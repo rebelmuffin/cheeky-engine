@@ -1,5 +1,5 @@
 #include "VkEngine.h"
-#include "VkTypes.h"
+#include "Utility/VkInitialisers.h"
 
 #include <SDL.h>
 #include <SDL_vulkan.h>
@@ -24,6 +24,13 @@ void VulkanEngine::Init()
 
 void VulkanEngine::Cleanup()
 {
+    vkDeviceWaitIdle(m_device);
+
+    for (size_t i = 0; i < FRAME_OVERLAP; ++i)
+    {
+        vkDestroyCommandPool(m_device, m_frames[i].command_pool, nullptr);
+    }
+
     DestroySwapchain();
     vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
     vkDestroyDevice(m_device, nullptr);
@@ -34,6 +41,7 @@ void VulkanEngine::Cleanup()
 
 void VulkanEngine::Draw(double delta_ms)
 {
+    ++frame_number;
 }
 
 void VulkanEngine::Update(double delta_ms)
@@ -84,6 +92,9 @@ void VulkanEngine::InitVulkan()
 
     m_gpu = vkb_gpu.physical_device;
     m_device = vkb_device.device;
+
+    m_graphics_queue = vkb_device.get_queue(vkb::QueueType::graphics).value();
+    m_graphics_queue_family = vkb_device.get_queue_index(vkb::QueueType::graphics).value();
 }
 
 void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
@@ -124,6 +135,17 @@ void VulkanEngine::InitSwapchain()
 
 void VulkanEngine::InitCommands()
 {
+    VkCommandPoolCreateInfo commandPoolInfo =
+        Utils::CommandPoolCreateInfo(m_graphics_queue_family, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+
+    for (size_t i = 0; i < FRAME_OVERLAP; ++i)
+    {
+        VK_CHECK(vkCreateCommandPool(m_device, &commandPoolInfo, nullptr, &m_frames[i].command_pool));
+
+        VkCommandBufferAllocateInfo cmdAllocInfo = Utils::CommandBufferAllocateInfo(m_frames[i].command_pool, 1);
+
+        VK_CHECK(vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &m_frames[i].command_buffer));
+    }
 }
 
 void VulkanEngine::InitSyncStructures()

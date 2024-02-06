@@ -22,7 +22,6 @@ shader_gen_src = shader_gen.process(shaders)
 # sdl2
 vulkan_dep = dependency('vulkan')
 sdl2_dep = dependency('sdl2')
-glslang_dep = dependency('glslang')
 
 vma_dep = dependency('vulkan-memory-allocator')
 glm_dep = dependency('glm')
@@ -41,11 +40,11 @@ executable('cheeky-vk-new',
            'src/Private/main.cpp',
            'src/Private/VkEngine.cpp',
            'src/Private/EngineCore.cpp',
+           'src/Private/Utility/VkInitialisers.cpp',
            shader_gen_src,
            dependencies: [
             vulkan_dep,
             sdl2_dep,
-            glslang_dep,
             vma_dep, 
             glm_dep,
             imgui_dep,

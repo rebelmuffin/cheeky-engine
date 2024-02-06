@@ -4,6 +4,14 @@
 
 struct SDL_Window;
 
+struct FrameData
+{
+    VkCommandPool command_pool;
+    VkCommandBuffer command_buffer;
+};
+
+constexpr uint FRAME_OVERLAP = 2;
+
 class VulkanEngine
 {
   public:
@@ -45,6 +53,15 @@ class VulkanEngine
     std::vector<VkImage> m_swapchain_images;
     std::vector<VkImageView> m_swapchain_image_views;
     VkExtent2D m_swapchain_extent;
+
+    FrameData m_frames[FRAME_OVERLAP];
+    inline FrameData& GetCurrentFrame()
+    {
+        return m_frames[frame_number % FRAME_OVERLAP];
+    }
+
+    VkQueue m_graphics_queue;
+    uint32_t m_graphics_queue_family;
 
     VkExtent2D m_window_extent;
     SDL_Window* m_window;
