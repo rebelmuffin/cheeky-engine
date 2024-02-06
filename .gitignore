@@ -1,0 +1,12 @@
+*.kdev4
+.vscode
+
+# ignore generated subprojects
+/subprojects/*
+!/subprojects/*.wrap
+
+# don't ignore non-generated subprojects
+!/subprojects/volk
+!/subprojects/vkbootstrap
+!/subprojects/tinyobjloader
+!/subprojects/stb_image

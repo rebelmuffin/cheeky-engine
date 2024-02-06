@@ -1,0 +1,5 @@
+[wrap-file]
+directory = tinyobjloader
+
+[provide]
+tinyobjloader = tinyobjloader_dep
