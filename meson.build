@@ -41,6 +41,7 @@ executable('cheeky-vk-new',
            'src/Private/VkEngine.cpp',
            'src/Private/EngineCore.cpp',
            'src/Private/Utility/VkInitialisers.cpp',
+           'src/Private/Utility/VkImages.cpp',
            shader_gen_src,
            dependencies: [
             vulkan_dep,

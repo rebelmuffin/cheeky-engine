@@ -8,6 +8,10 @@ struct FrameData
 {
     VkCommandPool command_pool;
     VkCommandBuffer command_buffer;
+
+    VkSemaphore swapchain_semaphore; // so this frame waits for swapchain before rendering
+    VkSemaphore render_semaphore;    // so the present can wait for this frame to finish
+    VkFence render_fence;            // so we can wait for this frame on cpu
 };
 
 constexpr uint FRAME_OVERLAP = 2;
