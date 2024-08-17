@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Utility/DeletionQueue.h"
 #include "VkBootstrapDispatch.h"
 #include "VkTypes.h"
 
@@ -80,9 +81,7 @@ class VulkanEngine
 
     bool m_use_validation_layers;
 
-    // functions to execute in order during destruction
-    using DeletionFunctionType = std::function<void()>;
-    std::vector<DeletionFunctionType> m_deletion_queue;
+    Utils::DeletionQueue m_deletion_queue;
 
     uint64_t m_last_update_us = 0;
 };

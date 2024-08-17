@@ -40,10 +40,7 @@ void VulkanEngine::Cleanup()
 {
     m_device_dispatch.deviceWaitIdle();
 
-    for (uint64_t i = m_deletion_queue.size() - 1; i > 0; --i)
-    {
-        m_deletion_queue[i]();
-    }
+    m_deletion_queue.Flush();
 
     VK_DEVICE_CALL(m_device, vkDestroyDevice, nullptr);
     vkb::destroy_debug_utils_messenger(m_instance, m_debug_messenger);
@@ -166,7 +163,7 @@ bool VulkanEngine::InitVulkan()
     m_graphics_queue_family = vkb_device.get_queue_index(vkb::QueueType::graphics).value();
 
     // make sure we destroy the surface when we're done
-    m_deletion_queue.push_back([this]() { m_instance_dispatch.destroySurfaceKHR(m_surface, nullptr); });
+    m_deletion_queue.PushFunction([this]() { m_instance_dispatch.destroySurfaceKHR(m_surface, nullptr); });
 
     return true;
 }
@@ -194,10 +191,10 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 
     for (size_t i = 0; i < m_swapchain_image_views.size(); ++i)
     {
-        m_deletion_queue.push_back(
+        m_deletion_queue.PushFunction(
             [i, this]() { m_device_dispatch.destroyImageView(m_swapchain_image_views[i], nullptr); });
     }
-    m_deletion_queue.push_back([this]() { m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr); });
+    m_deletion_queue.PushFunction([this]() { m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr); });
 }
 
 void VulkanEngine::InitSwapchain()
@@ -218,7 +215,7 @@ void VulkanEngine::InitCommands()
 
         VK_CHECK(m_device_dispatch.allocateCommandBuffers(&cmdAllocInfo, &m_frames[i].command_buffer));
 
-        m_deletion_queue.push_back(
+        m_deletion_queue.PushFunction(
             [i, this]() { m_device_dispatch.destroyCommandPool(m_frames[i].command_pool, nullptr); });
     }
 }
@@ -232,12 +229,13 @@ void VulkanEngine::InitSyncStructures()
     {
         VK_CHECK(m_device_dispatch.createFence(&fenceCreateInfo, nullptr, &m_frames[i].render_fence));
 
-        m_deletion_queue.push_back([i, this]() { m_device_dispatch.destroyFence(m_frames[i].render_fence, nullptr); });
+        m_deletion_queue.PushFunction(
+            [i, this]() { m_device_dispatch.destroyFence(m_frames[i].render_fence, nullptr); });
 
         VK_CHECK(m_device_dispatch.createSemaphore(&semaphoreCreateInfo, nullptr, &m_frames[i].swapchain_semaphore));
         VK_CHECK(m_device_dispatch.createSemaphore(&semaphoreCreateInfo, nullptr, &m_frames[i].render_semaphore));
 
-        m_deletion_queue.push_back([i, this]() {
+        m_deletion_queue.PushFunction([i, this]() {
             m_device_dispatch.destroySemaphore(m_frames[i].render_semaphore, nullptr);
             m_device_dispatch.destroySemaphore(m_frames[i].swapchain_semaphore, nullptr);
         });
