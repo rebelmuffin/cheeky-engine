@@ -39,6 +39,7 @@ class VulkanEngine
   private:
     // draw loop
     void Draw(double delta_ms);
+    void DrawBackground(VkCommandBuffer cmd);
 
     bool InitVulkan();
     void InitAllocator();
@@ -47,6 +48,7 @@ class VulkanEngine
     void InitSyncStructures();
 
     void CreateSwapchain(uint32_t width, uint32_t height);
+    void CreateDrawImage();
 
     void DeleteFence(int frame_idx);
 
@@ -64,6 +66,8 @@ class VulkanEngine
     PFN_vkGetDeviceProcAddr m_get_device_proc_addr;
     PFN_vkGetInstanceProcAddr m_get_instance_proc_addr;
 
+    AllocatedImage m_draw_image;
+    VkExtent2D m_draw_extent;
     std::vector<VkImage> m_swapchain_images;
     std::vector<VkImageView> m_swapchain_image_views;
     VkExtent2D m_swapchain_extent;

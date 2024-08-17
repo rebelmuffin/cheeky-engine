@@ -34,6 +34,42 @@ namespace Utils
         device_dispatch->cmdPipelineBarrier2(cmd, &depInfo);
     }
 
+    void CopyImageToImage(vkb::DispatchTable* device_dispatch, VkCommandBuffer cmd, VkImage source_image,
+                          VkImage dest_image, VkExtent2D source_size, VkExtent2D dest_size)
+    {
+        VkImageBlit2 blit_region{};
+        blit_region.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2;
+        blit_region.pNext = nullptr;
+
+        blit_region.srcOffsets[1].x = int32_t(source_size.width);
+        blit_region.srcOffsets[1].y = int32_t(source_size.height);
+        blit_region.srcOffsets[1].z = 1;
+        blit_region.dstOffsets[1].x = int32_t(dest_size.width);
+        blit_region.dstOffsets[1].y = int32_t(dest_size.height);
+        blit_region.dstOffsets[1].z = 1;
+
+        blit_region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit_region.srcSubresource.baseArrayLayer = 0;
+        blit_region.srcSubresource.mipLevel = 0;
+        blit_region.srcSubresource.layerCount = 1;
+
+        blit_region.dstSubresource = blit_region.srcSubresource;
+
+        VkBlitImageInfo2 blit_info{};
+        blit_info.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2;
+        blit_info.pNext = nullptr;
+
+        blit_info.srcImage = source_image;
+        blit_info.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        blit_info.dstImage = dest_image;
+        blit_info.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        blit_info.filter = VK_FILTER_NEAREST; // NEAREST!!!
+        blit_info.regionCount = 1;
+        blit_info.pRegions = &blit_region;
+
+        device_dispatch->cmdBlitImage2(cmd, &blit_info);
+    }
+
     VkImageSubresourceRange SubresourceRange(VkImageAspectFlags aspect_mask)
     {
         VkImageSubresourceRange subImage{};

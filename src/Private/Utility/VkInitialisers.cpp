@@ -101,4 +101,41 @@ namespace Utils
         info.pWaitSemaphores = wait_semaphore;
         return info;
     }
+
+    VkImageCreateInfo ImageCreateInfo(VkFormat format, VkImageUsageFlags flags, VkExtent3D extent)
+    {
+        VkImageCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        info.pNext = nullptr;
+        info.imageType = VK_IMAGE_TYPE_2D;
+
+        info.format = format;
+        info.usage = flags;
+        info.extent = extent;
+
+        info.mipLevels = 1;
+        info.arrayLayers = 1;
+        info.samples = VK_SAMPLE_COUNT_1_BIT; // no MSAA
+        info.tiling = VK_IMAGE_TILING_OPTIMAL;
+
+        return info;
+    }
+
+    VkImageViewCreateInfo ImageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspect_flags)
+    {
+        VkImageViewCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        info.pNext = nullptr;
+        info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+
+        info.format = format;
+        info.image = image;
+        info.subresourceRange.aspectMask = aspect_flags;
+        info.subresourceRange.baseArrayLayer = 0;
+        info.subresourceRange.baseMipLevel = 0;
+        info.subresourceRange.levelCount = 1;
+        info.subresourceRange.layerCount = 1;
+
+        return info;
+    }
 } // namespace Utils

@@ -54,11 +54,12 @@ void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
 {
     constexpr uint64_t one_second_ns = 1'000'000'000;
     VK_CHECK(m_device_dispatch.waitForFences(1, &GetCurrentFrame().render_fence, true, one_second_ns));
-    VK_CHECK(m_device_dispatch.resetFences(1, &GetCurrentFrame().render_fence));
 
     uint32_t swapchain_image_index;
     VK_CHECK(m_device_dispatch.acquireNextImageKHR(m_swapchain, one_second_ns, GetCurrentFrame().swapchain_semaphore,
                                                    nullptr, &swapchain_image_index));
+
+    VK_CHECK(m_device_dispatch.resetFences(1, &GetCurrentFrame().render_fence));
 
     VkCommandBuffer cmd = GetCurrentFrame().command_buffer;
     VK_CHECK(m_device_dispatch.resetCommandBuffer(cmd, 0));
@@ -67,19 +68,19 @@ void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
     VK_CHECK(m_device_dispatch.beginCommandBuffer(cmd, &cmdBeginInfo));
     // COMMAND BEGIN
 
+    Utils::TransitionImage(&m_device_dispatch, cmd, m_draw_image.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                           VK_IMAGE_LAYOUT_GENERAL);
+    DrawBackground(cmd);
+    Utils::TransitionImage(&m_device_dispatch, cmd, m_draw_image.image, VK_IMAGE_LAYOUT_GENERAL,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+    // copy draw into swapchain
     Utils::TransitionImage(&m_device_dispatch, cmd, m_swapchain_images[swapchain_image_index],
-                           VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-
-    VkClearColorValue clear_value;
-    float flash = abs(sin(float(frame_number) / 120.f));
-    clear_value = {{flash * 0.2f, flash * 0.2f, flash * 0.8f, 1.0f}};
-
-    VkImageSubresourceRange clear_range = Utils::SubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT);
-    m_device_dispatch.cmdClearColorImage(cmd, m_swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_GENERAL,
-                                         &clear_value, 1, &clear_range);
-
-    Utils::TransitionImage(&m_device_dispatch, cmd, m_swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_GENERAL,
-                           VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+                           VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    Utils::CopyImageToImage(&m_device_dispatch, cmd, m_draw_image.image, m_swapchain_images[swapchain_image_index],
+                            m_draw_extent, m_swapchain_extent);
+    Utils::TransitionImage(&m_device_dispatch, cmd, m_swapchain_images[swapchain_image_index],
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     // COMMAND END
     VK_CHECK(m_device_dispatch.endCommandBuffer(cmd));
@@ -100,6 +101,17 @@ void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
     VK_CHECK(m_device_dispatch.queuePresentKHR(m_graphics_queue, &present_info));
 
     ++frame_number;
+}
+
+void VulkanEngine::DrawBackground(VkCommandBuffer cmd)
+{
+    VkClearColorValue clear_value;
+    float flash = abs(sin(float(frame_number) / 120.f));
+    clear_value = {{flash * 0.2f, flash * 0.2f, flash * 0.8f, 1.0f}};
+
+    VkImageSubresourceRange clear_range = Utils::SubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT);
+    m_device_dispatch.cmdClearColorImage(cmd, m_draw_image.image, VK_IMAGE_LAYOUT_GENERAL, &clear_value, 1,
+                                         &clear_range);
 }
 
 void VulkanEngine::Update(double delta_ms)
@@ -165,7 +177,8 @@ bool VulkanEngine::InitVulkan()
     m_graphics_queue_family = vkb_device.get_queue_index(vkb::QueueType::graphics).value();
 
     // make sure we destroy the surface when we're done
-    m_deletion_queue.PushFunction([this]() { m_instance_dispatch.destroySurfaceKHR(m_surface, nullptr); });
+    m_deletion_queue.PushFunction("main surface",
+                                  [this]() { m_instance_dispatch.destroySurfaceKHR(m_surface, nullptr); });
 
     return true;
 }
@@ -184,7 +197,7 @@ void VulkanEngine::InitAllocator()
     allocator_info.pVulkanFunctions = &vulkan_functions;
     vmaCreateAllocator(&allocator_info, &m_allocator);
 
-    m_deletion_queue.PushFunction([this]() { vmaDestroyAllocator(m_allocator); });
+    m_deletion_queue.PushFunction("vmaAllocator", [this]() { vmaDestroyAllocator(m_allocator); });
 }
 
 void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
@@ -210,15 +223,51 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 
     for (size_t i = 0; i < m_swapchain_image_views.size(); ++i)
     {
-        m_deletion_queue.PushFunction(
-            [i, this]() { m_device_dispatch.destroyImageView(m_swapchain_image_views[i], nullptr); });
+        m_deletion_queue.PushFunction("swapchain image view", [i, this]() {
+            m_device_dispatch.destroyImageView(m_swapchain_image_views[i], nullptr);
+        });
     }
-    m_deletion_queue.PushFunction([this]() { m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr); });
+    m_deletion_queue.PushFunction("swapchain",
+                                  [this]() { m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr); });
+}
+
+void VulkanEngine::CreateDrawImage()
+{
+    VkExtent3D image_extent{m_window_extent.width, m_window_extent.height, 1};
+
+    m_draw_image.image_extent = image_extent;
+    m_draw_image.image_format = VK_FORMAT_R16G16B16A16_SFLOAT; // hardcoded to 32bit float
+
+    VkImageUsageFlags usage_flags{};
+    usage_flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    usage_flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    usage_flags |= VK_IMAGE_USAGE_STORAGE_BIT;
+    usage_flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+    VkImageCreateInfo image_info =
+        Utils::ImageCreateInfo(m_draw_image.image_format, usage_flags, m_draw_image.image_extent);
+
+    VmaAllocationCreateInfo allocation_info{};
+    allocation_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    allocation_info.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    vmaCreateImage(m_allocator, &image_info, &allocation_info, &m_draw_image.image, &m_draw_image.allocation, nullptr);
+
+    // Image is created! Now just need a view for it
+    VkImageViewCreateInfo image_view_info =
+        Utils::ImageViewCreateInfo(m_draw_image.image_format, m_draw_image.image, VK_IMAGE_ASPECT_COLOR_BIT);
+    VK_CHECK(m_device_dispatch.createImageView(&image_view_info, nullptr, &m_draw_image.image_view));
+
+    m_deletion_queue.PushFunction("draw image", [this]() {
+        m_device_dispatch.destroyImageView(m_draw_image.image_view, nullptr);
+        vmaDestroyImage(m_allocator, m_draw_image.image, m_draw_image.allocation);
+    });
 }
 
 void VulkanEngine::InitSwapchain()
 {
     CreateSwapchain(m_window_extent.width, m_window_extent.height);
+    CreateDrawImage();
 }
 
 void VulkanEngine::InitCommands()
@@ -235,7 +284,7 @@ void VulkanEngine::InitCommands()
         VK_CHECK(m_device_dispatch.allocateCommandBuffers(&cmdAllocInfo, &m_frames[i].command_buffer));
 
         m_deletion_queue.PushFunction(
-            [i, this]() { m_device_dispatch.destroyCommandPool(m_frames[i].command_pool, nullptr); });
+            "command pool", [i, this]() { m_device_dispatch.destroyCommandPool(m_frames[i].command_pool, nullptr); });
     }
 }
 
@@ -249,12 +298,12 @@ void VulkanEngine::InitSyncStructures()
         VK_CHECK(m_device_dispatch.createFence(&fenceCreateInfo, nullptr, &m_frames[i].render_fence));
 
         m_deletion_queue.PushFunction(
-            [i, this]() { m_device_dispatch.destroyFence(m_frames[i].render_fence, nullptr); });
+            "fence", [i, this]() { m_device_dispatch.destroyFence(m_frames[i].render_fence, nullptr); });
 
         VK_CHECK(m_device_dispatch.createSemaphore(&semaphoreCreateInfo, nullptr, &m_frames[i].swapchain_semaphore));
         VK_CHECK(m_device_dispatch.createSemaphore(&semaphoreCreateInfo, nullptr, &m_frames[i].render_semaphore));
 
-        m_deletion_queue.PushFunction([i, this]() {
+        m_deletion_queue.PushFunction("semaphores x2", [i, this]() {
             m_device_dispatch.destroySemaphore(m_frames[i].render_semaphore, nullptr);
             m_device_dispatch.destroySemaphore(m_frames[i].swapchain_semaphore, nullptr);
         });

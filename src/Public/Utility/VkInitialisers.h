@@ -17,4 +17,7 @@ namespace Utils
                              VkSemaphoreSubmitInfo* wait_semaphore_info);
     VkPresentInfoKHR PresentInfo(VkSwapchainKHR* swapchain, VkSemaphore* wait_semaphore,
                                  uint32_t* swapchain_image_index);
+
+    VkImageCreateInfo ImageCreateInfo(VkFormat format, VkImageUsageFlags flags, VkExtent3D extents);
+    VkImageViewCreateInfo ImageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspect_flags);
 } // namespace Utils

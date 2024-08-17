@@ -5,14 +5,21 @@
 
 namespace Utils
 {
+    using FunctionType = std::function<void()>;
+
+    struct DeletionItem
+    {
+        FunctionType function;
+        const char* debug_name;
+    };
+
     class DeletionQueue
     {
       public:
-        using FunctionType = std::function<void()>;
-        void PushFunction(const FunctionType& func);
+        void PushFunction(const char* debug_name, const FunctionType& func);
         void Flush();
 
       private:
-        std::deque<std::function<void()>> m_deletors;
+        std::deque<DeletionItem> m_deletors;
     };
 } // namespace Utils
