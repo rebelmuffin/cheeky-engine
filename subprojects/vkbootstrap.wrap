@@ -1,5 +1,0 @@
-[wrap-file]
-directory = vkbootstrap
-
-[provide]
-vkbootstrap = vkbootstrap_dep

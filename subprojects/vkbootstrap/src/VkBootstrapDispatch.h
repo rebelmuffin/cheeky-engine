@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 namespace vkb {
 
@@ -2097,6 +2097,9 @@ struct DispatchTable {
 #endif
 #if (defined(VK_NV_device_generated_commands_compute))
         fp_vkGetPipelineIndirectDeviceAddressNV = reinterpret_cast<PFN_vkGetPipelineIndirectDeviceAddressNV>(procAddr(device, "vkGetPipelineIndirectDeviceAddressNV"));
+#endif
+#if (defined(VK_AMD_anti_lag))
+        fp_vkAntiLagUpdateAMD = reinterpret_cast<PFN_vkAntiLagUpdateAMD>(procAddr(device, "vkAntiLagUpdateAMD"));
 #endif
 #if (defined(VK_VERSION_1_3))
         fp_vkCmdSetCullMode = reinterpret_cast<PFN_vkCmdSetCullMode>(procAddr(device, "vkCmdSetCullMode"));
@@ -4246,6 +4249,11 @@ struct DispatchTable {
         return fp_vkGetPipelineIndirectDeviceAddressNV(device, pInfo);
     }
 #endif
+#if (defined(VK_AMD_anti_lag))
+    void antiLagUpdateAMD(const VkAntiLagDataAMD* pData) const noexcept {
+        fp_vkAntiLagUpdateAMD(device, pData);
+    }
+#endif
 #if (defined(VK_VERSION_1_3))
     void cmdSetCullMode(VkCommandBuffer commandBuffer, VkCullModeFlags cullMode) const noexcept {
         fp_vkCmdSetCullMode(commandBuffer, cullMode);
@@ -5127,8 +5135,8 @@ struct DispatchTable {
     }
 #endif
 #if (defined(VK_KHR_dynamic_rendering_local_read))
-    void cmdSetRenderingInputAttachmentIndicesKHR(VkCommandBuffer commandBuffer, const VkRenderingInputAttachmentIndexInfoKHR* pLocationInfo) const noexcept {
-        fp_vkCmdSetRenderingInputAttachmentIndicesKHR(commandBuffer, pLocationInfo);
+    void cmdSetRenderingInputAttachmentIndicesKHR(VkCommandBuffer commandBuffer, const VkRenderingInputAttachmentIndexInfoKHR* pInputAttachmentIndexInfo) const noexcept {
+        fp_vkCmdSetRenderingInputAttachmentIndicesKHR(commandBuffer, pInputAttachmentIndexInfo);
     }
 #endif
 #if (defined(VK_EXT_host_query_reset))
@@ -6644,6 +6652,11 @@ struct DispatchTable {
     PFN_vkGetPipelineIndirectDeviceAddressNV fp_vkGetPipelineIndirectDeviceAddressNV = nullptr;
 #else
     void * fp_vkGetPipelineIndirectDeviceAddressNV{};
+#endif
+#if (defined(VK_AMD_anti_lag))
+    PFN_vkAntiLagUpdateAMD fp_vkAntiLagUpdateAMD = nullptr;
+#else
+    void * fp_vkAntiLagUpdateAMD{};
 #endif
 #if (defined(VK_VERSION_1_3))
     PFN_vkCmdSetCullMode fp_vkCmdSetCullMode = nullptr;
