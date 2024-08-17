@@ -31,7 +31,7 @@ bool VulkanEngine::Init()
     }
 
     InitAllocator();
-    InitSwapchain();
+    ResetSwapchain();
     InitCommands();
     InitSyncStructures();
 
@@ -56,8 +56,13 @@ void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
     VK_CHECK(m_device_dispatch.waitForFences(1, &GetCurrentFrame().render_fence, true, one_second_ns));
 
     uint32_t swapchain_image_index;
-    VK_CHECK(m_device_dispatch.acquireNextImageKHR(m_swapchain, one_second_ns, GetCurrentFrame().swapchain_semaphore,
-                                                   nullptr, &swapchain_image_index));
+    VkResult e = m_device_dispatch.acquireNextImageKHR(
+        m_swapchain, one_second_ns, GetCurrentFrame().swapchain_semaphore, nullptr, &swapchain_image_index);
+    if (e == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        ResetSwapchain();
+        return;
+    }
 
     VK_CHECK(m_device_dispatch.resetFences(1, &GetCurrentFrame().render_fence));
 
@@ -202,6 +207,9 @@ void VulkanEngine::InitAllocator()
 
 void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 {
+    // destroy in case it already exists
+    m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr);
+
     vkb::SwapchainBuilder builder(m_gpu, m_device, m_surface);
 
     m_swapchain_format = VK_FORMAT_B8G8R8A8_UNORM;
@@ -233,6 +241,10 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 
 void VulkanEngine::CreateDrawImage()
 {
+    // destroy in case already exists
+    m_device_dispatch.destroyImageView(m_draw_image.image_view, nullptr);
+    vmaDestroyImage(m_allocator, m_draw_image.image, m_draw_image.allocation);
+
     VkExtent3D image_extent{m_window_extent.width, m_window_extent.height, 1};
 
     m_draw_image.image_extent = image_extent;
@@ -264,7 +276,7 @@ void VulkanEngine::CreateDrawImage()
     });
 }
 
-void VulkanEngine::InitSwapchain()
+void VulkanEngine::ResetSwapchain()
 {
     CreateSwapchain(m_window_extent.width, m_window_extent.height);
     CreateDrawImage();

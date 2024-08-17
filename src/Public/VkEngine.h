@@ -43,7 +43,7 @@ class VulkanEngine
 
     bool InitVulkan();
     void InitAllocator();
-    void InitSwapchain();
+    void ResetSwapchain();
     void InitCommands();
     void InitSyncStructures();
 
