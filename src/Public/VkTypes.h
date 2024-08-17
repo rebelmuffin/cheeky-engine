@@ -1,10 +1,9 @@
 #pragma once
 
-#define FMT_HEADER_ONLY
-
 #include <array>
 #include <deque>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <span>
@@ -13,8 +12,6 @@
 
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
-
-#include <fmt/core.h>
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
@@ -25,7 +22,7 @@
         VkResult err = x;                                                                                              \
         if (err)                                                                                                       \
         {                                                                                                              \
-            fmt::print("Detected Vulkan error: {}", static_cast<uint64_t>(err));                                       \
+            std::cout << "Detected Vulkan error: " << static_cast<uint64_t>(err) << std::endl;                         \
             abort();                                                                                                   \
         }                                                                                                              \
     } while (0)
