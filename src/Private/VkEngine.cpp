@@ -1,6 +1,7 @@
 #include "VkEngine.h"
 #include "Utility/VkImages.h"
 #include "Utility/VkInitialisers.h"
+#include "VkThirdParty.h"
 
 #include <SDL.h>
 #include <SDL_vulkan.h>
@@ -29,6 +30,7 @@ bool VulkanEngine::Init()
         return false;
     }
 
+    InitAllocator();
     InitSwapchain();
     InitCommands();
     InitSyncStructures();
@@ -166,6 +168,23 @@ bool VulkanEngine::InitVulkan()
     m_deletion_queue.PushFunction([this]() { m_instance_dispatch.destroySurfaceKHR(m_surface, nullptr); });
 
     return true;
+}
+
+void VulkanEngine::InitAllocator()
+{
+    VmaVulkanFunctions vulkan_functions{};
+    vulkan_functions.vkGetInstanceProcAddr = m_get_instance_proc_addr;
+    vulkan_functions.vkGetDeviceProcAddr = m_get_device_proc_addr;
+
+    VmaAllocatorCreateInfo allocator_info{};
+    allocator_info.instance = m_instance;
+    allocator_info.device = m_device;
+    allocator_info.physicalDevice = m_gpu;
+    allocator_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    allocator_info.pVulkanFunctions = &vulkan_functions;
+    vmaCreateAllocator(&allocator_info, &m_allocator);
+
+    m_deletion_queue.PushFunction([this]() { vmaDestroyAllocator(m_allocator); });
 }
 
 void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)

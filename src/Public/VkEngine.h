@@ -41,6 +41,7 @@ class VulkanEngine
     void Draw(double delta_ms);
 
     bool InitVulkan();
+    void InitAllocator();
     void InitSwapchain();
     void InitCommands();
     void InitSyncStructures();
@@ -78,6 +79,8 @@ class VulkanEngine
 
     VkExtent2D m_window_extent;
     SDL_Window* m_window;
+
+    VmaAllocator m_allocator;
 
     bool m_use_validation_layers;
 
