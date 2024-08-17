@@ -4,7 +4,7 @@
 
 #include <chrono>
 
-EngineCore::EngineCore(uint32_t width, uint32_t height)
+EngineCore::EngineCore(int width, int height)
 {
     // We initialize SDL and create a window with it.
     SDL_Init(SDL_INIT_VIDEO);
@@ -15,7 +15,10 @@ EngineCore::EngineCore(uint32_t width, uint32_t height)
                                 window_flags);
 
     m_renderer = std::make_unique<VulkanEngine>(width, height, m_window, /* use_validation_layers = */ true);
-    m_renderer->Init();
+    if (m_renderer->Init() == false)
+    {
+        m_initialisation_failure = true;
+    }
 }
 
 EngineCore::~EngineCore()
@@ -32,7 +35,7 @@ void EngineCore::RunMainLoop()
 {
     SDL_Event e;
     bool quit = false;
-    uint64_t now_us =
+    int64_t now_us =
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock().now().time_since_epoch())
             .count();
     double delta_ms = static_cast<double>(now_us - m_last_update_us) / 1000.0;
@@ -61,5 +64,11 @@ void EngineCore::RunMainLoop()
         }
 
         m_renderer->Update(delta_ms);
+        Update();
     }
+}
+
+bool EngineCore::InitialisationFailed()
+{
+    return m_initialisation_failure;
 }

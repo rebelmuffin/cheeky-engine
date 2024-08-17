@@ -1,20 +1,21 @@
 #pragma once
 
+#include "VkBootstrapDispatch.h"
 #include "VkTypes.h"
 
 struct SDL_Window;
 
 struct FrameData
 {
-    VkCommandPool command_pool;
-    VkCommandBuffer command_buffer;
+    VkCommandPool command_pool = nullptr;
+    VkCommandBuffer command_buffer = nullptr;
 
-    VkSemaphore swapchain_semaphore; // so this frame waits for swapchain before rendering
-    VkSemaphore render_semaphore;    // so the present can wait for this frame to finish
-    VkFence render_fence;            // so we can wait for this frame on cpu
+    VkSemaphore swapchain_semaphore = nullptr; // so this frame waits for swapchain before rendering
+    VkSemaphore render_semaphore = nullptr;    // so the present can wait for this frame to finish
+    VkFence render_fence = nullptr;            // so we can wait for this frame on cpu
 };
 
-constexpr uint FRAME_OVERLAP = 2;
+constexpr int FRAME_OVERLAP = 2;
 
 class VulkanEngine
 {
@@ -26,7 +27,7 @@ class VulkanEngine
     bool stop_rendering{false};
 
     // initializes everything in the engine
-    void Init();
+    bool Init();
 
     // shuts down the engine
     void Cleanup();
@@ -38,21 +39,28 @@ class VulkanEngine
     // draw loop
     void Draw(double delta_ms);
 
-    void InitVulkan();
+    bool InitVulkan();
     void InitSwapchain();
     void InitCommands();
     void InitSyncStructures();
 
     void CreateSwapchain(uint32_t width, uint32_t height);
-    void DestroySwapchain();
 
-    VkInstance m_instance;
-    VkDebugUtilsMessengerEXT m_debug_messenger;
-    VkPhysicalDevice m_gpu;
-    VkDevice m_device;
-    VkSurfaceKHR m_surface;
-    VkSwapchainKHR m_swapchain;
+    void DeleteFence(int frame_idx);
+
+    VkInstance m_instance = nullptr;
+    VkDebugUtilsMessengerEXT m_debug_messenger = nullptr;
+    VkPhysicalDevice m_gpu = nullptr;
+    VkDevice m_device = nullptr;
+    VkSurfaceKHR m_surface = nullptr;
+    VkSwapchainKHR m_swapchain = nullptr;
     VkFormat m_swapchain_format;
+
+    vkb::InstanceDispatchTable m_instance_dispatch;
+    vkb::DispatchTable m_device_dispatch;
+    // there are functions that aren't implemented by vkb's dispatch tables. Need to lookup manually :(
+    PFN_vkGetDeviceProcAddr m_get_device_proc_addr;
+    PFN_vkGetInstanceProcAddr m_get_instance_proc_addr;
 
     std::vector<VkImage> m_swapchain_images;
     std::vector<VkImageView> m_swapchain_image_views;
@@ -71,6 +79,10 @@ class VulkanEngine
     SDL_Window* m_window;
 
     bool m_use_validation_layers;
+
+    // functions to execute in order during destruction
+    using DeletionFunctionType = std::function<void()>;
+    std::vector<DeletionFunctionType> m_deletion_queue;
 
     uint64_t m_last_update_us = 0;
 };

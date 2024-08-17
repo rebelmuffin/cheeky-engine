@@ -10,10 +10,11 @@ struct SDL_Window;
 class EngineCore
 {
   public:
-    EngineCore(uint32_t width, uint32_t height);
+    EngineCore(int width, int height);
     ~EngineCore();
 
     void RunMainLoop();
+    bool InitialisationFailed();
 
   private:
     void Update();
@@ -21,5 +22,6 @@ class EngineCore
     SDL_Window* m_window;
     std::unique_ptr<VulkanEngine> m_renderer;
 
-    uint64_t m_last_update_us = 0;
+    int64_t m_last_update_us = 0;
+    bool m_initialisation_failure = false;
 };

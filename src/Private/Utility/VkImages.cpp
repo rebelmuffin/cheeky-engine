@@ -1,8 +1,10 @@
 #include "Utility/VkImages.h"
+#include "VkBootstrapDispatch.h"
 
 namespace Utils
 {
-    void TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout current_layout, VkImageLayout target_layout)
+    void TransitionImage(vkb::DispatchTable* device_dispatch, VkCommandBuffer cmd, VkImage image,
+                         VkImageLayout current_layout, VkImageLayout target_layout)
     {
         VkImageMemoryBarrier2 imageBarrier{};
         imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -29,7 +31,7 @@ namespace Utils
         depInfo.imageMemoryBarrierCount = 1;
         depInfo.pImageMemoryBarriers = &imageBarrier;
 
-        vkCmdPipelineBarrier2(cmd, &depInfo);
+        device_dispatch->cmdPipelineBarrier2(cmd, &depInfo);
     }
 
     VkImageSubresourceRange SubresourceRange(VkImageAspectFlags aspect_mask)

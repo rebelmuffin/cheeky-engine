@@ -6,7 +6,15 @@
 #include <SDL_vulkan.h>
 #include <VkBootstrap.h>
 
+#include <cstdint>
+#include <iostream>
 #include <thread>
+
+#define VK_DEVICE_CALL(device, function, ...)                                                                          \
+    reinterpret_cast<PFN_##function>(m_get_device_proc_addr(device, #function))(device, __VA_ARGS__);
+
+#define VK_INSTANCE_CALL(instance, function, ...)                                                                      \
+    reinterpret_cast<PFN_##function>(m_get_instance_proc_addr(instance, #function))(instance, __VA_ARGS__);
 
 VulkanEngine::VulkanEngine(uint32_t window_width, uint32_t window_height, SDL_Window* window,
                            bool use_validation_layers)
@@ -14,68 +22,68 @@ VulkanEngine::VulkanEngine(uint32_t window_width, uint32_t window_height, SDL_Wi
 {
 }
 
-void VulkanEngine::Init()
+bool VulkanEngine::Init()
 {
-    InitVulkan();
+    if (InitVulkan() == false)
+    {
+        return false;
+    }
+
     InitSwapchain();
     InitCommands();
     InitSyncStructures();
-    is_initialised = true;
+
+    return true;
 }
 
 void VulkanEngine::Cleanup()
 {
-    vkDeviceWaitIdle(m_device);
+    m_device_dispatch.deviceWaitIdle();
 
-    for (size_t i = 0; i < FRAME_OVERLAP; ++i)
+    for (uint64_t i = m_deletion_queue.size() - 1; i > 0; --i)
     {
-        vkDestroyCommandPool(m_device, m_frames[i].command_pool, nullptr);
-        vkDestroyFence(m_device, m_frames[i].render_fence, nullptr);
-        vkDestroySemaphore(m_device, m_frames[i].render_semaphore, nullptr);
-        vkDestroySemaphore(m_device, m_frames[i].swapchain_semaphore, nullptr);
+        m_deletion_queue[i]();
     }
 
-    DestroySwapchain();
-    vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
-    vkDestroyDevice(m_device, nullptr);
+    VK_DEVICE_CALL(m_device, vkDestroyDevice, nullptr);
     vkb::destroy_debug_utils_messenger(m_instance, m_debug_messenger);
-    vkDestroyInstance(m_instance, nullptr);
+    VK_INSTANCE_CALL(m_instance, vkDestroyInstance, nullptr);
     is_initialised = false;
 }
 
-void VulkanEngine::Draw(double delta_ms)
+void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
 {
     constexpr uint64_t one_second_ns = 1'000'000'000;
-    VK_CHECK(vkWaitForFences(m_device, 1, &GetCurrentFrame().render_fence, true, one_second_ns));
-    VK_CHECK(vkResetFences(m_device, 1, &GetCurrentFrame().render_fence));
+    VK_CHECK(m_device_dispatch.waitForFences(1, &GetCurrentFrame().render_fence, true, one_second_ns));
+    VK_CHECK(m_device_dispatch.resetFences(1, &GetCurrentFrame().render_fence));
 
     uint32_t swapchain_image_index;
-    VK_CHECK(vkAcquireNextImageKHR(m_device, m_swapchain, one_second_ns, GetCurrentFrame().swapchain_semaphore, nullptr,
-                                   &swapchain_image_index));
+    VK_CHECK(m_device_dispatch.acquireNextImageKHR(m_swapchain, one_second_ns, GetCurrentFrame().swapchain_semaphore,
+                                                   nullptr, &swapchain_image_index));
 
     VkCommandBuffer cmd = GetCurrentFrame().command_buffer;
-    VK_CHECK(vkResetCommandBuffer(cmd, 0));
+    VK_CHECK(m_device_dispatch.resetCommandBuffer(cmd, 0));
 
     VkCommandBufferBeginInfo cmdBeginInfo = Utils::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-    VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+    VK_CHECK(m_device_dispatch.beginCommandBuffer(cmd, &cmdBeginInfo));
     // COMMAND BEGIN
 
-    Utils::TransitionImage(cmd, m_swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED,
-                           VK_IMAGE_LAYOUT_GENERAL);
+    Utils::TransitionImage(&m_device_dispatch, cmd, m_swapchain_images[swapchain_image_index],
+                           VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
     VkClearColorValue clear_value;
-    float flash = abs(sin(frame_number) / 120.0f);
-    clear_value = {{0.0f, 0.0f, flash, 1.0f}};
+    float flash = abs(sin(float(frame_number) / 120.f));
+    clear_value = {{flash * 0.2f, flash * 0.2f, flash * 0.8f, 1.0f}};
 
     VkImageSubresourceRange clear_range = Utils::SubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT);
-    vkCmdClearColorImage(cmd, m_swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_GENERAL, &clear_value, 1,
-                         &clear_range);
+    m_device_dispatch.cmdClearColorImage(cmd, m_swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_GENERAL,
+                                         &clear_value, 1, &clear_range);
 
-    Utils::TransitionImage(cmd, m_swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_GENERAL,
+    Utils::TransitionImage(&m_device_dispatch, cmd, m_swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_GENERAL,
                            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     // COMMAND END
-    VK_CHECK(vkEndCommandBuffer(cmd));
+    VK_CHECK(m_device_dispatch.endCommandBuffer(cmd));
 
     VkCommandBufferSubmitInfo cmd_info = Utils::CommandBufferSubmitInfo(cmd);
 
@@ -86,11 +94,11 @@ void VulkanEngine::Draw(double delta_ms)
 
     VkSubmitInfo2 submit_info = Utils::SubmitInfo(&cmd_info, &signal_info, &wait_info);
 
-    VK_CHECK(vkQueueSubmit2(m_graphics_queue, 1, &submit_info, GetCurrentFrame().render_fence));
+    VK_CHECK(m_device_dispatch.queueSubmit2(m_graphics_queue, 1, &submit_info, GetCurrentFrame().render_fence));
 
     VkPresentInfoKHR present_info =
         Utils::PresentInfo(&m_swapchain, &GetCurrentFrame().render_semaphore, &swapchain_image_index);
-    VK_CHECK(vkQueuePresentKHR(m_graphics_queue, &present_info));
+    VK_CHECK(m_device_dispatch.queuePresentKHR(m_graphics_queue, &present_info));
 
     ++frame_number;
 }
@@ -106,16 +114,25 @@ void VulkanEngine::Update(double delta_ms)
     Draw(delta_ms);
 }
 
-void VulkanEngine::InitVulkan()
+bool VulkanEngine::InitVulkan()
 {
     vkb::InstanceBuilder builder;
 
-    vkb::Instance vkb_instance = builder.set_app_name("Vulkan Engine")
-                                     .request_validation_layers(m_use_validation_layers)
-                                     .use_default_debug_messenger()
-                                     .require_api_version(1, 3, 0)
-                                     .build()
-                                     .value();
+    builder.set_app_name("Vulkan Engine")
+        .request_validation_layers(m_use_validation_layers)
+        .use_default_debug_messenger()
+        .require_api_version(1, 3, 0);
+
+    vkb::Result<vkb::Instance> build_result = builder.build();
+    if (build_result.has_value() == false)
+    {
+        return false;
+    }
+
+    vkb::Instance vkb_instance = build_result.value();
+    m_instance_dispatch = vkb::InstanceDispatchTable(vkb_instance.instance, vkb_instance.fp_vkGetInstanceProcAddr);
+    m_get_instance_proc_addr = vkb_instance.fp_vkGetInstanceProcAddr;
+    m_get_device_proc_addr = vkb_instance.fp_vkGetDeviceProcAddr;
 
     m_instance = vkb_instance.instance;
     m_debug_messenger = vkb_instance.debug_messenger;
@@ -143,9 +160,15 @@ void VulkanEngine::InitVulkan()
 
     m_gpu = vkb_gpu.physical_device;
     m_device = vkb_device.device;
+    m_device_dispatch = vkb::DispatchTable(m_device, vkb_device.fp_vkGetDeviceProcAddr);
 
     m_graphics_queue = vkb_device.get_queue(vkb::QueueType::graphics).value();
     m_graphics_queue_family = vkb_device.get_queue_index(vkb::QueueType::graphics).value();
+
+    // make sure we destroy the surface when we're done
+    m_deletion_queue.push_back([this]() { m_instance_dispatch.destroySurfaceKHR(m_surface, nullptr); });
+
+    return true;
 }
 
 void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
@@ -168,15 +191,13 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
     m_swapchain = vkb_swapchain.swapchain;
     m_swapchain_images = vkb_swapchain.get_images().value();
     m_swapchain_image_views = vkb_swapchain.get_image_views().value();
-}
 
-void VulkanEngine::DestroySwapchain()
-{
-    vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
     for (size_t i = 0; i < m_swapchain_image_views.size(); ++i)
     {
-        vkDestroyImageView(m_device, m_swapchain_image_views[i], nullptr);
+        m_deletion_queue.push_back(
+            [i, this]() { m_device_dispatch.destroyImageView(m_swapchain_image_views[i], nullptr); });
     }
+    m_deletion_queue.push_back([this]() { m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr); });
 }
 
 void VulkanEngine::InitSwapchain()
@@ -191,11 +212,14 @@ void VulkanEngine::InitCommands()
 
     for (size_t i = 0; i < FRAME_OVERLAP; ++i)
     {
-        VK_CHECK(vkCreateCommandPool(m_device, &commandPoolInfo, nullptr, &m_frames[i].command_pool));
+        VK_CHECK(m_device_dispatch.createCommandPool(&commandPoolInfo, nullptr, &m_frames[i].command_pool));
 
         VkCommandBufferAllocateInfo cmdAllocInfo = Utils::CommandBufferAllocateInfo(m_frames[i].command_pool, 1);
 
-        VK_CHECK(vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &m_frames[i].command_buffer));
+        VK_CHECK(m_device_dispatch.allocateCommandBuffers(&cmdAllocInfo, &m_frames[i].command_buffer));
+
+        m_deletion_queue.push_back(
+            [i, this]() { m_device_dispatch.destroyCommandPool(m_frames[i].command_pool, nullptr); });
     }
 }
 
@@ -206,9 +230,16 @@ void VulkanEngine::InitSyncStructures()
 
     for (size_t i = 0; i < FRAME_OVERLAP; ++i)
     {
-        VK_CHECK(vkCreateFence(m_device, &fenceCreateInfo, nullptr, &m_frames[i].render_fence));
+        VK_CHECK(m_device_dispatch.createFence(&fenceCreateInfo, nullptr, &m_frames[i].render_fence));
 
-        VK_CHECK(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_frames[i].swapchain_semaphore));
-        VK_CHECK(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_frames[i].render_semaphore));
+        m_deletion_queue.push_back([i, this]() { m_device_dispatch.destroyFence(m_frames[i].render_fence, nullptr); });
+
+        VK_CHECK(m_device_dispatch.createSemaphore(&semaphoreCreateInfo, nullptr, &m_frames[i].swapchain_semaphore));
+        VK_CHECK(m_device_dispatch.createSemaphore(&semaphoreCreateInfo, nullptr, &m_frames[i].render_semaphore));
+
+        m_deletion_queue.push_back([i, this]() {
+            m_device_dispatch.destroySemaphore(m_frames[i].render_semaphore, nullptr);
+            m_device_dispatch.destroySemaphore(m_frames[i].swapchain_semaphore, nullptr);
+        });
     }
 }
