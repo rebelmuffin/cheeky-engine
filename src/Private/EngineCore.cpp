@@ -1,5 +1,7 @@
 #include "EngineCore.h"
 
+#include "ThirdParty/ImGUI.h"
+
 #include <SDL.h>
 
 #include <chrono>
@@ -35,11 +37,6 @@ void EngineCore::RunMainLoop()
 {
     SDL_Event e;
     bool quit = false;
-    int64_t now_us =
-        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock().now().time_since_epoch())
-            .count();
-    double delta_ms = static_cast<double>(now_us - m_last_update_us) / 1000.0;
-    m_last_update_us = now_us;
 
     while (quit == false)
     {
@@ -61,11 +58,42 @@ void EngineCore::RunMainLoop()
                     m_renderer->stop_rendering = false;
                 }
             }
+
+            ImGui_ImplSDL2_ProcessEvent(&e);
         }
 
-        m_renderer->Update(delta_ms);
+        // update delta time
+        int64_t now_us =
+            std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock().now().time_since_epoch())
+                .count();
+        m_last_delta_ms = static_cast<double>(now_us - m_last_update_us) / 1000.0;
+        m_last_update_us = now_us;
+
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplSDL2_NewFrame();
+        ImGui::NewFrame();
+
+        OnImgui();
+
+        m_renderer->Update(m_last_delta_ms);
         Update();
     }
+}
+
+void EngineCore::OnImgui()
+{
+    // Show Imgui demo
+    ImGui::ShowDemoWindow();
+
+    // draw time delta and FPS
+    ImDrawList* draw_list = ImGui::GetForegroundDrawList();
+    double delta_s = m_last_delta_ms / 1000.0;
+    std::ostringstream stream;
+    stream << "FPS: " << std::setw(5) << int64_t(1.0 / delta_s) << " | " << std::fixed << std::setprecision(2)
+           << m_last_delta_ms << "ms";
+    std::string fps_text = stream.str();
+    draw_list->AddText({0.0f, 0.0f}, ImGui::GetColorU32(ImGuiCol_Text), fps_text.data(),
+                       fps_text.data() + fps_text.size());
 }
 
 bool EngineCore::InitialisationFailed()

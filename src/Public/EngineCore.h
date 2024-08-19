@@ -18,10 +18,12 @@ class EngineCore
 
   private:
     void Update();
+    void OnImgui();
 
     SDL_Window* m_window;
     std::unique_ptr<VulkanEngine> m_renderer;
 
+    double m_last_delta_ms = 0;
     int64_t m_last_update_us = 0;
     bool m_initialisation_failure = false;
 };

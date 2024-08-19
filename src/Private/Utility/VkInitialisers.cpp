@@ -138,4 +138,35 @@ namespace Utils
 
         return info;
     }
+
+    VkRenderingAttachmentInfo AttachmentInfo(VkImageView view, VkClearValue* clear, VkImageLayout layout)
+    {
+        VkRenderingAttachmentInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        info.pNext = nullptr;
+        info.imageView = view;
+        info.imageLayout = layout;
+        info.loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+        info.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        if (clear)
+        {
+            info.clearValue = *clear;
+        }
+
+        return info;
+    }
+
+    VkRenderingInfo RenderingInfo(VkRenderingAttachmentInfo* attachment_info, VkExtent2D draw_extent)
+    {
+        VkRenderingInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+        info.pNext = nullptr;
+        info.layerCount = 1;
+        info.colorAttachmentCount = 1;
+        info.pColorAttachments = attachment_info;
+        info.renderArea = {{0, 0}, {draw_extent.width, draw_extent.height}};
+
+        return info;
+    }
+
 } // namespace Utils

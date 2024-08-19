@@ -41,6 +41,7 @@ class VulkanEngine
     // draw loop
     void Draw(double delta_ms);
     void DrawBackground(VkCommandBuffer cmd);
+    void DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view);
 
     bool InitVulkan();
     void InitAllocator();
@@ -50,6 +51,7 @@ class VulkanEngine
     void InitDescriptors();
     bool InitPipelines();
     bool InitBackgroundPipelines();
+    void InitImgui();
 
     void CreateSwapchain(uint32_t width, uint32_t height);
     void CreateDrawImage();

@@ -20,4 +20,8 @@ namespace Utils
 
     VkImageCreateInfo ImageCreateInfo(VkFormat format, VkImageUsageFlags flags, VkExtent3D extents);
     VkImageViewCreateInfo ImageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspect_flags);
+
+    VkRenderingAttachmentInfo AttachmentInfo(VkImageView view, VkClearValue* clear,
+                                             VkImageLayout layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    VkRenderingInfo RenderingInfo(VkRenderingAttachmentInfo* attachment_info, VkExtent2D draw_extent);
 } // namespace Utils

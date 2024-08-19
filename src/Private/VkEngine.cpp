@@ -1,8 +1,9 @@
 #include "VkEngine.h"
+#include "ThirdParty/ImGUI.h"
+#include "ThirdParty/VkMemAlloc.h"
 #include "Utility/VkImages.h"
 #include "Utility/VkInitialisers.h"
 #include "Utility/VkPipelines.h"
-#include "VkThirdParty.h"
 
 #include <SDL.h>
 #include <SDL_vulkan.h>
@@ -41,6 +42,9 @@ bool VulkanEngine::Init()
     {
         return false;
     }
+
+    // Imgui
+    InitImgui();
 
     return true;
 }
@@ -92,7 +96,10 @@ void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
     Utils::CopyImageToImage(&m_device_dispatch, cmd, m_draw_image.image, m_swapchain_images[swapchain_image_index],
                             m_draw_extent, m_swapchain_extent);
     Utils::TransitionImage(&m_device_dispatch, cmd, m_swapchain_images[swapchain_image_index],
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    DrawImgui(cmd, m_swapchain_image_views[swapchain_image_index]);
+    Utils::TransitionImage(&m_device_dispatch, cmd, m_swapchain_images[swapchain_image_index],
+                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     // COMMAND END
     VK_CHECK(m_device_dispatch.endCommandBuffer(cmd));
@@ -124,6 +131,17 @@ void VulkanEngine::DrawBackground(VkCommandBuffer cmd)
                                   uint32_t(std::ceil(float(m_draw_extent.height) / 16.0f)), 1);
 }
 
+void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view)
+{
+    VkRenderingAttachmentInfo attachment_info = Utils::AttachmentInfo(target_image_view, nullptr);
+    // swapchain extent because we're drawing directly onto it
+    VkRenderingInfo rendering_info = Utils::RenderingInfo(&attachment_info, m_swapchain_extent);
+
+    m_device_dispatch.cmdBeginRendering(cmd, &rendering_info);
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+    m_device_dispatch.cmdEndRendering(cmd);
+}
+
 void VulkanEngine::Update(double delta_ms)
 {
     if (stop_rendering)
@@ -131,6 +149,8 @@ void VulkanEngine::Update(double delta_ms)
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         return;
     }
+
+    ImGui::Render();
 
     Draw(delta_ms);
 }
@@ -410,4 +430,56 @@ bool VulkanEngine::InitBackgroundPipelines()
     });
 
     return true;
+}
+
+void VulkanEngine::InitImgui()
+{
+    // Mostly copied from the examples
+    VkDescriptorPoolSize pool_sizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
+                                         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+                                         {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+                                         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
+                                         {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
+                                         {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
+                                         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+                                         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
+                                         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+                                         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
+                                         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
+
+    VkDescriptorPoolCreateInfo pool_info{};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    pool_info.maxSets = 1000;
+    pool_info.poolSizeCount = (uint32_t)std::size(pool_sizes);
+    pool_info.pPoolSizes = pool_sizes;
+
+    VkDescriptorPool imgui_descriptor_pool;
+    VK_CHECK(m_device_dispatch.createDescriptorPool(&pool_info, nullptr, &imgui_descriptor_pool));
+
+    ImGui::CreateContext();
+    ImGui_ImplSDL2_InitForVulkan(m_window);
+    ImGui_ImplVulkan_InitInfo init_info{};
+    init_info.Instance = m_instance;
+    init_info.PhysicalDevice = m_gpu;
+    init_info.Device = m_device;
+    init_info.Queue = m_graphics_queue;
+    init_info.DescriptorPool = imgui_descriptor_pool;
+    init_info.MinImageCount = 3;
+    init_info.ImageCount = 3;
+    init_info.UseDynamicRendering = true;
+
+    init_info.PipelineRenderingCreateInfo = {};
+    init_info.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+    init_info.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+    init_info.PipelineRenderingCreateInfo.pColorAttachmentFormats = &m_swapchain_format;
+    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
+    ImGui_ImplVulkan_Init(&init_info);
+    ImGui_ImplVulkan_CreateFontsTexture();
+
+    m_deletion_queue.PushFunction("imgui", [this, imgui_descriptor_pool]() {
+        ImGui_ImplVulkan_Shutdown();
+        m_device_dispatch.destroyDescriptorPool(imgui_descriptor_pool, nullptr);
+    });
 }
