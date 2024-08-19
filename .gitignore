@@ -16,3 +16,5 @@
 !/subprojects/vkbootstrap
 !/subprojects/tinyobjloader
 !/subprojects/stb_image
+!/subprojects/imgui
+/subprojects/imgui/backends/vulkan/*.u32
