@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Utility/DeletionQueue.h"
+#include "Utility/VkDescriptors.h"
 #include "VkBootstrapDispatch.h"
 #include "VkTypes.h"
 
@@ -46,6 +47,9 @@ class VulkanEngine
     void ResetSwapchain();
     void InitCommands();
     void InitSyncStructures();
+    void InitDescriptors();
+    bool InitPipelines();
+    bool InitBackgroundPipelines();
 
     void CreateSwapchain(uint32_t width, uint32_t height);
     void CreateDrawImage();
@@ -68,6 +72,12 @@ class VulkanEngine
 
     AllocatedImage m_draw_image;
     VkExtent2D m_draw_extent;
+    VkDescriptorSet m_draw_image_descriptors;
+    VkDescriptorSetLayout m_draw_image_descriptor_layout;
+
+    VkPipeline m_gradient_pipeline;
+    VkPipelineLayout m_gradient_pipeline_layout;
+
     std::vector<VkImage> m_swapchain_images;
     std::vector<VkImageView> m_swapchain_image_views;
     VkExtent2D m_swapchain_extent;
@@ -84,6 +94,7 @@ class VulkanEngine
     VkExtent2D m_window_extent;
     SDL_Window* m_window;
 
+    Utils::DescriptorAllocator m_descriptor_allocator;
     VmaAllocator m_allocator;
 
     bool m_use_validation_layers;

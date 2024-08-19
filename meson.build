@@ -47,8 +47,10 @@ executable(
     'src/Private/main.cpp',
     'src/Private/VkEngine.cpp',
     'src/Private/EngineCore.cpp',
+    'src/Private/Utility/VkPipelines.cpp',
     'src/Private/Utility/VkInitialisers.cpp',
     'src/Private/Utility/VkImages.cpp',
+    'src/Private/Utility/VkDescriptors.cpp',
     'src/Private/Utility/DeletionQueue.cpp',
     shader_gen_src,
     dependencies: [

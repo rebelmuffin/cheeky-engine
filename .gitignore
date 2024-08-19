@@ -1,6 +1,12 @@
 *.kdev4
 .vscode
 
+# ignore renderdoc captures
+/captures/*
+
+# ignore compiled SPIR-V
+/data/shader/**/*.spv
+
 # ignore generated subprojects
 /subprojects/*
 !/subprojects/*.wrap
