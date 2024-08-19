@@ -27,6 +27,8 @@ sdl2_dep = dependency('sdl2')
 
 vma_dep = dependency('vulkan-memory-allocator')
 glm_dep = dependency('glm')
+
+subproject('imgui')
 imgui_dep = dependency('imgui')
 
 # cmake dependencies
