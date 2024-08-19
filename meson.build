@@ -40,7 +40,7 @@ stb_image_dep = dependency('stb_image')
 tinyobjloader_dep = dependency('tinyobjloader')
 
 # includes
-includes = include_directories('src/Public')
+includes = include_directories('src/Public', 'subprojects') # is this okay?
 
 executable(
     'cheeky-vk-new',
