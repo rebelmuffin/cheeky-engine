@@ -65,17 +65,20 @@ void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
 {
     constexpr uint64_t one_second_ns = 1'000'000'000;
     VK_CHECK(m_device_dispatch.waitForFences(1, &GetCurrentFrame().render_fence, true, one_second_ns));
+    VK_CHECK(m_device_dispatch.resetFences(1, &GetCurrentFrame().render_fence));
 
     uint32_t swapchain_image_index;
-    VkResult e = m_device_dispatch.acquireNextImageKHR(
+    VkResult result = m_device_dispatch.acquireNextImageKHR(
         m_swapchain, one_second_ns, GetCurrentFrame().swapchain_semaphore, nullptr, &swapchain_image_index);
-    if (e == VK_ERROR_OUT_OF_DATE_KHR)
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
         ResetSwapchain();
         return;
     }
-
-    VK_CHECK(m_device_dispatch.resetFences(1, &GetCurrentFrame().render_fence));
+    else if (result == VK_TIMEOUT)
+    {
+        return; // try again next frame
+    }
 
     VkCommandBuffer cmd = GetCurrentFrame().command_buffer;
     VK_CHECK(m_device_dispatch.resetCommandBuffer(cmd, 0));
@@ -117,7 +120,16 @@ void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
 
     VkPresentInfoKHR present_info =
         Utils::PresentInfo(&m_swapchain, &GetCurrentFrame().render_semaphore, &swapchain_image_index);
-    VK_CHECK(m_device_dispatch.queuePresentKHR(m_graphics_queue, &present_info));
+    result = m_device_dispatch.queuePresentKHR(m_graphics_queue, &present_info);
+    if (result == VK_SUBOPTIMAL_KHR)
+    {
+        ResetSwapchain();
+        return;
+    }
+    else if (result != VK_SUCCESS)
+    {
+        abort(); // if this happens, investigate why the heck
+    }
 
     ++frame_number;
 }
