@@ -25,49 +25,6 @@ VulkanEngine::VulkanEngine(uint32_t window_width, uint32_t window_height, SDL_Wi
 {
 }
 
-namespace
-{
-    bool CreateComputeEffect(const char* name, const char* shader_path, vkb::DispatchTable& device_dispatch,
-                             VkPipelineLayout layout, Utils::DeletionQueue& deletion_queue, ComputeEffect* out_effect)
-    {
-        VkShaderModule shader_module{};
-        if (Utils::LoadShaderModule(device_dispatch, shader_path, &shader_module) == false)
-        {
-            return false;
-        }
-
-        ComputeEffect effect{};
-        effect.name = name;
-        effect.path = shader_path;
-        effect.layout = layout;
-
-        VkPipelineShaderStageCreateInfo stage_info{};
-        stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        stage_info.pNext = nullptr;
-        stage_info.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-        stage_info.module = shader_module;
-        stage_info.pName = "main";
-
-        VkComputePipelineCreateInfo compute_pipeline_info{};
-        compute_pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-        compute_pipeline_info.pNext = nullptr;
-        compute_pipeline_info.layout = layout;
-        compute_pipeline_info.stage = stage_info;
-
-        VK_CHECK(device_dispatch.createComputePipelines(VK_NULL_HANDLE, 1, &compute_pipeline_info, nullptr,
-                                                        &effect.pipeline));
-
-        // Clean up
-        device_dispatch.destroyShaderModule(shader_module, nullptr);
-        deletion_queue.PushFunction("pipelines", [device_dispatch, pipeline = effect.pipeline]() {
-            device_dispatch.destroyPipeline(pipeline, nullptr);
-        });
-
-        *out_effect = effect;
-        return true;
-    }
-} // namespace
-
 bool VulkanEngine::Init()
 {
     if (InitVulkan() == false)
@@ -179,14 +136,9 @@ void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
 
 void VulkanEngine::DrawBackground(VkCommandBuffer cmd)
 {
-    ComputeEffect& effect = m_compute_effects[m_current_effect];
-    m_device_dispatch.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
-    m_device_dispatch.cmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.layout, 0, 1,
+    m_device_dispatch.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_gradient_pipeline);
+    m_device_dispatch.cmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_gradient_pipeline_layout, 0, 1,
                                             &m_draw_image_descriptors, 0, nullptr);
-
-    m_device_dispatch.cmdPushConstants(cmd, effect.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                                       sizeof(effect.push_constants), &effect.push_constants);
-
     m_device_dispatch.cmdDispatch(cmd, uint32_t(std::ceil(float(m_draw_extent.width) / 16.0f)),
                                   uint32_t(std::ceil(float(m_draw_extent.height) / 16.0f)), 1);
 }
@@ -293,10 +245,6 @@ void VulkanEngine::InitAllocator()
 void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 {
     // destroy in case it already exists
-    for (std::size_t i = 0; i < m_swapchain_image_views.size(); ++i)
-    {
-        m_device_dispatch.destroyImageView(m_swapchain_image_views[i], nullptr);
-    }
     m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr);
 
     vkb::SwapchainBuilder builder(m_gpu, m_device, m_surface);
@@ -318,7 +266,7 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
     m_swapchain_images = vkb_swapchain.get_images().value();
     m_swapchain_image_views = vkb_swapchain.get_image_views().value();
 
-    for (std::size_t i = 0; i < m_swapchain_image_views.size(); ++i)
+    for (size_t i = 0; i < m_swapchain_image_views.size(); ++i)
     {
         m_deletion_queue.PushFunction("swapchain image view", [i, this]() {
             m_device_dispatch.destroyImageView(m_swapchain_image_views[i], nullptr);
@@ -377,7 +325,7 @@ void VulkanEngine::InitCommands()
     VkCommandPoolCreateInfo commandPoolInfo =
         Utils::CommandPoolCreateInfo(m_graphics_queue_family, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
-    for (std::size_t i = 0; i < FRAME_OVERLAP; ++i)
+    for (size_t i = 0; i < FRAME_OVERLAP; ++i)
     {
         VK_CHECK(m_device_dispatch.createCommandPool(&commandPoolInfo, nullptr, &m_frames[i].command_pool));
 
@@ -395,7 +343,7 @@ void VulkanEngine::InitSyncStructures()
     VkFenceCreateInfo fenceCreateInfo = Utils::FenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
     VkSemaphoreCreateInfo semaphoreCreateInfo = Utils::SemaphoreCreateInfo(0);
 
-    for (std::size_t i = 0; i < FRAME_OVERLAP; ++i)
+    for (size_t i = 0; i < FRAME_OVERLAP; ++i)
     {
         VK_CHECK(m_device_dispatch.createFence(&fenceCreateInfo, nullptr, &m_frames[i].render_fence));
 
@@ -461,38 +409,37 @@ bool VulkanEngine::InitBackgroundPipelines()
     layout_info.pSetLayouts = &m_draw_image_descriptor_layout;
     layout_info.setLayoutCount = 1;
 
-    VkPushConstantRange push_constants_info{};
-    push_constants_info.offset = 0;
-    push_constants_info.size = sizeof(PushConstants);
-    push_constants_info.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-    layout_info.pushConstantRangeCount = 1;
-    layout_info.pPushConstantRanges = &push_constants_info;
-
     VK_CHECK(m_device_dispatch.createPipelineLayout(&layout_info, nullptr, &m_gradient_pipeline_layout));
 
-    m_deletion_queue.PushFunction(
-        "pipeline layout", [this]() { m_device_dispatch.destroyPipelineLayout(m_gradient_pipeline_layout, nullptr); });
-
-    // create background effects
-    ComputeEffect sky_effect;
-    if (CreateComputeEffect("sky", "../data/shader/sky.comp.spv", m_device_dispatch, m_gradient_pipeline_layout,
-                            m_deletion_queue, &sky_effect) == false)
+    VkShaderModule shader_module{};
+    if (Utils::LoadShaderModule(m_device_dispatch, "../data/shader/stuff.comp.spv", &shader_module) == false)
     {
+        m_device_dispatch.destroyPipelineLayout(m_gradient_pipeline_layout, nullptr);
         return false;
     }
-    sky_effect.push_constants.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
-    m_compute_effects.emplace_back(sky_effect);
 
-    ComputeEffect gradient;
-    if (CreateComputeEffect("gradient_color", "../data/shader/gradient_color.comp.spv", m_device_dispatch,
-                            m_gradient_pipeline_layout, m_deletion_queue, &gradient) == false)
-    {
-        return false;
-    }
-    gradient.push_constants.data1 = glm::vec4(1, 0, 0, 1);
-    gradient.push_constants.data2 = glm::vec4(0, 0, 1, 1);
-    m_compute_effects.emplace_back(gradient);
+    VkPipelineShaderStageCreateInfo stage_info{};
+    stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stage_info.pNext = nullptr;
+    stage_info.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    stage_info.module = shader_module;
+    stage_info.pName = "main";
+
+    VkComputePipelineCreateInfo compute_pipeline_info{};
+    compute_pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    compute_pipeline_info.pNext = nullptr;
+    compute_pipeline_info.layout = m_gradient_pipeline_layout;
+    compute_pipeline_info.stage = stage_info;
+
+    VK_CHECK(m_device_dispatch.createComputePipelines(VK_NULL_HANDLE, 1, &compute_pipeline_info, nullptr,
+                                                      &m_gradient_pipeline));
+
+    // Clean up
+    m_device_dispatch.destroyShaderModule(shader_module, nullptr);
+    m_deletion_queue.PushFunction("pipelines", [this]() {
+        m_device_dispatch.destroyPipelineLayout(m_gradient_pipeline_layout, nullptr);
+        m_device_dispatch.destroyPipeline(m_gradient_pipeline, nullptr);
+    });
 
     return true;
 }

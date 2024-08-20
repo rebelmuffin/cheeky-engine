@@ -7,6 +7,23 @@
 
 struct SDL_Window;
 
+struct PushConstants
+{
+    glm::vec4 data1;
+    glm::vec4 data2;
+    glm::vec4 data3;
+    glm::vec4 data4;
+};
+
+struct ComputeEffect
+{
+    const char* name;
+    const char* path;
+    VkPipeline pipeline;
+    VkPipelineLayout layout;
+    PushConstants push_constants;
+};
+
 struct FrameData
 {
     VkCommandPool command_pool = nullptr;
@@ -36,6 +53,19 @@ class VulkanEngine
 
     // run main loop
     void Update(double delta_ms);
+
+    std::vector<ComputeEffect>& ComputeEffects()
+    {
+        return m_compute_effects;
+    }
+    std::size_t CurrentComputeEffect()
+    {
+        return m_current_effect;
+    }
+    void SetCurrentComputeEffect(std::size_t target)
+    {
+        m_current_effect = target;
+    }
 
   private:
     // draw loop
@@ -79,6 +109,8 @@ class VulkanEngine
 
     VkPipeline m_gradient_pipeline;
     VkPipelineLayout m_gradient_pipeline_layout;
+    std::vector<ComputeEffect> m_compute_effects{};
+    std::size_t m_current_effect = 0;
 
     std::vector<VkImage> m_swapchain_images;
     std::vector<VkImageView> m_swapchain_image_views;
