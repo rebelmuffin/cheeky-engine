@@ -82,18 +82,38 @@ void EngineCore::RunMainLoop()
 
 void EngineCore::OnImgui()
 {
-    // Show Imgui demo
-    ImGui::ShowDemoWindow();
+    float imgui_menu_cursor_y = 0;
+    if (ImGui::BeginMainMenuBar())
+    {
+        if (ImGui::BeginMenu("ImGUI"))
+        {
+            ImGui::Checkbox("Show Demo", &m_show_imgui_demo);
+            ImGui::Checkbox("Frame Stats", &m_show_fps);
+            ImGui::EndMenu();
+        }
 
-    // draw time delta and FPS
-    ImDrawList* draw_list = ImGui::GetForegroundDrawList();
-    double delta_s = m_last_delta_ms / 1000.0;
-    std::ostringstream stream;
-    stream << "FPS: " << std::setw(5) << int64_t(1.0 / delta_s) << " | " << std::fixed << std::setprecision(2)
-           << m_last_delta_ms << "ms";
-    std::string fps_text = stream.str();
-    draw_list->AddText({0.0f, 0.0f}, ImGui::GetColorU32(ImGuiCol_Text), fps_text.data(),
-                       fps_text.data() + fps_text.size());
+        ImGuiContext& ctx = *ImGui::GetCurrentContext();
+        imgui_menu_cursor_y = ctx.Style.DisplaySafeAreaPadding.y * 2.0f + ctx.Font->FontSize; // is this okay??
+        ImGui::EndMainMenuBar();
+    }
+
+    if (m_show_imgui_demo)
+    {
+        ImGui::ShowDemoWindow();
+    }
+
+    if (m_show_fps)
+    {
+        // draw time delta and FPS
+        ImDrawList* draw_list = ImGui::GetForegroundDrawList();
+        double delta_s = m_last_delta_ms / 1000.0;
+        std::ostringstream stream;
+        stream << "FPS: " << std::setw(5) << int64_t(1.0 / delta_s) << " | " << std::fixed << std::setprecision(2)
+               << m_last_delta_ms << "ms";
+        std::string fps_text = stream.str();
+        draw_list->AddText({0.0f, imgui_menu_cursor_y}, ImGui::GetColorU32(ImGuiCol_Text), fps_text.data(),
+                           fps_text.data() + fps_text.size());
+    }
 }
 
 bool EngineCore::InitialisationFailed()

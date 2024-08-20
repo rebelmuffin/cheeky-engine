@@ -26,4 +26,7 @@ class EngineCore
     double m_last_delta_ms = 0;
     int64_t m_last_update_us = 0;
     bool m_initialisation_failure = false;
+
+    bool m_show_imgui_demo = false;
+    bool m_show_fps = true;
 };
