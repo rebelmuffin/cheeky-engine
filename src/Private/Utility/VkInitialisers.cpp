@@ -169,4 +169,17 @@ namespace Utils
         return info;
     }
 
+    VkPipelineShaderStageCreateInfo ShaderStageCreateInfo(const char* name, VkShaderModule shader,
+                                                          VkShaderStageFlagBits stage)
+    {
+        VkPipelineShaderStageCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        info.pNext = nullptr;
+        info.pName = name;
+        info.stage = stage;
+        info.module = shader;
+
+        return info;
+    }
+
 } // namespace Utils

@@ -71,6 +71,7 @@ class VulkanEngine
     // draw loop
     void Draw(double delta_ms);
     void DrawBackground(VkCommandBuffer cmd);
+    void DrawGeometry(VkCommandBuffer cmd);
     void DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view);
 
     bool InitVulkan();
@@ -81,6 +82,7 @@ class VulkanEngine
     void InitDescriptors();
     bool InitPipelines();
     bool InitBackgroundPipelines();
+    bool InitTrianglePipeline();
     void InitImgui();
 
     void CreateSwapchain(uint32_t width, uint32_t height);
@@ -110,6 +112,9 @@ class VulkanEngine
     VkPipelineLayout m_gradient_pipeline_layout;
     std::vector<ComputeEffect> m_compute_effects{};
     std::size_t m_current_effect = 0;
+
+    VkPipeline m_triangle_pipeline;
+    VkPipelineLayout m_triangle_pipeline_layout;
 
     std::vector<VkImage> m_swapchain_images;
     std::vector<VkImageView> m_swapchain_image_views;
