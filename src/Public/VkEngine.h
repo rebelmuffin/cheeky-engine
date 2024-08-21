@@ -107,7 +107,6 @@ class VulkanEngine
     VkDescriptorSet m_draw_image_descriptors;
     VkDescriptorSetLayout m_draw_image_descriptor_layout;
 
-    VkPipeline m_gradient_pipeline;
     VkPipelineLayout m_gradient_pipeline_layout;
     std::vector<ComputeEffect> m_compute_effects{};
     std::size_t m_current_effect = 0;
