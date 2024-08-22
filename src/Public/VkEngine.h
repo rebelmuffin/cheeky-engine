@@ -4,6 +4,7 @@
 #include "Utility/VkDescriptors.h"
 #include "VkBootstrapDispatch.h"
 #include "VkTypes.h"
+#include <vulkan/vulkan_core.h>
 
 struct SDL_Window;
 
@@ -34,12 +35,21 @@ struct FrameData
     VkFence render_fence = nullptr;            // so we can wait for this frame on cpu
 };
 
+// The pending mesh upload structure is used to keep a list of pending uploads to execute on next draw.
+// Staging buffer is deleted after this operation, can probably recycle it instead but eh.
+struct PendingMeshUpload
+{
+    GPUMeshBuffers target_mesh;
+    AllocatedBuffer staging_buffer;
+};
+
 constexpr int FRAME_OVERLAP = 2;
 
 class VulkanEngine
 {
   public:
-    VulkanEngine(uint32_t window_width, uint32_t window_height, SDL_Window* window, bool use_validation_layers);
+    VulkanEngine(uint32_t window_width, uint32_t window_height, SDL_Window* window, float backbuffer_scale,
+                 bool use_validation_layers);
 
     bool is_initialised{false};
     int frame_number{0};
@@ -88,6 +98,10 @@ class VulkanEngine
     void CreateSwapchain(uint32_t width, uint32_t height);
     void CreateDrawImage();
 
+    AllocatedBuffer CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage);
+    void DestroyBuffer(const AllocatedBuffer& buffer);
+    GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
+
     void DeleteFence(int frame_idx);
 
     VkInstance m_instance = nullptr;
@@ -108,6 +122,7 @@ class VulkanEngine
     VkExtent2D m_draw_extent;
     VkDescriptorSet m_draw_image_descriptors;
     VkDescriptorSetLayout m_draw_image_descriptor_layout;
+    float m_backbuffer_scale;
 
     VkPipelineLayout m_gradient_pipeline_layout;
     std::vector<ComputeEffect> m_compute_effects{};

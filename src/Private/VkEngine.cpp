@@ -4,14 +4,19 @@
 #include "Utility/VkImages.h"
 #include "Utility/VkInitialisers.h"
 #include "Utility/VkPipelines.h"
+#include "VkTypes.h"
 
 #include <SDL.h>
 #include <SDL_vulkan.h>
 #include <VkBootstrap.h>
 
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <thread>
+#include <vulkan/vulkan_core.h>
 
 #define VK_DEVICE_CALL(device, function, ...)                                                                          \
     reinterpret_cast<PFN_##function>(m_get_device_proc_addr(device, #function))(device, __VA_ARGS__);
@@ -19,9 +24,10 @@
 #define VK_INSTANCE_CALL(instance, function, ...)                                                                      \
     reinterpret_cast<PFN_##function>(m_get_instance_proc_addr(instance, #function))(instance, __VA_ARGS__);
 
-VulkanEngine::VulkanEngine(uint32_t window_width, uint32_t window_height, SDL_Window* window,
+VulkanEngine::VulkanEngine(uint32_t window_width, uint32_t window_height, SDL_Window* window, float backbuffer_scale,
                            bool use_validation_layers)
-    : m_window_extent({window_width, window_height}), m_window(window), m_use_validation_layers(use_validation_layers)
+    : m_backbuffer_scale(backbuffer_scale), m_window_extent({window_width, window_height}), m_window(window),
+      m_use_validation_layers(use_validation_layers)
 {
 }
 
@@ -370,7 +376,8 @@ void VulkanEngine::CreateDrawImage()
     m_device_dispatch.destroyImageView(m_draw_image.image_view, nullptr);
     vmaDestroyImage(m_allocator, m_draw_image.image, m_draw_image.allocation);
 
-    VkExtent3D image_extent{m_window_extent.width, m_window_extent.height, 1};
+    VkExtent3D image_extent{uint32_t(float(m_window_extent.width) * m_backbuffer_scale),
+                            uint32_t(float(m_window_extent.height) * m_backbuffer_scale), 1};
 
     m_draw_extent = VkExtent2D{image_extent.width, image_extent.height};
     m_draw_image.image_extent = image_extent;
@@ -400,6 +407,66 @@ void VulkanEngine::CreateDrawImage()
         m_device_dispatch.destroyImageView(m_draw_image.image_view, nullptr);
         vmaDestroyImage(m_allocator, m_draw_image.image, m_draw_image.allocation);
     });
+}
+
+AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage,
+                                           VmaMemoryUsage memory_usage)
+{
+    VkBufferCreateInfo buffer_info{};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.pNext = nullptr;
+    buffer_info.size = allocation_size;
+    buffer_info.usage = usage;
+
+    VmaAllocationCreateInfo alloc_create_info{};
+    alloc_create_info.usage = memory_usage;
+    alloc_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    AllocatedBuffer buffer;
+
+    VK_CHECK(vmaCreateBuffer(m_allocator, &buffer_info, &alloc_create_info, &buffer.buffer, &buffer.allocation,
+                             &buffer.allocation_info));
+
+    return buffer;
+}
+
+void VulkanEngine::DestroyBuffer(const AllocatedBuffer& buffer)
+{
+    vmaDestroyBuffer(m_allocator, buffer.buffer, buffer.allocation);
+}
+
+GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
+{
+    const size_t vertex_buffer_size = vertices.size() * sizeof(Vertex);
+    const size_t index_buffer_size = indices.size() * sizeof(uint32_t);
+
+    GPUMeshBuffers buffers{};
+
+    // storage to make VB an SSBO. Transfer so we can copy into them.
+    VkBufferUsageFlags vertex_usage =
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    VkBufferUsageFlags index_usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buffers.vertex_buffer = CreateBuffer(vertex_buffer_size, vertex_usage, VMA_MEMORY_USAGE_GPU_ONLY);
+
+    VkBufferDeviceAddressInfo device_address{};
+    device_address.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    device_address.pNext = nullptr;
+    device_address.buffer = buffers.vertex_buffer.buffer;
+    m_device_dispatch.getBufferDeviceAddress(&device_address);
+
+    buffers.index_buffer = CreateBuffer(index_buffer_size, index_usage, VMA_MEMORY_USAGE_GPU_ONLY);
+
+    // the buffers are created. Now we need to do the same thing basically and create a staging buffer.
+
+    AllocatedBuffer staging = CreateBuffer(vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                           VMA_MEMORY_USAGE_CPU_ONLY);
+
+    void* data = staging.allocation->GetMappedData();
+    memcpy(data, vertices.data(), vertex_buffer_size);
+    memcpy(static_cast<char*>(data) + vertex_buffer_size, indices.data(), index_buffer_size);
+
+    // destroy the staging buffer
+
+    return buffers;
 }
 
 void VulkanEngine::ResetSwapchain()

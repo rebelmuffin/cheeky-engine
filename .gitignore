@@ -1,5 +1,6 @@
 *.kdev4
 .vscode
+.cache
 
 # ignore renderdoc captures
 /captures/*

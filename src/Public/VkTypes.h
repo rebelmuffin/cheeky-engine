@@ -12,6 +12,7 @@
 
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
@@ -34,4 +35,33 @@ struct AllocatedImage
     VmaAllocation allocation;
     VkExtent3D image_extent;
     VkFormat image_format;
+};
+
+struct AllocatedBuffer
+{
+    VkBuffer buffer;
+    VmaAllocation allocation;
+    VmaAllocationInfo allocation_info;
+};
+
+struct Vertex
+{
+    glm::vec3 position;
+    float uv_x;
+    glm::vec3 normal;
+    float ux_y;
+    glm::vec4 colour;
+};
+
+struct GPUMeshBuffers
+{
+    AllocatedBuffer index_buffer;
+    AllocatedBuffer vertex_buffer;
+    VkDeviceAddress vertex_buffer_address;
+};
+
+struct GPUDrawPushConstants
+{
+    glm::mat4 world_matrix;
+    VkDeviceAddress mesh_buffer_address;
 };

@@ -16,7 +16,7 @@ EngineCore::EngineCore(int width, int height)
     m_window = SDL_CreateWindow("Vulkan Engine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height,
                                 window_flags);
 
-    m_renderer = std::make_unique<VulkanEngine>(width, height, m_window, /* use_validation_layers = */ true);
+    m_renderer = std::make_unique<VulkanEngine>(width, height, m_window, 1.0f, /* use_validation_layers = */ true);
     if (m_renderer->Init() == false)
     {
         m_initialisation_failure = true;
@@ -95,6 +95,7 @@ void EngineCore::OnImgui()
         if (ImGui::BeginMenu("Graphics"))
         {
             ImGui::Checkbox("Compute Effects", &m_show_compute_effects);
+            ImGui::Checkbox("Engine Settings", &m_show_engine_settings);
             ImGui::EndMenu();
         }
 
@@ -172,6 +173,16 @@ void EngineCore::OnImgui()
         if (ImGui::ColorEdit4("data4", data4))
         {
             copy_array_to_vec(data4, constants->data4);
+        }
+
+        ImGui::End();
+    }
+
+    if (m_show_engine_settings && ImGui::Begin("Engine Settings", &m_show_engine_settings))
+    {
+        if (ImGui::Button("Reset Swapchain"))
+        {
+            // m_renderer->ResetSwapchain();
         }
 
         ImGui::End();
