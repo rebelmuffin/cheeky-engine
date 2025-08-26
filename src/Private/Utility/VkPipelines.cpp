@@ -226,7 +226,8 @@ namespace Utils
         pipeline_info.layout = m_pipeline_layout;
 
         VkPipeline new_pipeline;
-        VkResult result = device_dispatch.createGraphicsPipelines(nullptr, 1, &pipeline_info, nullptr, &new_pipeline);
+        VkResult result =
+            device_dispatch.createGraphicsPipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &new_pipeline);
         if (result != VK_SUCCESS)
         {
             std::cout << "[!] Failed to create pipeline." << std::endl;

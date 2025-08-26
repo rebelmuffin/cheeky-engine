@@ -39,6 +39,8 @@ struct FrameData
 // Staging buffer is deleted after this operation, can probably recycle it instead but eh.
 struct PendingMeshUpload
 {
+    size_t vertex_buffer_size;
+    size_t index_buffer_size;
     GPUMeshBuffers target_mesh;
     AllocatedBuffer staging_buffer;
 };
@@ -80,6 +82,7 @@ class VulkanEngine
   private:
     // draw loop
     void Draw(double delta_ms);
+    void FinishPendingUploads(VkCommandBuffer cmd);
     void DrawBackground(VkCommandBuffer cmd);
     void DrawGeometry(VkCommandBuffer cmd);
     void DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view);
@@ -92,7 +95,8 @@ class VulkanEngine
     void InitDescriptors();
     bool InitPipelines();
     bool InitBackgroundPipelines();
-    bool InitTrianglePipeline();
+    bool InitMeshPipeline();
+    void InitDefaultData();
     void InitImgui();
 
     void CreateSwapchain(uint32_t width, uint32_t height);
@@ -128,8 +132,9 @@ class VulkanEngine
     std::vector<ComputeEffect> m_compute_effects{};
     std::size_t m_current_effect = 0;
 
-    VkPipeline m_triangle_pipeline;
-    VkPipelineLayout m_triangle_pipeline_layout;
+    VkPipeline m_mesh_pipeline;
+    VkPipelineLayout m_mesh_pipeline_layout;
+    GPUMeshBuffers m_rectangle_mesh;
 
     std::vector<VkImage> m_swapchain_images;
     std::vector<VkImageView> m_swapchain_image_views;
@@ -152,6 +157,7 @@ class VulkanEngine
 
     bool m_use_validation_layers;
 
+    std::vector<PendingMeshUpload> m_pending_uploads;
     Utils::DeletionQueue m_deletion_queue;
 
     uint64_t m_last_update_us = 0;
