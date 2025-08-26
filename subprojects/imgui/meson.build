@@ -1,4 +1,4 @@
-project('Dear ImGUI', 'cpp', version: '1.19.1', default_options : ['default_library=static'])
+project('Dear ImGUI', 'cpp', version: '1.92.2b', default_options : ['default_library=static'])
 
 imgui_includes = include_directories('./backends', '.')
 

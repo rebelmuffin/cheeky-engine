@@ -684,6 +684,7 @@ void VulkanEngine::InitImgui()
     VK_CHECK(m_device_dispatch.createDescriptorPool(&pool_info, nullptr, &imgui_descriptor_pool));
 
     ImGui_ImplVulkan_LoadFunctions(
+        VK_API_VERSION_1_3,
         [](const char* function_name, void* engine) {
             VulkanEngine* engine_casted = reinterpret_cast<VulkanEngine*>(engine);
             return engine_casted->m_get_instance_proc_addr(engine_casted->m_instance, function_name);
@@ -709,7 +710,6 @@ void VulkanEngine::InitImgui()
     init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 
     ImGui_ImplVulkan_Init(&init_info);
-    ImGui_ImplVulkan_CreateFontsTexture();
 
     m_deletion_queue.PushFunction("imgui", [this, imgui_descriptor_pool]() {
         ImGui_ImplVulkan_Shutdown();
