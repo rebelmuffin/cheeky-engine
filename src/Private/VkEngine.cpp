@@ -372,10 +372,6 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
 
 void VulkanEngine::CreateDrawImage()
 {
-    // destroy in case already exists
-    m_device_dispatch.destroyImageView(m_draw_image.image_view, nullptr);
-    vmaDestroyImage(m_allocator, m_draw_image.image, m_draw_image.allocation);
-
     VkExtent3D image_extent{uint32_t(float(m_window_extent.width) * m_backbuffer_scale),
                             uint32_t(float(m_window_extent.height) * m_backbuffer_scale), 1};
 
