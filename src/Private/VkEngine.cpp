@@ -687,6 +687,13 @@ void VulkanEngine::InitImgui()
     VkDescriptorPool imgui_descriptor_pool;
     VK_CHECK(m_device_dispatch.createDescriptorPool(&pool_info, nullptr, &imgui_descriptor_pool));
 
+    ImGui_ImplVulkan_LoadFunctions(
+        [](const char* function_name, void* engine) {
+            VulkanEngine* engine_casted = reinterpret_cast<VulkanEngine*>(engine);
+            return engine_casted->m_get_instance_proc_addr(engine_casted->m_instance, function_name);
+        },
+        this);
+
     ImGui::CreateContext();
     ImGui_ImplSDL2_InitForVulkan(m_window);
     ImGui_ImplVulkan_InitInfo init_info{};

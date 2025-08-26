@@ -34,8 +34,6 @@ imgui_dep = dependency('imgui')
 # cmake dependencies
 vkbootstrap_proj = cmake.subproject('vkbootstrap')
 vkbootstrap_dep = vkbootstrap_proj.dependency('vk-bootstrap')
-volk_proj = cmake.subproject('volk')
-volk_dep = volk_proj.dependency('volk')
 
 # other third party
 stb_image_dep = dependency('stb_image')
@@ -62,7 +60,6 @@ executable(
         glm_dep,
         imgui_dep,
         vkbootstrap_dep,
-        volk_dep,
         stb_image_dep,
         tinyobjloader_dep,
     ],
