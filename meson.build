@@ -49,6 +49,7 @@ executable(
     'src/Private/main.cpp',
     'src/Private/VkEngine.cpp',
     'src/Private/EngineCore.cpp',
+    'src/Private/Utility/VkLoader.cpp',
     'src/Private/Utility/VkPipelines.cpp',
     'src/Private/Utility/VkInitialisers.cpp',
     'src/Private/Utility/VkImages.cpp',
