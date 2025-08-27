@@ -6,6 +6,8 @@ project(
     meson_version: '>= 0.60.0',
 )
 
+add_global_arguments('-DGLM_FORCE_DEPTH_ZERO_TO_ONE', language: 'cpp')
+
 cmake = import('cmake')
 
 # Compile all shaders under data/shader/

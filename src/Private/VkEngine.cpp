@@ -10,6 +10,9 @@
 #include <SDL.h>
 #include <SDL_vulkan.h>
 #include <VkBootstrap.h>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/transform.hpp>
+#undef GLM_ENABLE_EXPERIMENTAL
 
 #include <cmath>
 #include <cstddef>
@@ -240,9 +243,6 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
     m_device_dispatch.cmdBeginRendering(cmd, &render_info);
 
     m_device_dispatch.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_mesh_pipeline);
-    m_device_dispatch.cmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_mesh_pipeline_layout, 0, 1,
-                                            &m_draw_image_descriptors, 0, nullptr);
-
     VkViewport viewport{};
     viewport.x = 0;
     viewport.y = 0;
@@ -261,7 +261,21 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 
     GPUDrawPushConstants push_constants;
     push_constants.vertex_buffer_address = m_default_mesh->buffers.vertex_buffer_address;
-    push_constants.world_matrix = glm::mat4(1.0f);
+
+    glm::mat4 view = glm::translate(glm::vec3{0, 0, -1.0f});
+    // camera projection
+    glm::mat4 projection =
+        glm::perspective(glm::radians(70.f), (float)m_draw_extent.width / (float)m_draw_extent.height, 10000.f, 0.1f);
+
+    // invert the Y direction on projection matrix so that we are more similar
+    // to opengl and gltf axis
+    projection[1][1] *= -1;
+
+    // rotate over time
+    float angle = float(frame_number % 360) * 0.5f;
+    view = glm::rotate(view, glm::radians(angle), glm::vec3(0, 1, 0));
+
+    push_constants.world_matrix = projection * view;
 
     m_device_dispatch.cmdPushConstants(cmd, m_mesh_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
                                        sizeof(push_constants), &push_constants);
