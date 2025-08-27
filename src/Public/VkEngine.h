@@ -80,6 +80,9 @@ class VulkanEngine
         m_current_effect = target;
     }
 
+    float GetRenderScale() const;
+    void SetRenderScale(float scale);
+
     AllocatedBuffer CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage,
                                  const char* debug_name = "unnamed_buffer");
     void DestroyBuffer(const AllocatedBuffer& buffer);
@@ -102,7 +105,6 @@ class VulkanEngine
 
     bool InitVulkan();
     void InitAllocator();
-    void ResetSwapchain();
     void InitCommands();
     void InitSyncStructures();
     void InitDescriptors();
@@ -116,6 +118,8 @@ class VulkanEngine
     void CreateDrawImage();
     void CreateDepthImage();
 
+    void DestroySwapchain();
+    void ResizeSwapchain();
     void SetAllocationName(VmaAllocation allocation, const char* name);
 
     VkInstance m_instance = nullptr;
@@ -136,6 +140,7 @@ class VulkanEngine
     AllocatedImage m_depth_image;
 
     VkExtent2D m_draw_extent;
+    float m_render_scale = 1.0f;
     VkDescriptorSet m_draw_image_descriptors;
     VkDescriptorSetLayout m_draw_image_descriptor_layout;
     float m_backbuffer_scale;
@@ -179,4 +184,5 @@ class VulkanEngine
     Utils::DeletionQueue m_deletion_queue;
 
     uint64_t m_last_update_us = 0;
+    bool m_resize_requested = false;
 };

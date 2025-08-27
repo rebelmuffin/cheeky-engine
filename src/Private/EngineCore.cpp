@@ -12,7 +12,7 @@ EngineCore::EngineCore(int width, int height)
     // We initialize SDL and create a window with it.
     SDL_Init(SDL_INIT_VIDEO);
 
-    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN);
+    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
     m_window = SDL_CreateWindow("Vulkan Engine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height,
                                 window_flags);
@@ -191,9 +191,10 @@ void EngineCore::OnImgui()
     {
         if (ImGui::Begin("Engine Settings", &m_show_engine_settings))
         {
-            if (ImGui::Button("Reset Swapchain"))
+            float render_scale = m_renderer->GetRenderScale();
+            if (ImGui::SliderFloat("Render Scale", &render_scale, 0.1f, 1.0f))
             {
-                // m_renderer->ResetSwapchain();
+                m_renderer->SetRenderScale(render_scale);
             }
         }
         ImGui::End();

@@ -7,20 +7,22 @@
 #include "Utility/VkPipelines.h"
 #include "VkTypes.h"
 
+#include "SDL_video.h"
 #include <SDL.h>
 #include <SDL_vulkan.h>
 #include <VkBootstrap.h>
+#include <vulkan/vulkan_core.h>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/transform.hpp>
 #undef GLM_ENABLE_EXPERIMENTAL
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <thread>
-#include <vulkan/vulkan_core.h>
 
 #define VK_DEVICE_CALL(device, function, ...)                                                                          \
     reinterpret_cast<PFN_##function>(m_get_device_proc_addr(device, #function))(device, __VA_ARGS__);
@@ -86,7 +88,9 @@ bool VulkanEngine::Init()
     }
 
     InitAllocator();
-    ResetSwapchain();
+    CreateSwapchain(m_window_extent.width, m_window_extent.height);
+    CreateDrawImage();
+    CreateDepthImage();
     InitCommands();
     InitSyncStructures();
     InitDescriptors();
@@ -110,10 +114,23 @@ void VulkanEngine::Cleanup()
 
     m_deletion_queue.Flush();
 
+    // swapchain isn't handled by the deletion queue because it gets recreated at runtime
+    DestroySwapchain();
+
     VK_DEVICE_CALL(m_device, vkDestroyDevice, nullptr);
     vkb::destroy_debug_utils_messenger(m_instance, m_debug_messenger);
     VK_INSTANCE_CALL(m_instance, vkDestroyInstance, nullptr);
     is_initialised = false;
+}
+
+float VulkanEngine::GetRenderScale() const
+{
+    return m_render_scale;
+}
+
+void VulkanEngine::SetRenderScale(float scale)
+{
+    m_render_scale = std::clamp(scale, 0.1f, 1.0f);
 }
 
 void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
@@ -127,13 +144,18 @@ void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
         m_swapchain, one_second_ns, GetCurrentFrame().swapchain_semaphore, nullptr, &swapchain_image_index);
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
-        ResetSwapchain();
+        m_resize_requested = true;
         return;
     }
     else if (result == VK_TIMEOUT)
     {
         return; // try again next frame
     }
+
+    m_draw_extent.height =
+        uint32_t((float)std::min(m_swapchain_extent.height, m_draw_image.image_extent.height) * m_render_scale);
+    m_draw_extent.width =
+        uint32_t((float)std::min(m_swapchain_extent.width, m_draw_image.image_extent.width) * m_render_scale);
 
     VkCommandBuffer cmd = GetCurrentFrame().command_buffer;
     VK_CHECK(m_device_dispatch.resetCommandBuffer(cmd, 0));
@@ -184,7 +206,7 @@ void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
     result = m_device_dispatch.queuePresentKHR(m_graphics_queue, &present_info);
     if (result == VK_SUBOPTIMAL_KHR)
     {
-        ResetSwapchain();
+        m_resize_requested = true;
         return;
     }
     else if (result != VK_SUCCESS)
@@ -334,13 +356,19 @@ void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& fu
 
 void VulkanEngine::Update(double delta_ms)
 {
+    ImGui::Render();
+
     if (stop_rendering)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         return;
     }
 
-    ImGui::Render();
+    if (m_resize_requested)
+    {
+        ResizeSwapchain();
+        return; // no render while resizing (or minimised!)
+    }
 
     Draw(delta_ms);
 }
@@ -533,15 +561,6 @@ void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
     m_swapchain = vkb_swapchain.swapchain;
     m_swapchain_images = vkb_swapchain.get_images().value();
     m_swapchain_image_views = vkb_swapchain.get_image_views().value();
-
-    for (std::size_t i = 0; i < m_swapchain_image_views.size(); ++i)
-    {
-        m_deletion_queue.PushFunction("swapchain image view", [i, this]() {
-            m_device_dispatch.destroyImageView(m_swapchain_image_views[i], nullptr);
-        });
-    }
-    m_deletion_queue.PushFunction("swapchain",
-                                  [this]() { m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr); });
 }
 
 void VulkanEngine::CreateDrawImage()
@@ -610,13 +629,6 @@ AllocatedImage VulkanEngine::AllocateImage(uint32_t width, uint32_t height, VkFo
     VK_CHECK(m_device_dispatch.createImageView(&image_view_info, nullptr, &image.image_view));
 
     return image;
-}
-
-void VulkanEngine::ResetSwapchain()
-{
-    CreateSwapchain(m_window_extent.width, m_window_extent.height);
-    CreateDrawImage();
-    CreateDepthImage();
 }
 
 void VulkanEngine::InitCommands()
@@ -913,6 +925,38 @@ void VulkanEngine::InitImgui()
         ImGui_ImplVulkan_Shutdown();
         m_device_dispatch.destroyDescriptorPool(imgui_descriptor_pool, nullptr);
     });
+}
+
+void VulkanEngine::DestroySwapchain()
+{
+    for (std::size_t i = 0; i < m_swapchain_image_views.size(); ++i)
+    {
+        m_device_dispatch.destroyImageView(m_swapchain_image_views[i], nullptr);
+    }
+    m_swapchain_image_views.clear();
+
+    m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr);
+    m_swapchain = VK_NULL_HANDLE;
+}
+
+void VulkanEngine::ResizeSwapchain()
+{
+    m_device_dispatch.deviceWaitIdle();
+
+    DestroySwapchain();
+
+    int32_t width, height;
+    SDL_GetWindowSize(m_window, &width, &height);
+    if (width == 0 || height == 0)
+    {
+        // window is minimized, wait until we get a non-zero size
+        return;
+    }
+
+    m_window_extent = VkExtent2D{uint32_t(width), uint32_t(height)};
+    CreateSwapchain(m_window_extent.width, m_window_extent.height);
+
+    m_resize_requested = false;
 }
 
 void VulkanEngine::SetAllocationName([[maybe_unused]] VmaAllocation allocation, [[maybe_unused]] const char* name)
