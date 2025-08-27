@@ -67,7 +67,7 @@ namespace Utils
             {
                 GeoSurface surface;
                 surface.first_index = static_cast<uint32_t>(indices.size());
-                surface.index_count = static_cast<uint32_t>(primitive.indicesAccessor.value());
+                surface.index_count = static_cast<uint32_t>(asset.accessors[primitive.indicesAccessor.value()].count);
 
                 const size_t initial_vertex = vertices.size();
 
