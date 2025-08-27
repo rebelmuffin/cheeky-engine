@@ -8,6 +8,8 @@ project(
 
 add_global_arguments('-DGLM_FORCE_DEPTH_ZERO_TO_ONE', language: 'cpp')
 
+add_project_arguments('-DCHEEKY_ENABLE_MEMORY_TRACKING', language: 'cpp')
+
 cmake = import('cmake')
 
 # Compile all shaders under data/shader/

@@ -80,9 +80,13 @@ class VulkanEngine
         m_current_effect = target;
     }
 
-    AllocatedBuffer CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage);
+    AllocatedBuffer CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage,
+                                 const char* debug_name = "unnamed_buffer");
     void DestroyBuffer(const AllocatedBuffer& buffer);
     GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
+    AllocatedImage AllocateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage,
+                                 VmaMemoryUsage memory_usage, VkMemoryPropertyFlags additional_flags = 0,
+                                 const char* debug_name = "unnamed_image");
 
   private:
     // draw loop
@@ -109,7 +113,7 @@ class VulkanEngine
     void CreateSwapchain(uint32_t width, uint32_t height);
     void CreateDrawImage();
 
-    void DeleteFence(int frame_idx);
+    void SetAllocationName(VmaAllocation allocation, const char* name);
 
     VkInstance m_instance = nullptr;
     VkDebugUtilsMessengerEXT m_debug_messenger = nullptr;

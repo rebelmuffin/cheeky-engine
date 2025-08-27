@@ -337,7 +337,7 @@ void VulkanEngine::Update(double delta_ms)
 }
 
 AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage,
-                                           VmaMemoryUsage memory_usage)
+                                           VmaMemoryUsage memory_usage, const char* debug_name)
 {
     VkBufferCreateInfo buffer_info{};
     buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -352,6 +352,7 @@ AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocation_size, VkBufferUsage
 
     VK_CHECK(vmaCreateBuffer(m_allocator, &buffer_info, &alloc_create_info, &buffer.buffer, &buffer.allocation,
                              &buffer.allocation_info));
+    SetAllocationName(buffer.allocation, debug_name);
 
     return buffer;
 }
@@ -372,7 +373,8 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
     // can copy into them.
     VkBufferUsageFlags vertex_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    buffers.vertex_buffer = CreateBuffer(vertex_buffer_size, vertex_usage, VMA_MEMORY_USAGE_GPU_ONLY);
+    buffers.vertex_buffer =
+        CreateBuffer(vertex_buffer_size, vertex_usage, VMA_MEMORY_USAGE_GPU_ONLY, "buffer_mesh_vertex");
 
     VkBufferDeviceAddressInfo device_address{};
     device_address.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -381,12 +383,12 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
     buffers.vertex_buffer_address = m_device_dispatch.getBufferDeviceAddress(&device_address);
 
     VkBufferUsageFlags index_usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    buffers.index_buffer = CreateBuffer(index_buffer_size, index_usage, VMA_MEMORY_USAGE_GPU_ONLY);
+    buffers.index_buffer = CreateBuffer(index_buffer_size, index_usage, VMA_MEMORY_USAGE_GPU_ONLY, "buffer_mesh_index");
 
     // the buffers are created. Now we need to do the same thing basically and create a staging buffer.
 
     AllocatedBuffer staging = CreateBuffer(vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                           VMA_MEMORY_USAGE_CPU_ONLY);
+                                           VMA_MEMORY_USAGE_CPU_ONLY, "buffer_mesh_staging");
 
     void* data = staging.allocation->GetMappedData();
     memcpy(data, vertices.data(), vertex_buffer_size);
@@ -538,34 +540,50 @@ void VulkanEngine::CreateDrawImage()
     VkExtent3D image_extent{uint32_t(float(m_window_extent.width) * m_backbuffer_scale),
                             uint32_t(float(m_window_extent.height) * m_backbuffer_scale), 1};
 
+    // draw image defines the resolution we render at. Can be different to swapchain resolution
     m_draw_extent = VkExtent2D{image_extent.width, image_extent.height};
-    m_draw_image.image_extent = image_extent;
-    m_draw_image.image_format = VK_FORMAT_R16G16B16A16_SFLOAT; // hardcoded to 32bit float
 
+    VkFormat image_format = VK_FORMAT_R16G16B16A16_SFLOAT;
     VkImageUsageFlags usage_flags{};
     usage_flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     usage_flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     usage_flags |= VK_IMAGE_USAGE_STORAGE_BIT;
     usage_flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    VkMemoryPropertyFlags additional_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
-    VkImageCreateInfo image_info =
-        Utils::ImageCreateInfo(m_draw_image.image_format, usage_flags, m_draw_image.image_extent);
-
-    VmaAllocationCreateInfo allocation_info{};
-    allocation_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    allocation_info.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-    vmaCreateImage(m_allocator, &image_info, &allocation_info, &m_draw_image.image, &m_draw_image.allocation, nullptr);
-
-    // Image is created! Now just need a view for it
-    VkImageViewCreateInfo image_view_info =
-        Utils::ImageViewCreateInfo(m_draw_image.image_format, m_draw_image.image, VK_IMAGE_ASPECT_COLOR_BIT);
-    VK_CHECK(m_device_dispatch.createImageView(&image_view_info, nullptr, &m_draw_image.image_view));
+    m_draw_image = AllocateImage(image_extent.width, image_extent.height, image_format, usage_flags, memory_usage,
+                                 additional_flags, "image_draw");
 
     m_deletion_queue.PushFunction("draw image", [this]() {
         m_device_dispatch.destroyImageView(m_draw_image.image_view, nullptr);
         vmaDestroyImage(m_allocator, m_draw_image.image, m_draw_image.allocation);
     });
+}
+
+AllocatedImage VulkanEngine::AllocateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage,
+                                           VmaMemoryUsage memory_usage, VkMemoryPropertyFlags additional_flags,
+                                           const char* debug_name)
+{
+    AllocatedImage image{};
+
+    VkExtent3D image_extent{width, height, 1};
+    image.image_extent = image_extent;
+    image.image_format = format;
+
+    VkImageCreateInfo image_info = Utils::ImageCreateInfo(format, usage, image_extent);
+
+    VmaAllocationCreateInfo allocation_info{};
+    allocation_info.usage = memory_usage;
+    allocation_info.requiredFlags = additional_flags;
+
+    vmaCreateImage(m_allocator, &image_info, &allocation_info, &image.image, &image.allocation, nullptr);
+    SetAllocationName(image.allocation, debug_name);
+
+    VkImageViewCreateInfo image_view_info = Utils::ImageViewCreateInfo(format, image.image, VK_IMAGE_ASPECT_COLOR_BIT);
+    VK_CHECK(m_device_dispatch.createImageView(&image_view_info, nullptr, &image.image_view));
+
+    return image;
 }
 
 void VulkanEngine::ResetSwapchain()
@@ -868,4 +886,11 @@ void VulkanEngine::InitImgui()
         ImGui_ImplVulkan_Shutdown();
         m_device_dispatch.destroyDescriptorPool(imgui_descriptor_pool, nullptr);
     });
+}
+
+void VulkanEngine::SetAllocationName([[maybe_unused]] VmaAllocation allocation, [[maybe_unused]] const char* name)
+{
+#ifdef CHEEKY_ENABLE_MEMORY_TRACKING
+    vmaSetAllocationName(m_allocator, allocation, name);
+#endif
 }
