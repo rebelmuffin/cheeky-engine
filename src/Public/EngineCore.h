@@ -29,6 +29,6 @@ class EngineCore
 
     bool m_show_imgui_demo = false;
     bool m_show_fps = true;
-    bool m_show_compute_effects = true;
+    bool m_show_compute_effects = false;
     bool m_show_engine_settings = false;
 };
