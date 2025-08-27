@@ -38,6 +38,8 @@ vkbootstrap_dep = vkbootstrap_proj.dependency('vk-bootstrap')
 # other third party
 stb_image_dep = dependency('stb_image')
 tinyobjloader_dep = dependency('tinyobjloader')
+fastgltf_proj = cmake.subproject('fastgltf')
+fastgltf_dep = fastgltf_proj.dependency('fastgltf')
 
 # includes
 includes = include_directories('src/Public', 'subprojects') # is this okay?
@@ -62,6 +64,7 @@ executable(
         vkbootstrap_dep,
         stb_image_dep,
         tinyobjloader_dep,
+        fastgltf_dep
     ],
     include_directories: includes,
 )
