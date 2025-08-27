@@ -279,7 +279,7 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
     projection[1][1] *= -1;
 
     // rotate over time
-    float angle = float(frame_number % 360) * 0.5f;
+    float angle = float(frame_number % 360);
     view = glm::rotate(view, glm::radians(angle), glm::vec3(0, 1, 0));
 
     push_constants.world_matrix = projection * view;
