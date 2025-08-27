@@ -558,10 +558,11 @@ void VulkanEngine::CreateDrawImage()
     usage_flags |= VK_IMAGE_USAGE_STORAGE_BIT;
     usage_flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    VkImageAspectFlagBits aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
     VkMemoryPropertyFlags additional_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
     m_draw_image = AllocateImage(image_extent.width, image_extent.height, image_format, usage_flags, memory_usage,
-                                 additional_flags, "image_draw");
+                                 aspect_flags, additional_flags, "image_draw");
 
     m_deletion_queue.PushFunction("draw image", [this]() {
         m_device_dispatch.destroyImageView(m_draw_image.image_view, nullptr);
@@ -574,9 +575,10 @@ void VulkanEngine::CreateDepthImage()
     VkFormat image_format = VK_FORMAT_D32_SFLOAT;
     VkImageUsageFlags usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    VkImageAspectFlagBits aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
     VkMemoryPropertyFlags additional_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     m_depth_image = AllocateImage(m_draw_extent.width, m_draw_extent.height, image_format, usage_flags, memory_usage,
-                                  additional_flags, "image_depth");
+                                  aspect_flags, additional_flags, "image_depth");
 
     m_deletion_queue.PushFunction("depth image", [this]() {
         m_device_dispatch.destroyImageView(m_depth_image.image_view, nullptr);
@@ -585,8 +587,8 @@ void VulkanEngine::CreateDepthImage()
 }
 
 AllocatedImage VulkanEngine::AllocateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage,
-                                           VmaMemoryUsage memory_usage, VkMemoryPropertyFlags additional_flags,
-                                           const char* debug_name)
+                                           VmaMemoryUsage memory_usage, VkImageAspectFlagBits aspect_flags,
+                                           VkMemoryPropertyFlags additional_flags, const char* debug_name)
 {
     AllocatedImage image{};
 
@@ -603,7 +605,7 @@ AllocatedImage VulkanEngine::AllocateImage(uint32_t width, uint32_t height, VkFo
     vmaCreateImage(m_allocator, &image_info, &allocation_info, &image.image, &image.allocation, nullptr);
     SetAllocationName(image.allocation, debug_name);
 
-    VkImageViewCreateInfo image_view_info = Utils::ImageViewCreateInfo(format, image.image, VK_IMAGE_ASPECT_COLOR_BIT);
+    VkImageViewCreateInfo image_view_info = Utils::ImageViewCreateInfo(format, image.image, aspect_flags);
     VK_CHECK(m_device_dispatch.createImageView(&image_view_info, nullptr, &image.image_view));
 
     return image;

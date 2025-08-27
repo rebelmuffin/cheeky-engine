@@ -85,8 +85,8 @@ class VulkanEngine
     void DestroyBuffer(const AllocatedBuffer& buffer);
     GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
     AllocatedImage AllocateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage,
-                                 VmaMemoryUsage memory_usage, VkMemoryPropertyFlags additional_flags = 0,
-                                 const char* debug_name = "unnamed_image");
+                                 VmaMemoryUsage memory_usage, VkImageAspectFlagBits aspect_flags,
+                                 VkMemoryPropertyFlags additional_flags = 0, const char* debug_name = "unnamed_image");
 
   private:
     // draw loop
