@@ -156,14 +156,16 @@ namespace Utils
         return info;
     }
 
-    VkRenderingInfo RenderingInfo(VkRenderingAttachmentInfo* attachment_info, VkExtent2D draw_extent)
+    VkRenderingInfo RenderingInfo(VkRenderingAttachmentInfo* color_attachment_info,
+                                  VkRenderingAttachmentInfo* depth_attachment_info, VkExtent2D draw_extent)
     {
         VkRenderingInfo info{};
         info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
         info.pNext = nullptr;
         info.layerCount = 1;
         info.colorAttachmentCount = 1;
-        info.pColorAttachments = attachment_info;
+        info.pColorAttachments = color_attachment_info;
+        info.pDepthAttachment = depth_attachment_info;
         info.renderArea = {{0, 0}, {draw_extent.width, draw_extent.height}};
 
         return info;

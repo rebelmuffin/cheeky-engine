@@ -112,6 +112,7 @@ class VulkanEngine
 
     void CreateSwapchain(uint32_t width, uint32_t height);
     void CreateDrawImage();
+    void CreateDepthImage();
 
     void SetAllocationName(VmaAllocation allocation, const char* name);
 
@@ -130,6 +131,8 @@ class VulkanEngine
     PFN_vkGetInstanceProcAddr m_get_instance_proc_addr;
 
     AllocatedImage m_draw_image;
+    AllocatedImage m_depth_image;
+
     VkExtent2D m_draw_extent;
     VkDescriptorSet m_draw_image_descriptors;
     VkDescriptorSetLayout m_draw_image_descriptor_layout;

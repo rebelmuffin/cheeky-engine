@@ -183,6 +183,21 @@ namespace Utils
         return *this;
     }
 
+    PipelineBuilder PipelineBuilder::EnableDepthTest(VkCompareOp compare_op)
+    {
+        m_depth_stencil.depthTestEnable = VK_TRUE;
+        m_depth_stencil.depthWriteEnable = VK_TRUE;
+        m_depth_stencil.depthCompareOp = compare_op;
+        m_depth_stencil.depthBoundsTestEnable = VK_FALSE;
+        m_depth_stencil.stencilTestEnable = VK_FALSE;
+        m_depth_stencil.front = {};
+        m_depth_stencil.back = {};
+        m_depth_stencil.minDepthBounds = 0.0f;
+        m_depth_stencil.maxDepthBounds = 1.0f;
+
+        return *this;
+    }
+
     VkPipeline PipelineBuilder::BuildPipeline(const vkb::DispatchTable& device_dispatch)
     {
         VkPipelineViewportStateCreateInfo viewport_state{};

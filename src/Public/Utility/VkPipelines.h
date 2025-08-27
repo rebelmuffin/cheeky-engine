@@ -27,6 +27,7 @@ namespace Utils
         PipelineBuilder SetColorAttachmentFormat(VkFormat format);
         PipelineBuilder SetDepthFormat(VkFormat format);
         PipelineBuilder DisableDepthTest();
+        PipelineBuilder EnableDepthTest(VkCompareOp compare_op = VK_COMPARE_OP_LESS);
         VkPipeline BuildPipeline(const vkb::DispatchTable& device_dispatch);
 
       private:

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "VkTypes.h"
+#include <vulkan/vulkan_core.h>
 
 namespace Utils
 {
@@ -23,7 +24,8 @@ namespace Utils
 
     VkRenderingAttachmentInfo AttachmentInfo(VkImageView view, VkClearValue* clear,
                                              VkImageLayout layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    VkRenderingInfo RenderingInfo(VkRenderingAttachmentInfo* attachment_info, VkExtent2D draw_extent);
+    VkRenderingInfo RenderingInfo(VkRenderingAttachmentInfo* color_attachment_info,
+                                  VkRenderingAttachmentInfo* depth_attachment_info, VkExtent2D draw_extent);
     VkPipelineShaderStageCreateInfo ShaderStageCreateInfo(const char* name, VkShaderModule shader,
                                                           VkShaderStageFlagBits stage);
 } // namespace Utils

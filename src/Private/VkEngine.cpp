@@ -238,7 +238,14 @@ void VulkanEngine::DrawBackground(VkCommandBuffer cmd)
 void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 {
     VkRenderingAttachmentInfo color_attachment = Utils::AttachmentInfo(m_draw_image.image_view, nullptr);
-    VkRenderingInfo render_info = Utils::RenderingInfo(&color_attachment, m_draw_extent);
+
+    VkClearValue clear_value{};
+    clear_value.depthStencil.depth = 0.0f; // zero is far in reversed depth
+
+    VkRenderingAttachmentInfo depth_attachment =
+        Utils::AttachmentInfo(m_depth_image.image_view, &clear_value, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+
+    VkRenderingInfo render_info = Utils::RenderingInfo(&color_attachment, &depth_attachment, m_draw_extent);
 
     m_device_dispatch.cmdBeginRendering(cmd, &render_info);
 
@@ -291,7 +298,8 @@ void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view)
 {
     VkRenderingAttachmentInfo attachment_info = Utils::AttachmentInfo(target_image_view, nullptr);
     // swapchain extent because we're drawing directly onto it
-    VkRenderingInfo rendering_info = Utils::RenderingInfo(&attachment_info, m_swapchain_extent);
+    constexpr VkRenderingAttachmentInfo* depth_attachment_info = nullptr;
+    VkRenderingInfo rendering_info = Utils::RenderingInfo(&attachment_info, depth_attachment_info, m_swapchain_extent);
 
     m_device_dispatch.cmdBeginRendering(cmd, &rendering_info);
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
@@ -561,6 +569,21 @@ void VulkanEngine::CreateDrawImage()
     });
 }
 
+void VulkanEngine::CreateDepthImage()
+{
+    VkFormat image_format = VK_FORMAT_D32_SFLOAT;
+    VkImageUsageFlags usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    VkMemoryPropertyFlags additional_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    m_depth_image = AllocateImage(m_draw_extent.width, m_draw_extent.height, image_format, usage_flags, memory_usage,
+                                  additional_flags, "image_depth");
+
+    m_deletion_queue.PushFunction("depth image", [this]() {
+        m_device_dispatch.destroyImageView(m_depth_image.image_view, nullptr);
+        vmaDestroyImage(m_allocator, m_depth_image.image, m_depth_image.allocation);
+    });
+}
+
 AllocatedImage VulkanEngine::AllocateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage,
                                            VmaMemoryUsage memory_usage, VkMemoryPropertyFlags additional_flags,
                                            const char* debug_name)
@@ -590,6 +613,7 @@ void VulkanEngine::ResetSwapchain()
 {
     CreateSwapchain(m_window_extent.width, m_window_extent.height);
     CreateDrawImage();
+    CreateDepthImage();
 }
 
 void VulkanEngine::InitCommands()
@@ -790,10 +814,10 @@ bool VulkanEngine::InitMeshPipeline()
                           .SetPolygonMode(VK_POLYGON_MODE_FILL)
                           .SetCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
                           .SetColorAttachmentFormat(m_draw_image.image_format)
-                          .SetDepthFormat(VK_FORMAT_UNDEFINED)
+                          .SetDepthFormat(VK_FORMAT_D32_SFLOAT)
                           .SetMultisamplingNone()
                           .DisableBlending()
-                          .DisableDepthTest()
+                          .EnableDepthTest(VK_COMPARE_OP_GREATER_OR_EQUAL)
                           .BuildPipeline(m_device_dispatch);
     if (m_mesh_pipeline == VK_NULL_HANDLE)
     {
