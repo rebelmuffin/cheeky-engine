@@ -24,6 +24,8 @@ namespace Utils
         PipelineBuilder SetCullMode(VkCullModeFlags cull_mode, VkFrontFace front_face);
         PipelineBuilder SetMultisamplingNone();
         PipelineBuilder DisableBlending();
+        PipelineBuilder EnableBlendingAdditive();
+        PipelineBuilder EnableBlendingAlpha();
         PipelineBuilder SetColorAttachmentFormat(VkFormat format);
         PipelineBuilder SetDepthFormat(VkFormat format);
         PipelineBuilder DisableDepthTest();

@@ -1,7 +1,7 @@
 #version 450
 #extension GL_EXT_buffer_reference : require
 
-layout(location = 0) out vec3 outColour;
+layout(location = 0) out vec4 outColour;
 layout(location = 1) out vec2 outUV;
 
 struct Vertex
@@ -22,6 +22,7 @@ layout(push_constant) uniform constants
 {
     mat4 render_matrix;
     VertexBuffer vertex_buffer;
+    float opacity;
 }
 PushConstants;
 
@@ -32,7 +33,7 @@ void main()
 
     // push output
     gl_Position = PushConstants.render_matrix * vec4(v.position, 1.0f);
-    outColour = v.color.xyz;
+    outColour = vec4(v.color.rgb, PushConstants.opacity);
     outUV.x = v.uv_x;
     outUV.y = v.uv_y;
 }

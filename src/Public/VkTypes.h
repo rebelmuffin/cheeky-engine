@@ -64,4 +64,5 @@ struct GPUDrawPushConstants
 {
     glm::mat4 world_matrix;
     VkDeviceAddress vertex_buffer_address;
+    float opacity;
 };

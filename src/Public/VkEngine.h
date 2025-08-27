@@ -88,6 +88,8 @@ class VulkanEngine
                                  VmaMemoryUsage memory_usage, VkImageAspectFlagBits aspect_flags,
                                  VkMemoryPropertyFlags additional_flags = 0, const char* debug_name = "unnamed_image");
 
+    float test_mesh_opacity{1.0f};
+
   private:
     // draw loop
     void Draw(double delta_ms);

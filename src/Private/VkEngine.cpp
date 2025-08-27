@@ -268,6 +268,7 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 
     GPUDrawPushConstants push_constants;
     push_constants.vertex_buffer_address = m_default_mesh->buffers.vertex_buffer_address;
+    push_constants.opacity = test_mesh_opacity;
 
     glm::mat4 view = glm::translate(glm::vec3{0, 0, -1.0f});
     // camera projection
