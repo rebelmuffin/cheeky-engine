@@ -2,3 +2,4 @@ BasedOnStyle: Microsoft
 DerivePointerAlignment: false
 PointerAlignment: Left
 NamespaceIndentation: All
+BreakTemplateDeclarations: true
