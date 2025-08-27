@@ -2,6 +2,7 @@
 
 #include "Utility/DeletionQueue.h"
 #include "Utility/VkDescriptors.h"
+#include "Utility/VkLoader.h"
 #include "VkBootstrapDispatch.h"
 #include "VkTypes.h"
 #include <vulkan/vulkan_core.h>
@@ -51,7 +52,7 @@ class VulkanEngine
 {
   public:
     VulkanEngine(uint32_t window_width, uint32_t window_height, SDL_Window* window, float backbuffer_scale,
-                 bool use_validation_layers, bool immediate_uploads = false);
+                 bool use_validation_layers, bool immediate_uploads);
 
     bool is_initialised{false};
     int frame_number{0};
@@ -136,7 +137,7 @@ class VulkanEngine
 
     VkPipeline m_mesh_pipeline;
     VkPipelineLayout m_mesh_pipeline_layout;
-    GPUMeshBuffers m_rectangle_mesh;
+    std::shared_ptr<MeshAsset> m_default_mesh;
 
     std::vector<VkImage> m_swapchain_images;
     std::vector<VkImageView> m_swapchain_image_views;

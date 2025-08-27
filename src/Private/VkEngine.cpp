@@ -3,6 +3,7 @@
 #include "ThirdParty/VkMemAlloc.h"
 #include "Utility/VkImages.h"
 #include "Utility/VkInitialisers.h"
+#include "Utility/VkLoader.h"
 #include "Utility/VkPipelines.h"
 #include "VkTypes.h"
 
@@ -259,13 +260,15 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
     m_device_dispatch.cmdSetScissor(cmd, 0, 1, &scissor);
 
     GPUDrawPushConstants push_constants;
-    push_constants.vertex_buffer_address = m_rectangle_mesh.vertex_buffer_address;
-    push_constants.world_matrix = glm::mat4{1.0f};
+    push_constants.vertex_buffer_address = m_default_mesh->buffers.vertex_buffer_address;
+    push_constants.world_matrix = glm::mat4(1.0f);
 
     m_device_dispatch.cmdPushConstants(cmd, m_mesh_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
                                        sizeof(push_constants), &push_constants);
-    m_device_dispatch.cmdBindIndexBuffer(cmd, m_rectangle_mesh.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-    m_device_dispatch.cmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
+    m_device_dispatch.cmdBindIndexBuffer(cmd, m_default_mesh->buffers.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+    m_device_dispatch.cmdDrawIndexed(cmd, m_default_mesh->surfaces[0].index_count, 1,
+                                     m_default_mesh->surfaces[0].first_index, 0, 0);
 
     m_device_dispatch.cmdEndRendering(cmd);
 }
@@ -720,10 +723,11 @@ bool VulkanEngine::InitMeshPipeline()
     VkPipelineLayoutCreateInfo layout_info{};
     layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layout_info.pNext = nullptr;
-    layout_info.pSetLayouts = &m_draw_image_descriptor_layout;
-    layout_info.pushConstantRangeCount = 1;
+    layout_info.flags = 0;
+    layout_info.pSetLayouts = nullptr;
+    layout_info.setLayoutCount = 0;
     layout_info.pPushConstantRanges = &push_constant_range;
-    layout_info.setLayoutCount = 1;
+    layout_info.pushConstantRangeCount = 1;
 
     if (m_device_dispatch.createPipelineLayout(&layout_info, nullptr, &m_mesh_pipeline_layout) != VK_SUCCESS)
     {
@@ -746,13 +750,13 @@ bool VulkanEngine::InitMeshPipeline()
     }
 
     m_mesh_pipeline = Utils::PipelineBuilder()
-                          .SetName("triangle")
+                          .SetName("mesh")
                           .SetLayout(m_mesh_pipeline_layout)
                           .AddFragmentShader(frag_shader)
                           .AddVertexShader(vertex_shader)
                           .SetInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
                           .SetPolygonMode(VK_POLYGON_MODE_FILL)
-                          .SetCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE)
+                          .SetCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
                           .SetColorAttachmentFormat(m_draw_image.image_format)
                           .SetDepthFormat(VK_FORMAT_UNDEFINED)
                           .SetMultisamplingNone()
@@ -767,40 +771,29 @@ bool VulkanEngine::InitMeshPipeline()
     m_device_dispatch.destroyShaderModule(vertex_shader, nullptr);
     m_device_dispatch.destroyShaderModule(frag_shader, nullptr);
 
-    m_deletion_queue.PushFunction("mesh pipeline",
-                                  [this]() { m_device_dispatch.destroyPipeline(m_mesh_pipeline, nullptr); });
+    m_deletion_queue.PushFunction("mesh pipeline", [this]() {
+        m_device_dispatch.destroyPipelineLayout(m_mesh_pipeline_layout, nullptr);
+        m_device_dispatch.destroyPipeline(m_mesh_pipeline, nullptr);
+    });
 
     return true;
 }
 
 void VulkanEngine::InitDefaultData()
 {
-    std::array<Vertex, 4> rect_vertices;
+    auto loaded_meshes = Utils::LoadGltfMeshes(this, std::filesystem::path{"../data/resources/BarramundiFish.glb"});
+    if (loaded_meshes.has_value() == false || loaded_meshes->empty())
+    {
+        std::cout << "[!] Failed to load default mesh. Will probably crash." << std::endl;
+    }
+    else
+    {
+        m_default_mesh = loaded_meshes->at(0);
+    }
 
-    rect_vertices[0].position = {0.5, -0.5, 0};
-    rect_vertices[1].position = {0.5, 0.5, 0};
-    rect_vertices[2].position = {-0.5, -0.5, 0};
-    rect_vertices[3].position = {-0.5, 0.5, 0};
-
-    rect_vertices[0].colour = {0, 0, 0, 1};
-    rect_vertices[1].colour = {0.5, 0.5, 0.5, 1};
-    rect_vertices[2].colour = {1, 0, 0, 1};
-    rect_vertices[3].colour = {0, 1, 0, 1};
-
-    std::array<uint32_t, 6> rect_indices;
-
-    rect_indices[0] = 0;
-    rect_indices[1] = 1;
-    rect_indices[2] = 2;
-
-    rect_indices[3] = 2;
-    rect_indices[4] = 1;
-    rect_indices[5] = 3;
-
-    m_rectangle_mesh = UploadMesh(rect_indices, rect_vertices);
-    m_deletion_queue.PushFunction("rectangle mesh", [this]() {
-        DestroyBuffer(m_rectangle_mesh.vertex_buffer);
-        DestroyBuffer(m_rectangle_mesh.index_buffer);
+    m_deletion_queue.PushFunction("default mesh", [this]() {
+        DestroyBuffer(m_default_mesh->buffers.vertex_buffer);
+        DestroyBuffer(m_default_mesh->buffers.index_buffer);
     });
 }
 
