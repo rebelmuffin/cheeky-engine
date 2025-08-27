@@ -25,9 +25,9 @@
     reinterpret_cast<PFN_##function>(m_get_instance_proc_addr(instance, #function))(instance, __VA_ARGS__);
 
 VulkanEngine::VulkanEngine(uint32_t window_width, uint32_t window_height, SDL_Window* window, float backbuffer_scale,
-                           bool use_validation_layers)
+                           bool use_validation_layers, bool immediate_uploads)
     : m_backbuffer_scale(backbuffer_scale), m_window_extent({window_width, window_height}), m_window(window),
-      m_use_validation_layers(use_validation_layers)
+      m_use_validation_layers(use_validation_layers), m_immediate_uploads_enabled(immediate_uploads)
 {
 }
 
@@ -210,7 +210,7 @@ void VulkanEngine::FinishPendingUploads(VkCommandBuffer cmd)
         m_device_dispatch.cmdCopyBuffer(cmd, mesh.staging_buffer.buffer, mesh.target_mesh.index_buffer.buffer, 1,
                                         &index_copy);
 
-        // destroy the staging buffer. We have no use for it anymore
+        // #TODO: we need to destroy this after this frame is done with it, not right now.
         // DestroyBuffer(mesh.staging_buffer);
     }
 
@@ -281,6 +281,31 @@ void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view)
     m_device_dispatch.cmdEndRendering(cmd);
 }
 
+void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function)
+{
+    VkCommandBuffer cmd = m_immediate_command_buffer;
+
+    VK_CHECK(m_device_dispatch.resetFences(1, &m_immediate_fence));
+    VK_CHECK(m_device_dispatch.resetCommandBuffer(m_immediate_command_buffer, 0));
+
+    VkCommandBufferBeginInfo cmdBeginInfo = Utils::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    VK_CHECK(m_device_dispatch.beginCommandBuffer(cmd, &cmdBeginInfo));
+    // COMMAND BEGIN
+
+    function(cmd);
+
+    // COMMAND END
+    VK_CHECK(m_device_dispatch.endCommandBuffer(cmd));
+
+    VkCommandBufferSubmitInfo cmd_info = Utils::CommandBufferSubmitInfo(cmd);
+
+    VkSubmitInfo2 submit_info = Utils::SubmitInfo(&cmd_info, nullptr, nullptr);
+
+    VK_CHECK(m_device_dispatch.queueSubmit2(m_graphics_queue, 1, &submit_info, m_immediate_fence));
+
+    VK_CHECK(m_device_dispatch.waitForFences(1, &m_immediate_fence, true, 1'000'000'000));
+}
+
 void VulkanEngine::Update(double delta_ms)
 {
     if (stop_rendering)
@@ -292,6 +317,90 @@ void VulkanEngine::Update(double delta_ms)
     ImGui::Render();
 
     Draw(delta_ms);
+}
+
+AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage,
+                                           VmaMemoryUsage memory_usage)
+{
+    VkBufferCreateInfo buffer_info{};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.pNext = nullptr;
+    buffer_info.size = allocation_size;
+    buffer_info.usage = usage;
+
+    VmaAllocationCreateInfo alloc_create_info{};
+    alloc_create_info.usage = memory_usage;
+    alloc_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    AllocatedBuffer buffer;
+
+    VK_CHECK(vmaCreateBuffer(m_allocator, &buffer_info, &alloc_create_info, &buffer.buffer, &buffer.allocation,
+                             &buffer.allocation_info));
+
+    return buffer;
+}
+
+void VulkanEngine::DestroyBuffer(const AllocatedBuffer& buffer)
+{
+    vmaDestroyBuffer(m_allocator, buffer.buffer, buffer.allocation);
+}
+
+GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
+{
+    const size_t vertex_buffer_size = vertices.size() * sizeof(Vertex);
+    const size_t index_buffer_size = indices.size() * sizeof(uint32_t);
+
+    GPUMeshBuffers buffers{};
+
+    // storage and shader device address to make VB an SSBO that we can access through vertex pulling. Transfer so we
+    // can copy into them.
+    VkBufferUsageFlags vertex_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    buffers.vertex_buffer = CreateBuffer(vertex_buffer_size, vertex_usage, VMA_MEMORY_USAGE_GPU_ONLY);
+
+    VkBufferDeviceAddressInfo device_address{};
+    device_address.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    device_address.pNext = nullptr;
+    device_address.buffer = buffers.vertex_buffer.buffer;
+    buffers.vertex_buffer_address = m_device_dispatch.getBufferDeviceAddress(&device_address);
+
+    VkBufferUsageFlags index_usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buffers.index_buffer = CreateBuffer(index_buffer_size, index_usage, VMA_MEMORY_USAGE_GPU_ONLY);
+
+    // the buffers are created. Now we need to do the same thing basically and create a staging buffer.
+
+    AllocatedBuffer staging = CreateBuffer(vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                           VMA_MEMORY_USAGE_CPU_ONLY);
+
+    void* data = staging.allocation->GetMappedData();
+    memcpy(data, vertices.data(), vertex_buffer_size);
+    memcpy(static_cast<char*>(data) + vertex_buffer_size, indices.data(), index_buffer_size);
+
+    if (m_immediate_uploads_enabled)
+    {
+        ImmediateSubmit([this, staging, vertex_buffer_size, index_buffer_size, buffers](VkCommandBuffer cmd) {
+            VkBufferCopy vertex_copy{};
+            vertex_copy.dstOffset = 0;
+            vertex_copy.srcOffset = 0;
+            vertex_copy.size = vertex_buffer_size;
+
+            VkBufferCopy index_copy{};
+            index_copy.dstOffset = 0;
+            index_copy.srcOffset = vertex_buffer_size;
+            index_copy.size = index_buffer_size;
+
+            m_device_dispatch.cmdCopyBuffer(cmd, staging.buffer, buffers.vertex_buffer.buffer, 1, &vertex_copy);
+            m_device_dispatch.cmdCopyBuffer(cmd, staging.buffer, buffers.index_buffer.buffer, 1, &index_copy);
+        });
+
+        // destroy the staging buffer. We have no use for it anymore
+        DestroyBuffer(staging);
+    }
+    else
+    {
+        m_pending_uploads.push_back({vertex_buffer_size, index_buffer_size, buffers, staging});
+    }
+
+    return buffers;
 }
 
 bool VulkanEngine::InitVulkan()
@@ -442,68 +551,6 @@ void VulkanEngine::CreateDrawImage()
     });
 }
 
-AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage,
-                                           VmaMemoryUsage memory_usage)
-{
-    VkBufferCreateInfo buffer_info{};
-    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_info.pNext = nullptr;
-    buffer_info.size = allocation_size;
-    buffer_info.usage = usage;
-
-    VmaAllocationCreateInfo alloc_create_info{};
-    alloc_create_info.usage = memory_usage;
-    alloc_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
-    AllocatedBuffer buffer;
-
-    VK_CHECK(vmaCreateBuffer(m_allocator, &buffer_info, &alloc_create_info, &buffer.buffer, &buffer.allocation,
-                             &buffer.allocation_info));
-
-    return buffer;
-}
-
-void VulkanEngine::DestroyBuffer(const AllocatedBuffer& buffer)
-{
-    vmaDestroyBuffer(m_allocator, buffer.buffer, buffer.allocation);
-}
-
-GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
-{
-    const size_t vertex_buffer_size = vertices.size() * sizeof(Vertex);
-    const size_t index_buffer_size = indices.size() * sizeof(uint32_t);
-
-    GPUMeshBuffers buffers{};
-
-    // storage and shader device address to make VB an SSBO that we can access through vertex pulling. Transfer so we
-    // can copy into them.
-    VkBufferUsageFlags vertex_usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    VkBufferUsageFlags index_usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    buffers.vertex_buffer = CreateBuffer(vertex_buffer_size, vertex_usage, VMA_MEMORY_USAGE_GPU_ONLY);
-
-    VkBufferDeviceAddressInfo device_address{};
-    device_address.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    device_address.pNext = nullptr;
-    device_address.buffer = buffers.vertex_buffer.buffer;
-    buffers.vertex_buffer_address = m_device_dispatch.getBufferDeviceAddress(&device_address);
-
-    buffers.index_buffer = CreateBuffer(index_buffer_size, index_usage, VMA_MEMORY_USAGE_GPU_ONLY);
-
-    // the buffers are created. Now we need to do the same thing basically and create a staging buffer.
-
-    AllocatedBuffer staging = CreateBuffer(vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                           VMA_MEMORY_USAGE_CPU_ONLY);
-
-    void* data = staging.allocation->GetMappedData();
-    memcpy(data, vertices.data(), vertex_buffer_size);
-    memcpy(static_cast<char*>(data) + vertex_buffer_size, indices.data(), index_buffer_size);
-
-    // add to pending uploads. The staging buffer will be deleted automatically.
-    m_pending_uploads.emplace_back(vertex_buffer_size, index_buffer_size, buffers, staging);
-
-    return buffers;
-}
-
 void VulkanEngine::ResetSwapchain()
 {
     CreateSwapchain(m_window_extent.width, m_window_extent.height);
@@ -526,6 +573,19 @@ void VulkanEngine::InitCommands()
         m_deletion_queue.PushFunction(
             "command pool", [i, this]() { m_device_dispatch.destroyCommandPool(m_frames[i].command_pool, nullptr); });
     }
+
+    if (m_immediate_uploads_enabled == false)
+    {
+        return;
+    }
+
+    // immediate command buffer for short tasks
+    VK_CHECK(m_device_dispatch.createCommandPool(&commandPoolInfo, nullptr, &m_immediate_command_pool));
+    VkCommandBufferAllocateInfo cmdAllocInfo = Utils::CommandBufferAllocateInfo(m_immediate_command_pool, 1);
+    VK_CHECK(m_device_dispatch.allocateCommandBuffers(&cmdAllocInfo, &m_immediate_command_buffer));
+    m_deletion_queue.PushFunction("Immediate command pool", [this]() {
+        m_device_dispatch.destroyCommandPool(m_immediate_command_pool, nullptr);
+    });
 }
 
 void VulkanEngine::InitSyncStructures()
@@ -548,6 +608,16 @@ void VulkanEngine::InitSyncStructures()
             m_device_dispatch.destroySemaphore(m_frames[i].swapchain_semaphore, nullptr);
         });
     }
+
+    if (m_immediate_uploads_enabled == false)
+    {
+        return;
+    }
+
+    // immediate command buffer for short tasks
+    VK_CHECK(m_device_dispatch.createFence(&fenceCreateInfo, nullptr, &m_immediate_fence));
+    m_deletion_queue.PushFunction("Immediate fence",
+                                  [this]() { m_device_dispatch.destroyFence(m_immediate_fence, nullptr); });
 }
 
 void VulkanEngine::InitDescriptors()

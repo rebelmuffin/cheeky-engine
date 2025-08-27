@@ -51,7 +51,7 @@ class VulkanEngine
 {
   public:
     VulkanEngine(uint32_t window_width, uint32_t window_height, SDL_Window* window, float backbuffer_scale,
-                 bool use_validation_layers);
+                 bool use_validation_layers, bool immediate_uploads = false);
 
     bool is_initialised{false};
     int frame_number{0};
@@ -79,6 +79,10 @@ class VulkanEngine
         m_current_effect = target;
     }
 
+    AllocatedBuffer CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage);
+    void DestroyBuffer(const AllocatedBuffer& buffer);
+    GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
+
   private:
     // draw loop
     void Draw(double delta_ms);
@@ -86,6 +90,8 @@ class VulkanEngine
     void DrawBackground(VkCommandBuffer cmd);
     void DrawGeometry(VkCommandBuffer cmd);
     void DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view);
+
+    void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 
     bool InitVulkan();
     void InitAllocator();
@@ -101,10 +107,6 @@ class VulkanEngine
 
     void CreateSwapchain(uint32_t width, uint32_t height);
     void CreateDrawImage();
-
-    AllocatedBuffer CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage);
-    void DestroyBuffer(const AllocatedBuffer& buffer);
-    GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
     void DeleteFence(int frame_idx);
 
@@ -146,6 +148,11 @@ class VulkanEngine
         return m_frames[frame_number % FRAME_OVERLAP];
     }
 
+    // immediate submit structures. For copying stuff to gpu
+    VkFence m_immediate_fence;
+    VkCommandBuffer m_immediate_command_buffer;
+    VkCommandPool m_immediate_command_pool;
+
     VkQueue m_graphics_queue;
     uint32_t m_graphics_queue_family;
 
@@ -156,6 +163,7 @@ class VulkanEngine
     VmaAllocator m_allocator;
 
     bool m_use_validation_layers;
+    bool m_immediate_uploads_enabled;
 
     std::vector<PendingMeshUpload> m_pending_uploads;
     Utils::DeletionQueue m_deletion_queue;

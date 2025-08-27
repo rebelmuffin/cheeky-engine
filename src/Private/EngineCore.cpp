@@ -17,7 +17,8 @@ EngineCore::EngineCore(int width, int height)
     m_window = SDL_CreateWindow("Vulkan Engine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height,
                                 window_flags);
 
-    m_renderer = std::make_unique<VulkanEngine>(width, height, m_window, 1.0f, /* use_validation_layers = */ true);
+    m_renderer = std::make_unique<VulkanEngine>(width, height, m_window, 1.0f, /* use_validation_layers = */ true,
+                                                /* immediate_uploads = */ false);
     if (m_renderer->Init() == false)
     {
         m_initialisation_failure = true;
