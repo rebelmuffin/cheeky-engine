@@ -9,11 +9,14 @@
 #include "VkTypes.h"
 
 #include "SDL_video.h"
+#include "imgui.h"
 #include <SDL.h>
 #include <SDL_vulkan.h>
 #include <VkBootstrap.h>
+#include <glm/fwd.hpp>
 #include <vulkan/vulkan_core.h>
 #define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/transform.hpp>
 #undef GLM_ENABLE_EXPERIMENTAL
 
@@ -379,6 +382,48 @@ void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& fu
 
 void VulkanEngine::Update(double delta_ms)
 {
+    if (ImGui::BeginMainMenuBar())
+    {
+        if (ImGui::BeginMenu("Graphics"))
+        {
+            ImGui::Checkbox("Engine Settings", &m_draw_engine_settings);
+            ImGui::EndMenu();
+        }
+        ImGui::EndMainMenuBar();
+    }
+
+    if (m_draw_engine_settings)
+    {
+        if (ImGui::Begin("Engine Settings", &m_draw_engine_settings))
+        {
+            ImGui::Text("Frame: %d", frame_number);
+            ImGui::Text("Backbuffer Scale: %.2f", m_backbuffer_scale);
+            ImGui::Text("Render Resolution: %dx%d", m_draw_extent.width, m_draw_extent.height);
+            ImGui::Text("Swapchain Resolution: %dx%d", m_swapchain_extent.width, m_swapchain_extent.height);
+            ImGui::Text("Window Resolution: %dx%d", m_window_extent.width, m_window_extent.height);
+        }
+
+        ImGui::SliderFloat("Render Scale", &m_render_scale, 0.1f, 1.0f);
+        ImGui::SliderFloat("Mesh Opacity", &test_mesh_opacity, 0.0f, 1.0f);
+
+        if (ImGui::SliderAngle("Camera yaw", &m_camera_yaw_rad))
+        {
+            m_rotating_camera = false;
+        }
+        ImGui::SliderAngle("Camera pitch", &m_camera_pitch_rad, -89.0f, 89.0f);
+        ImGui::DragFloat3("Camera position", &m_camera_position.x);
+        ImGui::Checkbox("Rotating Camera", &m_rotating_camera);
+
+        if (ImGui::CollapsingHeader("Scene Lighting"))
+        {
+            ImGui::ColorEdit3("Ambient Colour", &m_scene_data.ambient_colour.r);
+            ImGui::ColorEdit3("Light Colour", &m_scene_data.light_colour.r);
+            ImGui::SliderFloat3("Light Direction", &m_scene_data.light_direction.x, -1.0f, 1.0f);
+        }
+
+        ImGui::End();
+    }
+
     ImGui::Render();
 
     if (stop_rendering)
@@ -393,18 +438,25 @@ void VulkanEngine::Update(double delta_ms)
         return; // no render while resizing (or minimised!)
     }
 
-    glm::mat4 view = glm::translate(glm::vec3{0, 0, -1.0f});
-    // camera projection
+    if (m_rotating_camera)
+    {
+        m_camera_yaw_rad += glm::radians(10.0f) * float(delta_ms) / 100.0f;
+        m_camera_yaw_rad = std::fmod(m_camera_yaw_rad, glm::two_pi<float>());
+    }
+
+    // pitch first, then yaw. order of multiplication matters
+    glm::mat4 rotation =
+        glm::rotate(m_camera_pitch_rad, glm::vec3(1, 0, 0)) * glm::rotate(m_camera_yaw_rad, glm::vec3(0, 1, 0));
+
+    // we translate first because we want to move the world, not the camera. When we make a real camera, the order
+    // should be reversed
+    glm::mat4 view = glm::translate(m_camera_position) * rotation;
     glm::mat4 projection =
         glm::perspective(glm::radians(70.f), (float)m_draw_extent.width / (float)m_draw_extent.height, 10000.f, 0.1f);
 
     // invert the Y direction on projection matrix so that we are more similar
     // to opengl and gltf axis
     projection[1][1] *= -1;
-
-    // rotate over time
-    float angle = float(frame_number % 360);
-    view = glm::rotate(view, glm::radians(angle), glm::vec3(0, 1, 0));
 
     m_scene_data.view = view;
     m_scene_data.projection = projection;

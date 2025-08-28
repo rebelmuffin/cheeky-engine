@@ -192,4 +192,10 @@ class VulkanEngine
 
     GPUSceneData m_scene_data; // this is the scene data that is uploaded each frame.
     VkDescriptorSetLayout m_scene_data_descriptor_layout;
+
+    bool m_draw_engine_settings = false;
+    float m_camera_yaw_rad = 0.0f;
+    float m_camera_pitch_rad = 0.0f;
+    glm::vec3 m_camera_position{0.0f, 0.0f, -1.0f};
+    bool m_rotating_camera = true;
 };

@@ -154,7 +154,7 @@ namespace Utils
                 continue;
             }
 
-            constexpr bool visualise_normals = true;
+            constexpr bool visualise_normals = false;
             if constexpr (visualise_normals)
             {
                 // for debugging: visualise normals as colours

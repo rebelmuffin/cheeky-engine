@@ -100,8 +100,7 @@ void EngineCore::OnImgui()
 
         if (ImGui::BeginMenu("Graphics"))
         {
-            ImGui::Checkbox("Compute Effects", &m_show_compute_effects);
-            ImGui::Checkbox("Engine Settings", &m_show_engine_settings);
+            ImGui::Checkbox("Background Compute Effects", &m_show_compute_effects);
             ImGui::EndMenu();
         }
 
@@ -183,19 +182,6 @@ void EngineCore::OnImgui()
             }
 
             ImGui::DragFloat("opacity", &m_renderer->test_mesh_opacity, 0.01f, 0.0f, 1.0f);
-        }
-        ImGui::End();
-    }
-
-    if (m_show_engine_settings)
-    {
-        if (ImGui::Begin("Engine Settings", &m_show_engine_settings))
-        {
-            float render_scale = m_renderer->GetRenderScale();
-            if (ImGui::SliderFloat("Render Scale", &render_scale, 0.1f, 1.0f))
-            {
-                m_renderer->SetRenderScale(render_scale);
-            }
         }
         ImGui::End();
     }
