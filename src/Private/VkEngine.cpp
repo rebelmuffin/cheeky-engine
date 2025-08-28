@@ -1,6 +1,7 @@
 #include "VkEngine.h"
 #include "ThirdParty/ImGUI.h"
 #include "ThirdParty/VkMemAlloc.h"
+#include "Utility/VkDescriptors.h"
 #include "Utility/VkImages.h"
 #include "Utility/VkInitialisers.h"
 #include "Utility/VkLoader.h"
@@ -248,7 +249,7 @@ void VulkanEngine::DrawBackground(VkCommandBuffer cmd)
     ComputeEffect& effect = m_compute_effects[m_current_effect];
     m_device_dispatch.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
     m_device_dispatch.cmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.layout, 0, 1,
-                                            &m_draw_image_descriptors, 0, nullptr);
+                                            &m_background_compute_descriptors, 0, nullptr);
 
     m_device_dispatch.cmdPushConstants(cmd, effect.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
                                        sizeof(effect.push_constants), &effect.push_constants);
@@ -704,29 +705,19 @@ void VulkanEngine::InitDescriptors()
     {
         Utils::DescriptorLayoutBuilder builder;
         builder.AddBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-        m_draw_image_descriptor_layout = builder.Build(m_device_dispatch, VK_SHADER_STAGE_COMPUTE_BIT);
+        m_background_compute_descriptor_layout = builder.Build(m_device_dispatch, VK_SHADER_STAGE_COMPUTE_BIT);
     }
 
-    m_draw_image_descriptors = m_descriptor_allocator.Allocate(m_device_dispatch, m_draw_image_descriptor_layout);
+    m_background_compute_descriptors =
+        m_descriptor_allocator.Allocate(m_device_dispatch, m_background_compute_descriptor_layout);
 
-    VkDescriptorImageInfo image_info{};
-    image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    image_info.imageView = m_draw_image.image_view;
-
-    VkWriteDescriptorSet write_set{};
-    write_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write_set.pNext = nullptr;
-    write_set.descriptorCount = 1;
-    write_set.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    write_set.pImageInfo = &image_info;
-    write_set.dstBinding = 0;
-    write_set.dstSet = m_draw_image_descriptors;
-
-    m_device_dispatch.updateDescriptorSets(1, &write_set, 0, nullptr);
+    Utils::DescriptorWriter writer{};
+    writer.WriteImage(0, m_draw_image.image_view, VK_IMAGE_LAYOUT_GENERAL, 0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+    writer.UpdateSet(m_device_dispatch, m_background_compute_descriptors);
 
     m_deletion_queue.PushFunction("descriptors", [this]() {
         m_descriptor_allocator.DestroyPool(m_device_dispatch);
-        m_device_dispatch.destroyDescriptorSetLayout(m_draw_image_descriptor_layout, nullptr);
+        m_device_dispatch.destroyDescriptorSetLayout(m_background_compute_descriptor_layout, nullptr);
     });
 }
 
@@ -745,7 +736,7 @@ bool VulkanEngine::InitBackgroundPipelines()
     VkPipelineLayoutCreateInfo layout_info{};
     layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layout_info.pNext = nullptr;
-    layout_info.pSetLayouts = &m_draw_image_descriptor_layout;
+    layout_info.pSetLayouts = &m_background_compute_descriptor_layout;
     layout_info.setLayoutCount = 1;
 
     VkPushConstantRange push_constants_info{};

@@ -141,8 +141,8 @@ class VulkanEngine
 
     VkExtent2D m_draw_extent;
     float m_render_scale = 1.0f;
-    VkDescriptorSet m_draw_image_descriptors;
-    VkDescriptorSetLayout m_draw_image_descriptor_layout;
+    VkDescriptorSet m_background_compute_descriptors;
+    VkDescriptorSetLayout m_background_compute_descriptor_layout;
     float m_backbuffer_scale;
 
     VkPipelineLayout m_gradient_pipeline_layout;
