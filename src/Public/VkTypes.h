@@ -66,3 +66,13 @@ struct GPUDrawPushConstants
     VkDeviceAddress vertex_buffer_address;
     float opacity;
 };
+
+struct GPUSceneData
+{
+    glm::mat4 view;
+    glm::mat4 projection;
+    glm::mat4 view_projection;
+    glm::vec4 ambient_colour;
+    glm::vec4 light_direction;
+    glm::vec4 light_colour;
+};

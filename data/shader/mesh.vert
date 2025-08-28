@@ -26,13 +26,24 @@ layout(push_constant) uniform constants
 }
 PushConstants;
 
+layout(set = 0, binding = 0) uniform SceneData
+{
+    mat4 view;
+    mat4 projection;
+    mat4 view_projection;
+    vec4 ambient_colour;
+    vec4 light_direction;
+    vec4 light_colour;
+}
+scene_data;
+
 void main()
 {
     // find the vertex from device address
     Vertex v = PushConstants.vertex_buffer.vertices[gl_VertexIndex];
 
     // push output
-    gl_Position = PushConstants.render_matrix * vec4(v.position, 1.0f);
+    gl_Position = scene_data.view_projection * PushConstants.render_matrix * vec4(v.position, 1.0f);
     outColour = vec4(v.color.rgb, PushConstants.opacity);
     outUV.x = v.uv_x;
     outUV.y = v.uv_y;

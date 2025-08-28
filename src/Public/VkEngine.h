@@ -34,6 +34,9 @@ struct FrameData
     VkSemaphore swapchain_semaphore = nullptr; // so this frame waits for swapchain before rendering
     VkSemaphore render_semaphore = nullptr;    // so the present can wait for this frame to finish
     VkFence render_fence = nullptr;            // so we can wait for this frame on cpu
+
+    Utils::DescriptorAllocatorDynamic frame_descriptors;
+    Utils::DeletionQueue deletion_queue;
 };
 
 // The pending mesh upload structure is used to keep a list of pending uploads to execute on next draw.
@@ -107,7 +110,8 @@ class VulkanEngine
     void InitAllocator();
     void InitCommands();
     void InitSyncStructures();
-    void InitDescriptors();
+    void InitFrameDescriptors();
+    void InitBackgroundDescriptors();
     bool InitPipelines();
     bool InitBackgroundPipelines();
     bool InitMeshPipeline();
@@ -185,4 +189,7 @@ class VulkanEngine
 
     uint64_t m_last_update_us = 0;
     bool m_resize_requested = false;
+
+    GPUSceneData m_scene_data; // this is the scene data that is uploaded each frame.
+    VkDescriptorSetLayout m_scene_data_descriptor_layout;
 };

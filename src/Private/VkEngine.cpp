@@ -24,6 +24,7 @@
 #include <cstring>
 #include <iostream>
 #include <thread>
+#include <vector>
 
 #define VK_DEVICE_CALL(device, function, ...)                                                                          \
     reinterpret_cast<PFN_##function>(m_get_device_proc_addr(device, #function))(device, __VA_ARGS__);
@@ -94,7 +95,8 @@ bool VulkanEngine::Init()
     CreateDepthImage();
     InitCommands();
     InitSyncStructures();
-    InitDescriptors();
+    InitFrameDescriptors();
+    InitBackgroundDescriptors();
 
     if (InitPipelines() == false)
     {
@@ -112,6 +114,12 @@ bool VulkanEngine::Init()
 void VulkanEngine::Cleanup()
 {
     m_device_dispatch.deviceWaitIdle();
+
+    // nuke the frame descriptors
+    for (FrameData& frame : m_frames)
+    {
+        frame.deletion_queue.Flush();
+    }
 
     m_deletion_queue.Flush();
 
@@ -139,6 +147,9 @@ void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
     constexpr uint64_t one_second_ns = 1'000'000'000;
     VK_CHECK(m_device_dispatch.waitForFences(1, &GetCurrentFrame().render_fence, true, one_second_ns));
     VK_CHECK(m_device_dispatch.resetFences(1, &GetCurrentFrame().render_fence));
+
+    GetCurrentFrame().deletion_queue.Flush();
+    GetCurrentFrame().frame_descriptors.ClearDescriptors(m_device_dispatch);
 
     uint32_t swapchain_image_index;
     VkResult result = m_device_dispatch.acquireNextImageKHR(
@@ -237,11 +248,12 @@ void VulkanEngine::FinishPendingUploads(VkCommandBuffer cmd)
         m_device_dispatch.cmdCopyBuffer(cmd, mesh.staging_buffer.buffer, mesh.target_mesh.index_buffer.buffer, 1,
                                         &index_copy);
 
-        // #TODO: we need to destroy this after this frame is done with it, not right now.
-        // DestroyBuffer(mesh.staging_buffer);
-    }
+        // this will get deleted in a few frames, definitely after the GPU is done with it. I'm a genius
+        GetCurrentFrame().deletion_queue.PushFunction(
+            "staging buffer", [this, buffer = mesh.staging_buffer]() { DestroyBuffer(buffer); });
 
-    m_pending_uploads.clear();
+        m_pending_uploads.clear();
+    }
 }
 
 void VulkanEngine::DrawBackground(VkCommandBuffer cmd)
@@ -260,6 +272,30 @@ void VulkanEngine::DrawBackground(VkCommandBuffer cmd)
 
 void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 {
+    // create the scene data!
+    // cpu to gpu so we can skip uploading it. Hopefully the data is small enough to fit in the GPU cache so it won't
+    // need to read from system memory. if that is not the case, lol
+    AllocatedBuffer scene_data_buffer =
+        CreateBuffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                     VMA_MEMORY_USAGE_CPU_TO_GPU, "scene data buffer");
+    // delete it next frame
+    GetCurrentFrame().deletion_queue.PushFunction("scene data buffer",
+                                                  [this, buffer = scene_data_buffer]() { DestroyBuffer(buffer); });
+
+    GPUSceneData* scene_data = (GPUSceneData*)scene_data_buffer.allocation->GetMappedData();
+    *scene_data = m_scene_data; // write into the mapped memory
+
+    // now we just need to bind it
+    VkDescriptorSet scene_data_descriptor =
+        GetCurrentFrame().frame_descriptors.Allocate(m_device_dispatch, m_scene_data_descriptor_layout);
+
+    Utils::DescriptorWriter writer{};
+    writer.WriteBuffer(0, scene_data_buffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    writer.UpdateSet(m_device_dispatch, scene_data_descriptor);
+
+    m_device_dispatch.cmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_mesh_pipeline_layout, 0, 1,
+                                            &scene_data_descriptor, 0, nullptr);
+
     VkRenderingAttachmentInfo color_attachment = Utils::AttachmentInfo(m_draw_image.image_view, nullptr);
 
     VkClearValue clear_value{};
@@ -292,21 +328,7 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
     GPUDrawPushConstants push_constants;
     push_constants.vertex_buffer_address = m_default_mesh->buffers.vertex_buffer_address;
     push_constants.opacity = test_mesh_opacity;
-
-    glm::mat4 view = glm::translate(glm::vec3{0, 0, -1.0f});
-    // camera projection
-    glm::mat4 projection =
-        glm::perspective(glm::radians(70.f), (float)m_draw_extent.width / (float)m_draw_extent.height, 10000.f, 0.1f);
-
-    // invert the Y direction on projection matrix so that we are more similar
-    // to opengl and gltf axis
-    projection[1][1] *= -1;
-
-    // rotate over time
-    float angle = float(frame_number % 360);
-    view = glm::rotate(view, glm::radians(angle), glm::vec3(0, 1, 0));
-
-    push_constants.world_matrix = projection * view;
+    push_constants.world_matrix = glm::mat4(1.0f); // identity
 
     m_device_dispatch.cmdPushConstants(cmd, m_mesh_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
                                        sizeof(push_constants), &push_constants);
@@ -371,6 +393,23 @@ void VulkanEngine::Update(double delta_ms)
         return; // no render while resizing (or minimised!)
     }
 
+    glm::mat4 view = glm::translate(glm::vec3{0, 0, -1.0f});
+    // camera projection
+    glm::mat4 projection =
+        glm::perspective(glm::radians(70.f), (float)m_draw_extent.width / (float)m_draw_extent.height, 10000.f, 0.1f);
+
+    // invert the Y direction on projection matrix so that we are more similar
+    // to opengl and gltf axis
+    projection[1][1] *= -1;
+
+    // rotate over time
+    float angle = float(frame_number % 360);
+    view = glm::rotate(view, glm::radians(angle), glm::vec3(0, 1, 0));
+
+    m_scene_data.view = view;
+    m_scene_data.projection = projection;
+    m_scene_data.view_projection = projection * view;
+
     Draw(delta_ms);
 }
 
@@ -407,8 +446,8 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
 
     GPUMeshBuffers buffers{};
 
-    // storage and shader device address to make VB an SSBO that we can access through vertex pulling. Transfer so we
-    // can copy into them.
+    // storage and shader device address to make VB an SSBO that we can access through vertex pulling. Transfer so
+    // we can copy into them.
     VkBufferUsageFlags vertex_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     buffers.vertex_buffer =
@@ -695,7 +734,26 @@ void VulkanEngine::InitSyncStructures()
                                   [this]() { m_device_dispatch.destroyFence(m_immediate_fence, nullptr); });
 }
 
-void VulkanEngine::InitDescriptors()
+void VulkanEngine::InitFrameDescriptors()
+{
+    for (size_t i = 0; i < FRAME_OVERLAP; ++i)
+    {
+        constexpr uint32_t frame_inital_sets = 32;
+        // only uniform buffers for now
+        std::vector<Utils::DescriptorPoolSizeRatio> sizes{{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}};
+        m_frames[i].frame_descriptors.Init(m_device_dispatch, frame_inital_sets, sizes);
+        m_deletion_queue.PushFunction("frame descriptors",
+                                      [i, this]() { m_frames[i].frame_descriptors.DestroyPools(m_device_dispatch); });
+    }
+
+    // create the layout
+    Utils::DescriptorLayoutBuilder builder;
+    builder.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    // all stages maybe a bit heavy-handed but meh
+    m_scene_data_descriptor_layout = builder.Build(m_device_dispatch, VK_SHADER_STAGE_ALL_GRAPHICS);
+}
+
+void VulkanEngine::InitBackgroundDescriptors()
 {
     // 10 sets with 1 image each
     std::vector<Utils::DescriptorPoolSizeRatio> sizes{{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}};
@@ -786,8 +844,8 @@ bool VulkanEngine::InitMeshPipeline()
     layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layout_info.pNext = nullptr;
     layout_info.flags = 0;
-    layout_info.pSetLayouts = nullptr;
-    layout_info.setLayoutCount = 0;
+    layout_info.pSetLayouts = &m_scene_data_descriptor_layout;
+    layout_info.setLayoutCount = 1;
     layout_info.pPushConstantRanges = &push_constant_range;
     layout_info.pushConstantRangeCount = 1;
 
