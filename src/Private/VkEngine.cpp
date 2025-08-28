@@ -698,8 +698,8 @@ void VulkanEngine::InitSyncStructures()
 void VulkanEngine::InitDescriptors()
 {
     // 10 sets with 1 image each
-    std::vector<Utils::DescriptorAllocator::PoolSizeRatio> sizes{{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}};
-    m_descriptor_allocator.InitPool(m_device_dispatch, 10, sizes);
+    std::vector<Utils::DescriptorPoolSizeRatio> sizes{{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}};
+    m_background_descriptor_allocator.InitPool(m_device_dispatch, 10, sizes);
 
     // descriptor set layout for the compute draw
     {
@@ -709,14 +709,14 @@ void VulkanEngine::InitDescriptors()
     }
 
     m_background_compute_descriptors =
-        m_descriptor_allocator.Allocate(m_device_dispatch, m_background_compute_descriptor_layout);
+        m_background_descriptor_allocator.Allocate(m_device_dispatch, m_background_compute_descriptor_layout);
 
     Utils::DescriptorWriter writer{};
     writer.WriteImage(0, m_draw_image.image_view, VK_IMAGE_LAYOUT_GENERAL, 0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
     writer.UpdateSet(m_device_dispatch, m_background_compute_descriptors);
 
     m_deletion_queue.PushFunction("descriptors", [this]() {
-        m_descriptor_allocator.DestroyPool(m_device_dispatch);
+        m_background_descriptor_allocator.DestroyPool(m_device_dispatch);
         m_device_dispatch.destroyDescriptorSetLayout(m_background_compute_descriptor_layout, nullptr);
     });
 }

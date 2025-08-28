@@ -174,7 +174,7 @@ class VulkanEngine
     VkExtent2D m_window_extent;
     SDL_Window* m_window;
 
-    Utils::DescriptorAllocator m_descriptor_allocator;
+    Utils::DescriptorAllocator m_background_descriptor_allocator;
     VmaAllocator m_allocator;
 
     bool m_use_validation_layers;

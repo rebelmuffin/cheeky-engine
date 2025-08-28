@@ -43,11 +43,11 @@ namespace Utils
     }
 
     void DescriptorAllocator::InitPool(vkb::DispatchTable device_dispatch, uint32_t max_sets,
-                                       std::span<PoolSizeRatio> pool_ratios)
+                                       std::span<DescriptorPoolSizeRatio> pool_ratios)
     {
         std::vector<VkDescriptorPoolSize> pool_sizes;
         pool_sizes.reserve(pool_ratios.size());
-        for (PoolSizeRatio ratio : pool_ratios)
+        for (DescriptorPoolSizeRatio ratio : pool_ratios)
         {
             pool_sizes.push_back(
                 VkDescriptorPoolSize{.type = ratio.type, .descriptorCount = uint32_t(ratio.ratio * float(max_sets))});
@@ -90,12 +90,12 @@ namespace Utils
     }
 
     void DescriptorAllocatorDynamic::Init(vkb::DispatchTable device_dispatch, uint32_t initial_max_sets,
-                                          std::span<PoolSizeRatio> pool_ratios)
+                                          std::span<DescriptorPoolSizeRatio> pool_ratios)
     {
         // create the first pool
         VkDescriptorPool new_pool = AllocateNewPool(device_dispatch, initial_max_sets, pool_ratios);
         m_ready_pools.push_back(new_pool);
-        m_size_ratios = std::vector<PoolSizeRatio>(pool_ratios.begin(), pool_ratios.end());
+        m_size_ratios = std::vector<DescriptorPoolSizeRatio>(pool_ratios.begin(), pool_ratios.end());
     }
 
     void DescriptorAllocatorDynamic::ClearDescriptors(vkb::DispatchTable device_dispatch)
@@ -171,11 +171,11 @@ namespace Utils
     }
 
     VkDescriptorPool DescriptorAllocatorDynamic::AllocateNewPool(vkb::DispatchTable device_dispatch, uint32_t max_sets,
-                                                                 std::span<PoolSizeRatio> pool_ratios)
+                                                                 std::span<DescriptorPoolSizeRatio> pool_ratios)
     {
         std::vector<VkDescriptorPoolSize> pool_sizes;
         pool_sizes.reserve(pool_ratios.size());
-        for (PoolSizeRatio ratio : pool_ratios)
+        for (DescriptorPoolSizeRatio ratio : pool_ratios)
         {
             pool_sizes.push_back(
                 VkDescriptorPoolSize{.type = ratio.type, .descriptorCount = uint32_t(ratio.ratio * float(max_sets))});

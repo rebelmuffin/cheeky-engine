@@ -18,18 +18,18 @@ namespace Utils
       private:
         std::vector<VkDescriptorSetLayoutBinding> m_bindings;
     };
+    struct DescriptorPoolSizeRatio
+    {
+        VkDescriptorType type;
+        float ratio;
+    };
 
     // Simple descriptor allocator that allocates from a single pool. Will crash if you run out of pool space.
     class DescriptorAllocator
     {
       public:
-        struct PoolSizeRatio
-        {
-            VkDescriptorType type;
-            float ratio;
-        };
-
-        void InitPool(vkb::DispatchTable device_dispatch, uint32_t max_sets, std::span<PoolSizeRatio> pool_ratios);
+        void InitPool(vkb::DispatchTable device_dispatch, uint32_t max_sets,
+                      std::span<DescriptorPoolSizeRatio> pool_ratios);
         void ClearDescriptors(vkb::DispatchTable device_dispatch);
         void DestroyPool(vkb::DispatchTable device_dispatch);
         VkDescriptorSet Allocate(vkb::DispatchTable device_dispatch, VkDescriptorSetLayout layout_set);
@@ -42,13 +42,8 @@ namespace Utils
     class DescriptorAllocatorDynamic
     {
       public:
-        struct PoolSizeRatio
-        {
-            VkDescriptorType type;
-            float ratio;
-        };
-
-        void Init(vkb::DispatchTable device_dispatch, uint32_t initial_max_sets, std::span<PoolSizeRatio> pool_ratios);
+        void Init(vkb::DispatchTable device_dispatch, uint32_t initial_max_sets,
+                  std::span<DescriptorPoolSizeRatio> pool_ratios);
         void ClearDescriptors(vkb::DispatchTable device_dispatch);
         void DestroyPools(vkb::DispatchTable device_dispatch);
         VkDescriptorSet Allocate(vkb::DispatchTable device_dispatch, VkDescriptorSetLayout layout_set);
@@ -56,11 +51,11 @@ namespace Utils
       private:
         VkDescriptorPool GetPool(vkb::DispatchTable device_dispatch);
         VkDescriptorPool AllocateNewPool(vkb::DispatchTable device_dispatch, uint32_t max_sets,
-                                         std::span<PoolSizeRatio> pool_ratios);
+                                         std::span<DescriptorPoolSizeRatio> pool_ratios);
 
         std::vector<VkDescriptorPool> m_ready_pools;
         std::vector<VkDescriptorPool> m_full_pools;
-        std::vector<PoolSizeRatio> m_size_ratios;
+        std::vector<DescriptorPoolSizeRatio> m_size_ratios;
         uint32_t m_sets_per_pool;
     };
 
