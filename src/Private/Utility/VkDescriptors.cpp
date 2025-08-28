@@ -142,12 +142,16 @@ namespace Utils
 
         VkDescriptorSet descriptor_set;
         VkResult result = device_dispatch.allocateDescriptorSets(&info, &descriptor_set);
-        if (result == VK_ERROR_OUT_OF_POOL_MEMORY)
+        while (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL)
         {
             m_full_pools.emplace_back(pool);
+            // we can avoid this search if we pop the pool from GetPool and add it back if allocation succeeds,
+            // look into doing that if it ever becomes a performance issue. I doubt it (28/08/2025)
             std::erase_if(m_ready_pools, [pool](VkDescriptorPool& p) { return p == pool; });
-            // try again
-            return Allocate(device_dispatch, layout_set);
+
+            pool = GetPool(device_dispatch);
+            info.descriptorPool = pool;
+            result = device_dispatch.allocateDescriptorSets(&info, &descriptor_set);
         }
 
         VK_CHECK(result);
@@ -185,6 +189,10 @@ namespace Utils
         info.pPoolSizes = pool_sizes.data();
 
         m_sets_per_pool = max_sets * 2; // next time we will double the pool size
+        if (m_sets_per_pool > 4092)
+        {
+            m_sets_per_pool = 4092;
+        }
 
         VkDescriptorPool new_pool;
         VK_CHECK(device_dispatch.createDescriptorPool(&info, nullptr, &new_pool));
