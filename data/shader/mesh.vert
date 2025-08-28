@@ -44,7 +44,10 @@ void main()
 
     // push output
     gl_Position = scene_data.view_projection * PushConstants.render_matrix * vec4(v.position, 1.0f);
-    outColour = vec4(v.color.rgb, PushConstants.opacity);
+    // very basic directional lighting
+    float light_intensity = max(dot(normalize(v.normal), normalize(-scene_data.light_direction.xyz)), 0.0);
+    vec3 lit_colour = v.color.rgb * (scene_data.ambient_colour.rgb + scene_data.light_colour.rgb * light_intensity);
+    outColour = vec4(lit_colour, PushConstants.opacity);
     outUV.x = v.uv_x;
     outUV.y = v.uv_y;
 }
