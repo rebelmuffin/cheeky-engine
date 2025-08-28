@@ -200,4 +200,62 @@ namespace Utils
         return new_pool;
     }
 
+    void DescriptorWriter::WriteImage(uint32_t binding, VkImageView image_view, VkImageLayout layout, VkSampler sampler,
+                                      VkDescriptorType descriptor_type)
+    {
+        VkDescriptorImageInfo& image_info = image_infos.emplace_back();
+        image_info.imageLayout = layout;
+        image_info.imageView = image_view;
+        image_info.sampler = sampler;
+
+        VkWriteDescriptorSet write_set{};
+        write_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_set.pNext = nullptr;
+        write_set.descriptorCount = 1;
+        write_set.descriptorType = descriptor_type;
+        write_set.pImageInfo = &image_info; // deque ptrs are stable
+        write_set.dstBinding = binding;
+        // write_set.dstSet will be filled in UpdateSet
+
+        writes.push_back(write_set);
+    }
+
+    void DescriptorWriter::WriteBuffer(uint32_t binding, VkBuffer buffer, VkDeviceSize size, VkDeviceSize offset,
+                                       VkDescriptorType descriptor_type)
+    {
+        VkDescriptorBufferInfo& buffer_info = buffer_infos.emplace_back();
+        buffer_info.buffer = buffer;
+        buffer_info.offset = offset;
+        buffer_info.range = size;
+
+        VkWriteDescriptorSet write_set{};
+        write_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_set.pNext = nullptr;
+        write_set.descriptorCount = 1;
+        write_set.descriptorType = descriptor_type;
+        write_set.pBufferInfo = &buffer_info; // deque ptrs are stable
+        write_set.dstBinding = binding;
+        // write_set.dstSet will be filled in UpdateSet
+
+        writes.push_back(write_set);
+    }
+
+    void DescriptorWriter::Clear()
+    {
+        image_infos.clear();
+        buffer_infos.clear();
+        writes.clear();
+    }
+
+    void DescriptorWriter::UpdateSet(vkb::DispatchTable device_dispatch, VkDescriptorSet set)
+    {
+        for (VkWriteDescriptorSet& write : writes)
+        {
+            write.dstSet = set;
+        }
+
+        device_dispatch.updateDescriptorSets(uint32_t(writes.size()), writes.data(), 0, nullptr);
+        Clear();
+    }
+
 } // namespace Utils

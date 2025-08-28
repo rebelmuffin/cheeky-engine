@@ -3,6 +3,7 @@
 #include "VkTypes.h"
 #include <VkBootstrapDispatch.h>
 #include <span>
+#include <vulkan/vulkan_core.h>
 
 namespace Utils
 {
@@ -61,5 +62,21 @@ namespace Utils
         std::vector<VkDescriptorPool> m_full_pools;
         std::vector<PoolSizeRatio> m_size_ratios;
         uint32_t m_sets_per_pool;
+    };
+
+    // Helper class to write descriptors.
+    struct DescriptorWriter
+    {
+        std::deque<VkDescriptorImageInfo> image_infos;
+        std::deque<VkDescriptorBufferInfo> buffer_infos;
+        std::vector<VkWriteDescriptorSet> writes;
+
+        void WriteImage(uint32_t binding, VkImageView image_view, VkImageLayout layout, VkSampler sampler,
+                        VkDescriptorType descriptor_type);
+        void WriteBuffer(uint32_t binding, VkBuffer buffer, VkDeviceSize size, VkDeviceSize offset,
+                         VkDescriptorType descriptor_type);
+
+        void Clear();
+        void UpdateSet(vkb::DispatchTable device_dispatch, VkDescriptorSet set);
     };
 } // namespace Utils
