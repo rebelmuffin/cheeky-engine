@@ -105,14 +105,14 @@ class VulkanEngine
     float test_mesh_opacity{1.0f};
 
   private:
+    void FinishPendingUploads(VkCommandBuffer cmd);
+    void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
+
     // draw loop
     void Draw(double delta_ms);
     void DrawBackground(VkCommandBuffer cmd);
     void DrawGeometry(VkCommandBuffer cmd);
     void DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view);
-
-    void FinishPendingUploads(VkCommandBuffer cmd);
-    void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 
     bool InitVulkan();
     void InitAllocator();

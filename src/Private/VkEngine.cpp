@@ -137,6 +137,91 @@ void VulkanEngine::Cleanup()
     is_initialised = false;
 }
 
+void VulkanEngine::Update(double delta_ms)
+{
+    if (ImGui::BeginMainMenuBar())
+    {
+        if (ImGui::BeginMenu("Graphics"))
+        {
+            ImGui::Checkbox("Engine Settings", &m_draw_engine_settings);
+            ImGui::EndMenu();
+        }
+        ImGui::EndMainMenuBar();
+    }
+
+    if (m_draw_engine_settings)
+    {
+        if (ImGui::Begin("Engine Settings", &m_draw_engine_settings))
+        {
+            ImGui::Text("Frame: %d", frame_number);
+            ImGui::Text("Backbuffer Scale: %.2f", m_backbuffer_scale);
+            ImGui::Text("Render Resolution: %dx%d", m_draw_extent.width, m_draw_extent.height);
+            ImGui::Text("Swapchain Resolution: %dx%d", m_swapchain_extent.width, m_swapchain_extent.height);
+            ImGui::Text("Window Resolution: %dx%d", m_window_extent.width, m_window_extent.height);
+        }
+
+        ImGui::SliderFloat("Render Scale", &m_render_scale, 0.1f, 1.0f);
+        ImGui::SliderFloat("Mesh Opacity", &test_mesh_opacity, 0.0f, 1.0f);
+
+        if (ImGui::SliderAngle("Camera yaw", &m_camera_yaw_rad))
+        {
+            m_rotating_camera = false;
+        }
+        ImGui::SliderAngle("Camera pitch", &m_camera_pitch_rad, -89.0f, 89.0f);
+        ImGui::DragFloat3("Camera position", &m_camera_position.x);
+        ImGui::Checkbox("Rotating Camera", &m_rotating_camera);
+
+        if (ImGui::CollapsingHeader("Scene Lighting"))
+        {
+            ImGui::ColorEdit3("Ambient Colour", &m_scene_data.ambient_colour.r);
+            ImGui::ColorEdit3("Light Colour", &m_scene_data.light_colour.r);
+            ImGui::SliderFloat3("Light Direction", &m_scene_data.light_direction.x, -1.0f, 1.0f);
+        }
+
+        ImGui::End();
+    }
+
+    ImGui::Render();
+
+    if (stop_rendering)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        return;
+    }
+
+    if (m_resize_requested)
+    {
+        ResizeSwapchain();
+        return; // no render while resizing (or minimised!)
+    }
+
+    if (m_rotating_camera)
+    {
+        m_camera_yaw_rad += glm::radians(10.0f) * float(delta_ms) / 100.0f;
+        m_camera_yaw_rad = std::fmod(m_camera_yaw_rad, glm::two_pi<float>());
+    }
+
+    // pitch first, then yaw. order of multiplication matters
+    glm::mat4 rotation =
+        glm::rotate(m_camera_pitch_rad, glm::vec3(1, 0, 0)) * glm::rotate(m_camera_yaw_rad, glm::vec3(0, 1, 0));
+
+    // we translate first because we want to move the world, not the camera. When we make a real camera, the order
+    // should be reversed
+    glm::mat4 view = glm::translate(m_camera_position) * rotation;
+    glm::mat4 projection =
+        glm::perspective(glm::radians(70.f), (float)m_draw_extent.width / (float)m_draw_extent.height, 10000.f, 0.1f);
+
+    // invert the Y direction on projection matrix so that we are more similar
+    // to opengl and gltf axis
+    projection[1][1] *= -1;
+
+    m_scene_data.view = view;
+    m_scene_data.projection = projection;
+    m_scene_data.view_projection = projection * view;
+
+    Draw(delta_ms);
+}
+
 float VulkanEngine::GetRenderScale() const
 {
     return m_render_scale;
@@ -146,6 +231,178 @@ void VulkanEngine::SetRenderScale(float scale)
 {
     m_render_scale = std::clamp(scale, 0.1f, 1.0f);
 }
+
+#pragma region Allocation_Destruction
+
+AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage,
+                                           VmaMemoryUsage memory_usage, const char* debug_name)
+{
+    VkBufferCreateInfo buffer_info{};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.pNext = nullptr;
+    buffer_info.size = allocation_size;
+    buffer_info.usage = usage;
+
+    VmaAllocationCreateInfo alloc_create_info{};
+    alloc_create_info.usage = memory_usage;
+    alloc_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    AllocatedBuffer buffer;
+
+    VK_CHECK(vmaCreateBuffer(m_allocator, &buffer_info, &alloc_create_info, &buffer.buffer, &buffer.allocation,
+                             &buffer.allocation_info));
+    SetAllocationName(buffer.allocation, debug_name);
+
+    return buffer;
+}
+
+void VulkanEngine::DestroyBuffer(const AllocatedBuffer& buffer)
+{
+    vmaDestroyBuffer(m_allocator, buffer.buffer, buffer.allocation);
+}
+
+GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
+{
+    const size_t vertex_buffer_size = vertices.size() * sizeof(Vertex);
+    const size_t index_buffer_size = indices.size() * sizeof(uint32_t);
+
+    GPUMeshBuffers buffers{};
+
+    // storage and shader device address to make VB an SSBO that we can access through vertex pulling. Transfer so
+    // we can copy into them.
+    VkBufferUsageFlags vertex_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    buffers.vertex_buffer =
+        CreateBuffer(vertex_buffer_size, vertex_usage, VMA_MEMORY_USAGE_GPU_ONLY, "buffer_mesh_vertex");
+
+    VkBufferDeviceAddressInfo device_address{};
+    device_address.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    device_address.pNext = nullptr;
+    device_address.buffer = buffers.vertex_buffer.buffer;
+    buffers.vertex_buffer_address = m_device_dispatch.getBufferDeviceAddress(&device_address);
+
+    VkBufferUsageFlags index_usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buffers.index_buffer = CreateBuffer(index_buffer_size, index_usage, VMA_MEMORY_USAGE_GPU_ONLY, "buffer_mesh_index");
+
+    // the buffers are created. Now we need to do the same thing basically and create a staging buffer.
+
+    AllocatedBuffer staging = CreateBuffer(vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                           VMA_MEMORY_USAGE_CPU_ONLY, "buffer_mesh_staging");
+
+    void* data = staging.allocation->GetMappedData();
+    memcpy(data, vertices.data(), vertex_buffer_size);
+    memcpy(static_cast<char*>(data) + vertex_buffer_size, indices.data(), index_buffer_size);
+
+    std::unique_ptr<Utils::IUploadRequest> upload_request = std::make_unique<Utils::MeshUploadRequest>(
+        vertex_buffer_size, index_buffer_size, buffers, staging, Utils::UploadType::Deferred);
+    RequestUpload(std::move(upload_request));
+
+    return buffers;
+}
+
+AllocatedImage VulkanEngine::AllocateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage,
+                                           VmaMemoryUsage memory_usage, VkImageAspectFlagBits aspect_flags,
+                                           VkMemoryPropertyFlags additional_flags, const char* debug_name)
+{
+    AllocatedImage image{};
+
+    VkExtent3D image_extent{width, height, 1};
+    image.image_extent = image_extent;
+    image.image_format = format;
+
+    VkImageCreateInfo image_info = Utils::ImageCreateInfo(format, usage, image_extent);
+
+    VmaAllocationCreateInfo allocation_info{};
+    allocation_info.usage = memory_usage;
+    allocation_info.requiredFlags = additional_flags;
+
+    vmaCreateImage(m_allocator, &image_info, &allocation_info, &image.image, &image.allocation, nullptr);
+    SetAllocationName(image.allocation, debug_name);
+
+    VkImageViewCreateInfo image_view_info = Utils::ImageViewCreateInfo(format, image.image, aspect_flags);
+    VK_CHECK(m_device_dispatch.createImageView(&image_view_info, nullptr, &image.image_view));
+
+    return image;
+}
+
+void VulkanEngine::RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request)
+{
+    if (m_force_all_uploads_immediate || upload_request->GetUploadType() == Utils::UploadType::Immediate)
+    {
+        ImmediateSubmit([this, upload_request = upload_request.get()](VkCommandBuffer cmd) {
+            upload_request->ExecuteUpload(*this, cmd);
+        });
+        return;
+    }
+
+    m_pending_uploads.push_back(std::move(upload_request));
+}
+
+void VulkanEngine::FinishPendingUploads(VkCommandBuffer cmd)
+{
+    // some uploads might need to wait until next frame to execute
+    std::vector<std::unique_ptr<Utils::IUploadRequest>> next_frame_uploads;
+
+    for (std::unique_ptr<Utils::IUploadRequest>& request : m_pending_uploads)
+    {
+        Utils::UploadExecutionResult result = request->ExecuteUpload(*this, cmd);
+        if (result == Utils::UploadExecutionResult::RetryNextFrame)
+        {
+            next_frame_uploads.push_back(std::move(request));
+            continue;
+        }
+        else if (result == Utils::UploadExecutionResult::Failed)
+        {
+            std::cerr << "[!] Upload request \"" << request->DebugName() << "\" failed to execute. Ignoring."
+                      << std::endl;
+        }
+
+        m_completed_uploads.emplace_back(std::move(request));
+        GetCurrentFrame().deletion_queue.PushFunction(
+            "upload request", [this, request = m_completed_uploads.back().get()]() {
+                request->DestroyResources(*this);
+
+                // is this a bad way to do this? Search is the easiest but idk
+                std::erase_if(m_completed_uploads, [request](const std::unique_ptr<Utils::IUploadRequest>& ptr) {
+                    return ptr.get() == request;
+                });
+            });
+    }
+
+    // nothing inside m_pending_uploads is valid anymore
+    m_pending_uploads.clear();
+
+    // move the next frame uploads into the pending uploads
+    m_pending_uploads = std::move(next_frame_uploads);
+}
+
+void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function)
+{
+    VkCommandBuffer cmd = m_immediate_command_buffer;
+
+    VK_CHECK(m_device_dispatch.resetFences(1, &m_immediate_fence));
+    VK_CHECK(m_device_dispatch.resetCommandBuffer(m_immediate_command_buffer, 0));
+
+    VkCommandBufferBeginInfo cmdBeginInfo = Utils::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    VK_CHECK(m_device_dispatch.beginCommandBuffer(cmd, &cmdBeginInfo));
+    // COMMAND BEGIN
+
+    function(cmd);
+
+    // COMMAND END
+    VK_CHECK(m_device_dispatch.endCommandBuffer(cmd));
+
+    VkCommandBufferSubmitInfo cmd_info = Utils::CommandBufferSubmitInfo(cmd);
+
+    VkSubmitInfo2 submit_info = Utils::SubmitInfo(&cmd_info, nullptr, nullptr);
+
+    VK_CHECK(m_device_dispatch.queueSubmit2(m_graphics_queue, 1, &submit_info, m_immediate_fence));
+
+    VK_CHECK(m_device_dispatch.waitForFences(1, &m_immediate_fence, true, 1'000'000'000));
+}
+
+#pragma endregion Allocation_Destruction
+
+#pragma region Draw
 
 void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
 {
@@ -330,256 +587,9 @@ void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view)
     m_device_dispatch.cmdEndRendering(cmd);
 }
 
-void VulkanEngine::FinishPendingUploads(VkCommandBuffer cmd)
-{
-    // some uploads might need to wait until next frame to execute
-    std::vector<std::unique_ptr<Utils::IUploadRequest>> next_frame_uploads;
+#pragma endregion Draw
 
-    for (std::unique_ptr<Utils::IUploadRequest>& request : m_pending_uploads)
-    {
-        Utils::UploadExecutionResult result = request->ExecuteUpload(*this, cmd);
-        if (result == Utils::UploadExecutionResult::RetryNextFrame)
-        {
-            next_frame_uploads.push_back(std::move(request));
-            continue;
-        }
-        else if (result == Utils::UploadExecutionResult::Failed)
-        {
-            std::cerr << "[!] Upload request \"" << request->DebugName() << "\" failed to execute. Ignoring."
-                      << std::endl;
-        }
-
-        m_completed_uploads.emplace_back(std::move(request));
-        GetCurrentFrame().deletion_queue.PushFunction(
-            "upload request", [this, request = m_completed_uploads.back().get()]() {
-                request->DestroyResources(*this);
-
-                // is this a bad way to do this? Search is the easiest but idk
-                std::erase_if(m_completed_uploads, [request](const std::unique_ptr<Utils::IUploadRequest>& ptr) {
-                    return ptr.get() == request;
-                });
-            });
-    }
-
-    // nothing inside m_pending_uploads is valid anymore
-    m_pending_uploads.clear();
-
-    // move the next frame uploads into the pending uploads
-    m_pending_uploads = std::move(next_frame_uploads);
-}
-
-void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function)
-{
-    VkCommandBuffer cmd = m_immediate_command_buffer;
-
-    VK_CHECK(m_device_dispatch.resetFences(1, &m_immediate_fence));
-    VK_CHECK(m_device_dispatch.resetCommandBuffer(m_immediate_command_buffer, 0));
-
-    VkCommandBufferBeginInfo cmdBeginInfo = Utils::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-    VK_CHECK(m_device_dispatch.beginCommandBuffer(cmd, &cmdBeginInfo));
-    // COMMAND BEGIN
-
-    function(cmd);
-
-    // COMMAND END
-    VK_CHECK(m_device_dispatch.endCommandBuffer(cmd));
-
-    VkCommandBufferSubmitInfo cmd_info = Utils::CommandBufferSubmitInfo(cmd);
-
-    VkSubmitInfo2 submit_info = Utils::SubmitInfo(&cmd_info, nullptr, nullptr);
-
-    VK_CHECK(m_device_dispatch.queueSubmit2(m_graphics_queue, 1, &submit_info, m_immediate_fence));
-
-    VK_CHECK(m_device_dispatch.waitForFences(1, &m_immediate_fence, true, 1'000'000'000));
-}
-
-void VulkanEngine::Update(double delta_ms)
-{
-    if (ImGui::BeginMainMenuBar())
-    {
-        if (ImGui::BeginMenu("Graphics"))
-        {
-            ImGui::Checkbox("Engine Settings", &m_draw_engine_settings);
-            ImGui::EndMenu();
-        }
-        ImGui::EndMainMenuBar();
-    }
-
-    if (m_draw_engine_settings)
-    {
-        if (ImGui::Begin("Engine Settings", &m_draw_engine_settings))
-        {
-            ImGui::Text("Frame: %d", frame_number);
-            ImGui::Text("Backbuffer Scale: %.2f", m_backbuffer_scale);
-            ImGui::Text("Render Resolution: %dx%d", m_draw_extent.width, m_draw_extent.height);
-            ImGui::Text("Swapchain Resolution: %dx%d", m_swapchain_extent.width, m_swapchain_extent.height);
-            ImGui::Text("Window Resolution: %dx%d", m_window_extent.width, m_window_extent.height);
-        }
-
-        ImGui::SliderFloat("Render Scale", &m_render_scale, 0.1f, 1.0f);
-        ImGui::SliderFloat("Mesh Opacity", &test_mesh_opacity, 0.0f, 1.0f);
-
-        if (ImGui::SliderAngle("Camera yaw", &m_camera_yaw_rad))
-        {
-            m_rotating_camera = false;
-        }
-        ImGui::SliderAngle("Camera pitch", &m_camera_pitch_rad, -89.0f, 89.0f);
-        ImGui::DragFloat3("Camera position", &m_camera_position.x);
-        ImGui::Checkbox("Rotating Camera", &m_rotating_camera);
-
-        if (ImGui::CollapsingHeader("Scene Lighting"))
-        {
-            ImGui::ColorEdit3("Ambient Colour", &m_scene_data.ambient_colour.r);
-            ImGui::ColorEdit3("Light Colour", &m_scene_data.light_colour.r);
-            ImGui::SliderFloat3("Light Direction", &m_scene_data.light_direction.x, -1.0f, 1.0f);
-        }
-
-        ImGui::End();
-    }
-
-    ImGui::Render();
-
-    if (stop_rendering)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        return;
-    }
-
-    if (m_resize_requested)
-    {
-        ResizeSwapchain();
-        return; // no render while resizing (or minimised!)
-    }
-
-    if (m_rotating_camera)
-    {
-        m_camera_yaw_rad += glm::radians(10.0f) * float(delta_ms) / 100.0f;
-        m_camera_yaw_rad = std::fmod(m_camera_yaw_rad, glm::two_pi<float>());
-    }
-
-    // pitch first, then yaw. order of multiplication matters
-    glm::mat4 rotation =
-        glm::rotate(m_camera_pitch_rad, glm::vec3(1, 0, 0)) * glm::rotate(m_camera_yaw_rad, glm::vec3(0, 1, 0));
-
-    // we translate first because we want to move the world, not the camera. When we make a real camera, the order
-    // should be reversed
-    glm::mat4 view = glm::translate(m_camera_position) * rotation;
-    glm::mat4 projection =
-        glm::perspective(glm::radians(70.f), (float)m_draw_extent.width / (float)m_draw_extent.height, 10000.f, 0.1f);
-
-    // invert the Y direction on projection matrix so that we are more similar
-    // to opengl and gltf axis
-    projection[1][1] *= -1;
-
-    m_scene_data.view = view;
-    m_scene_data.projection = projection;
-    m_scene_data.view_projection = projection * view;
-
-    Draw(delta_ms);
-}
-
-AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage,
-                                           VmaMemoryUsage memory_usage, const char* debug_name)
-{
-    VkBufferCreateInfo buffer_info{};
-    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_info.pNext = nullptr;
-    buffer_info.size = allocation_size;
-    buffer_info.usage = usage;
-
-    VmaAllocationCreateInfo alloc_create_info{};
-    alloc_create_info.usage = memory_usage;
-    alloc_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
-    AllocatedBuffer buffer;
-
-    VK_CHECK(vmaCreateBuffer(m_allocator, &buffer_info, &alloc_create_info, &buffer.buffer, &buffer.allocation,
-                             &buffer.allocation_info));
-    SetAllocationName(buffer.allocation, debug_name);
-
-    return buffer;
-}
-
-void VulkanEngine::DestroyBuffer(const AllocatedBuffer& buffer)
-{
-    vmaDestroyBuffer(m_allocator, buffer.buffer, buffer.allocation);
-}
-
-GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
-{
-    const size_t vertex_buffer_size = vertices.size() * sizeof(Vertex);
-    const size_t index_buffer_size = indices.size() * sizeof(uint32_t);
-
-    GPUMeshBuffers buffers{};
-
-    // storage and shader device address to make VB an SSBO that we can access through vertex pulling. Transfer so
-    // we can copy into them.
-    VkBufferUsageFlags vertex_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    buffers.vertex_buffer =
-        CreateBuffer(vertex_buffer_size, vertex_usage, VMA_MEMORY_USAGE_GPU_ONLY, "buffer_mesh_vertex");
-
-    VkBufferDeviceAddressInfo device_address{};
-    device_address.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    device_address.pNext = nullptr;
-    device_address.buffer = buffers.vertex_buffer.buffer;
-    buffers.vertex_buffer_address = m_device_dispatch.getBufferDeviceAddress(&device_address);
-
-    VkBufferUsageFlags index_usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    buffers.index_buffer = CreateBuffer(index_buffer_size, index_usage, VMA_MEMORY_USAGE_GPU_ONLY, "buffer_mesh_index");
-
-    // the buffers are created. Now we need to do the same thing basically and create a staging buffer.
-
-    AllocatedBuffer staging = CreateBuffer(vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                           VMA_MEMORY_USAGE_CPU_ONLY, "buffer_mesh_staging");
-
-    void* data = staging.allocation->GetMappedData();
-    memcpy(data, vertices.data(), vertex_buffer_size);
-    memcpy(static_cast<char*>(data) + vertex_buffer_size, indices.data(), index_buffer_size);
-
-    std::unique_ptr<Utils::IUploadRequest> upload_request = std::make_unique<Utils::MeshUploadRequest>(
-        vertex_buffer_size, index_buffer_size, buffers, staging, Utils::UploadType::Deferred);
-    RequestUpload(std::move(upload_request));
-
-    return buffers;
-}
-
-AllocatedImage VulkanEngine::AllocateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage,
-                                           VmaMemoryUsage memory_usage, VkImageAspectFlagBits aspect_flags,
-                                           VkMemoryPropertyFlags additional_flags, const char* debug_name)
-{
-    AllocatedImage image{};
-
-    VkExtent3D image_extent{width, height, 1};
-    image.image_extent = image_extent;
-    image.image_format = format;
-
-    VkImageCreateInfo image_info = Utils::ImageCreateInfo(format, usage, image_extent);
-
-    VmaAllocationCreateInfo allocation_info{};
-    allocation_info.usage = memory_usage;
-    allocation_info.requiredFlags = additional_flags;
-
-    vmaCreateImage(m_allocator, &image_info, &allocation_info, &image.image, &image.allocation, nullptr);
-    SetAllocationName(image.allocation, debug_name);
-
-    VkImageViewCreateInfo image_view_info = Utils::ImageViewCreateInfo(format, image.image, aspect_flags);
-    VK_CHECK(m_device_dispatch.createImageView(&image_view_info, nullptr, &image.image_view));
-
-    return image;
-}
-
-void VulkanEngine::RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request)
-{
-    if (m_force_all_uploads_immediate || upload_request->GetUploadType() == Utils::UploadType::Immediate)
-    {
-        ImmediateSubmit([this, upload_request = upload_request.get()](VkCommandBuffer cmd) {
-            upload_request->ExecuteUpload(*this, cmd);
-        });
-        return;
-    }
-
-    m_pending_uploads.push_back(std::move(upload_request));
-}
+#pragma region Init
 
 bool VulkanEngine::InitVulkan()
 {
@@ -656,77 +666,6 @@ void VulkanEngine::InitAllocator()
     m_deletion_queue.PushFunction("vmaAllocator", [this]() { vmaDestroyAllocator(m_allocator); });
 }
 
-void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
-{
-    // destroy in case it already exists
-    for (std::size_t i = 0; i < m_swapchain_image_views.size(); ++i)
-    {
-        m_device_dispatch.destroyImageView(m_swapchain_image_views[i], nullptr);
-    }
-    m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr);
-
-    vkb::SwapchainBuilder builder(m_gpu, m_device, m_surface);
-
-    m_swapchain_format = VK_FORMAT_B8G8R8A8_UNORM;
-
-    vkb::Swapchain vkb_swapchain =
-        builder
-            .set_desired_format(
-                VkSurfaceFormatKHR{.format = m_swapchain_format, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
-            .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR) // #TODO: Implement MAILBOX present
-            .set_desired_extent(width, height)
-            .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-            .build()
-            .value();
-
-    m_swapchain_extent = vkb_swapchain.extent;
-    m_swapchain = vkb_swapchain.swapchain;
-    m_swapchain_images = vkb_swapchain.get_images().value();
-    m_swapchain_image_views = vkb_swapchain.get_image_views().value();
-}
-
-void VulkanEngine::CreateDrawImage()
-{
-    VkExtent3D image_extent{uint32_t(float(m_window_extent.width) * m_backbuffer_scale),
-                            uint32_t(float(m_window_extent.height) * m_backbuffer_scale), 1};
-
-    // draw image defines the resolution we render at. Can be different to swapchain resolution
-    m_draw_extent = VkExtent2D{image_extent.width, image_extent.height};
-
-    VkFormat image_format = VK_FORMAT_R16G16B16A16_SFLOAT;
-    VkImageUsageFlags usage_flags{};
-    usage_flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-    usage_flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    usage_flags |= VK_IMAGE_USAGE_STORAGE_BIT;
-    usage_flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    VkImageAspectFlagBits aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
-    VkMemoryPropertyFlags additional_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-    m_draw_image = AllocateImage(image_extent.width, image_extent.height, image_format, usage_flags, memory_usage,
-                                 aspect_flags, additional_flags, "image_draw");
-
-    m_deletion_queue.PushFunction("draw image", [this]() {
-        m_device_dispatch.destroyImageView(m_draw_image.image_view, nullptr);
-        vmaDestroyImage(m_allocator, m_draw_image.image, m_draw_image.allocation);
-    });
-}
-
-void VulkanEngine::CreateDepthImage()
-{
-    VkFormat image_format = VK_FORMAT_D32_SFLOAT;
-    VkImageUsageFlags usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    VkImageAspectFlagBits aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
-    VkMemoryPropertyFlags additional_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    m_depth_image = AllocateImage(m_draw_extent.width, m_draw_extent.height, image_format, usage_flags, memory_usage,
-                                  aspect_flags, additional_flags, "image_depth");
-
-    m_deletion_queue.PushFunction("depth image", [this]() {
-        m_device_dispatch.destroyImageView(m_depth_image.image_view, nullptr);
-        vmaDestroyImage(m_allocator, m_depth_image.image, m_depth_image.allocation);
-    });
-}
 void VulkanEngine::InitCommands()
 {
     VkCommandPoolCreateInfo commandPoolInfo =
@@ -1019,6 +958,80 @@ void VulkanEngine::InitImgui()
     m_deletion_queue.PushFunction("imgui", [this, imgui_descriptor_pool]() {
         ImGui_ImplVulkan_Shutdown();
         m_device_dispatch.destroyDescriptorPool(imgui_descriptor_pool, nullptr);
+    });
+}
+
+#pragma endregion Init
+
+void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
+{
+    // destroy in case it already exists
+    for (std::size_t i = 0; i < m_swapchain_image_views.size(); ++i)
+    {
+        m_device_dispatch.destroyImageView(m_swapchain_image_views[i], nullptr);
+    }
+    m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr);
+
+    vkb::SwapchainBuilder builder(m_gpu, m_device, m_surface);
+
+    m_swapchain_format = VK_FORMAT_B8G8R8A8_UNORM;
+
+    vkb::Swapchain vkb_swapchain =
+        builder
+            .set_desired_format(
+                VkSurfaceFormatKHR{.format = m_swapchain_format, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
+            .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR) // #TODO: Implement MAILBOX present
+            .set_desired_extent(width, height)
+            .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+            .build()
+            .value();
+
+    m_swapchain_extent = vkb_swapchain.extent;
+    m_swapchain = vkb_swapchain.swapchain;
+    m_swapchain_images = vkb_swapchain.get_images().value();
+    m_swapchain_image_views = vkb_swapchain.get_image_views().value();
+}
+
+void VulkanEngine::CreateDrawImage()
+{
+    VkExtent3D image_extent{uint32_t(float(m_window_extent.width) * m_backbuffer_scale),
+                            uint32_t(float(m_window_extent.height) * m_backbuffer_scale), 1};
+
+    // draw image defines the resolution we render at. Can be different to swapchain resolution
+    m_draw_extent = VkExtent2D{image_extent.width, image_extent.height};
+
+    VkFormat image_format = VK_FORMAT_R16G16B16A16_SFLOAT;
+    VkImageUsageFlags usage_flags{};
+    usage_flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    usage_flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    usage_flags |= VK_IMAGE_USAGE_STORAGE_BIT;
+    usage_flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    VkImageAspectFlagBits aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
+    VkMemoryPropertyFlags additional_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+    m_draw_image = AllocateImage(image_extent.width, image_extent.height, image_format, usage_flags, memory_usage,
+                                 aspect_flags, additional_flags, "image_draw");
+
+    m_deletion_queue.PushFunction("draw image", [this]() {
+        m_device_dispatch.destroyImageView(m_draw_image.image_view, nullptr);
+        vmaDestroyImage(m_allocator, m_draw_image.image, m_draw_image.allocation);
+    });
+}
+
+void VulkanEngine::CreateDepthImage()
+{
+    VkFormat image_format = VK_FORMAT_D32_SFLOAT;
+    VkImageUsageFlags usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    VkImageAspectFlagBits aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
+    VkMemoryPropertyFlags additional_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    m_depth_image = AllocateImage(m_draw_extent.width, m_draw_extent.height, image_format, usage_flags, memory_usage,
+                                  aspect_flags, additional_flags, "image_depth");
+
+    m_deletion_queue.PushFunction("depth image", [this]() {
+        m_device_dispatch.destroyImageView(m_depth_image.image_view, nullptr);
+        vmaDestroyImage(m_allocator, m_depth_image.image, m_depth_image.allocation);
     });
 }
 
