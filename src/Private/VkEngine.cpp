@@ -103,6 +103,7 @@ bool VulkanEngine::Init()
     InitSyncStructures();
     InitFrameDescriptors();
     InitBackgroundDescriptors();
+    InitDefaultDescriptors();
 
     if (InitPipelines() == false)
     {
@@ -163,6 +164,19 @@ void VulkanEngine::Update(double delta_ms)
 
         ImGui::SliderFloat("Render Scale", &m_render_scale, 0.1f, 1.0f);
         ImGui::SliderFloat("Mesh Opacity", &test_mesh_opacity, 0.0f, 1.0f);
+        ImGui::Checkbox("Linear Sampling", &m_use_linear_sampling);
+        if (ImGui::BeginCombo("Texture", m_active_image->allocation->GetName()))
+        {
+            std::array<AllocatedImage*, 4> images{&m_white_image, &m_black_image, &m_grey_image, &m_checkerboard_image};
+            for (AllocatedImage* image : images)
+            {
+                if (ImGui::Selectable(image->allocation->GetName(), image == m_active_image))
+                {
+                    m_active_image = image;
+                }
+            }
+            ImGui::EndCombo();
+        }
 
         if (ImGui::SliderAngle("Camera yaw", &m_camera_yaw_rad))
         {
@@ -325,7 +339,7 @@ AllocatedImage VulkanEngine::AllocateImage(VkExtent3D image_extent, VkFormat for
     allocation_info.flags = allocation_flags;
 
     VkResult result =
-    vmaCreateImage(m_allocator, &image_info, &allocation_info, &image.image, &image.allocation, nullptr);
+        vmaCreateImage(m_allocator, &image_info, &allocation_info, &image.image, &image.allocation, nullptr);
     VK_CHECK(result);
     SetAllocationName(image.allocation, debug_name);
 
@@ -337,7 +351,7 @@ AllocatedImage VulkanEngine::AllocateImage(VkExtent3D image_extent, VkFormat for
 }
 
 AllocatedImage VulkanEngine::AllocateImage(void* image_data, VkExtent3D image_extent, VkFormat format,
-                                           VkImageUsageFlags usage, bool mipmapped)
+                                           VkImageUsageFlags usage, bool mipmapped, const char* debug_name)
 {
     // we'll try to use the BAR, which is addressable by both CPU and GPU. If cannot use, we'll just do a staging buffer
     // and copy from that.
@@ -351,7 +365,7 @@ AllocatedImage VulkanEngine::AllocateImage(void* image_data, VkExtent3D image_ex
                                                                       // non-mappable memory
 
     AllocatedImage image = AllocateImage(image_extent, format, usage, memory_usage, VK_IMAGE_ASPECT_COLOR_BIT,
-                                         required_memory_flags, allocation_flags, mipmapped);
+                                         required_memory_flags, allocation_flags, mipmapped, debug_name);
 
     VkMemoryPropertyFlags memory_properties;
     vmaGetAllocationMemoryProperties(m_allocator, image.allocation, &memory_properties);
@@ -576,12 +590,23 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
     VkDescriptorSet scene_data_descriptor =
         GetCurrentFrame().frame_descriptors.Allocate(m_device_dispatch, m_scene_data_descriptor_layout);
 
+    // bind scene data
     Utils::DescriptorWriter writer{};
     writer.WriteBuffer(0, scene_data_buffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     writer.UpdateSet(m_device_dispatch, scene_data_descriptor);
 
     m_device_dispatch.cmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_mesh_pipeline_layout, 0, 1,
                                             &scene_data_descriptor, 0, nullptr);
+
+    // write checkerboard image into the single image descriptor
+    writer.WriteImage(0, m_active_image->image_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      m_use_linear_sampling ? m_default_sampler_linear : m_default_sampler_nearest,
+                      VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    writer.UpdateSet(m_device_dispatch, m_single_image_descriptors);
+
+    // this could be bundled up with the bind call above but meh
+    m_device_dispatch.cmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_mesh_pipeline_layout, 1, 1,
+                                            &m_single_image_descriptors, 0, nullptr);
 
     VkRenderingAttachmentInfo color_attachment = Utils::AttachmentInfo(m_draw_image.image_view, nullptr);
 
@@ -675,6 +700,7 @@ bool VulkanEngine::InitVulkan()
     VkPhysicalDeviceVulkan12Features features12{};
     features12.bufferDeviceAddress = true;
     features12.descriptorIndexing = true;
+    features12.descriptorBindingSampledImageUpdateAfterBind = true;
 
     vkb::PhysicalDeviceSelector selector(vkb_instance);
     vkb::PhysicalDevice vkb_gpu = selector.set_minimum_version(1, 3)
@@ -786,6 +812,7 @@ void VulkanEngine::InitFrameDescriptors()
     // create the layout
     Utils::DescriptorLayoutBuilder builder;
     builder.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+
     // all stages maybe a bit heavy-handed but meh
     m_scene_data_descriptor_layout = builder.Build(m_device_dispatch, VK_SHADER_STAGE_ALL_GRAPHICS);
 }
@@ -810,9 +837,38 @@ void VulkanEngine::InitBackgroundDescriptors()
     writer.WriteImage(0, m_draw_image.image_view, VK_IMAGE_LAYOUT_GENERAL, 0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
     writer.UpdateSet(m_device_dispatch, m_background_compute_descriptors);
 
-    m_deletion_queue.PushFunction("descriptors", [this]() {
+    m_deletion_queue.PushFunction("background descriptors", [this]() {
         m_background_descriptor_allocator.DestroyPool(m_device_dispatch);
         m_device_dispatch.destroyDescriptorSetLayout(m_background_compute_descriptor_layout, nullptr);
+    });
+}
+
+void VulkanEngine::InitDefaultDescriptors()
+{
+    std::vector<Utils::DescriptorPoolSizeRatio> single_image_pool_sizes{{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}};
+    m_single_image_descriptor_allocator.Init(m_device_dispatch, 10, single_image_pool_sizes,
+                                             VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT);
+
+    Utils::DescriptorLayoutBuilder builder;
+    builder.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+    // we need to set binding flags to allow updating after binding so we can write to the descriptor set at runtime.
+    VkDescriptorBindingFlags binding_flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+    VkDescriptorSetLayoutBindingFlagsCreateInfo set_layout_flags{};
+    set_layout_flags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+    set_layout_flags.pBindingFlags = &binding_flags;
+    set_layout_flags.bindingCount = 1;
+
+    m_single_image_descriptor_layout =
+        builder.Build(m_device_dispatch, VK_SHADER_STAGE_FRAGMENT_BIT,
+                      VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT, &set_layout_flags);
+
+    m_single_image_descriptors =
+        m_single_image_descriptor_allocator.Allocate(m_device_dispatch, m_single_image_descriptor_layout);
+
+    m_deletion_queue.PushFunction("default descriptors", [this]() {
+        m_single_image_descriptor_allocator.DestroyPools(m_device_dispatch);
+        m_device_dispatch.destroyDescriptorSetLayout(m_single_image_descriptor_layout, nullptr);
     });
 }
 
@@ -877,12 +933,14 @@ bool VulkanEngine::InitMeshPipeline()
     push_constant_range.size = sizeof(GPUDrawPushConstants);
     push_constant_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
+    std::array<VkDescriptorSetLayout, 2> layouts{m_scene_data_descriptor_layout, m_single_image_descriptor_layout};
+
     VkPipelineLayoutCreateInfo layout_info{};
     layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layout_info.pNext = nullptr;
     layout_info.flags = 0;
-    layout_info.pSetLayouts = &m_scene_data_descriptor_layout;
-    layout_info.setLayoutCount = 1;
+    layout_info.pSetLayouts = layouts.data();
+    layout_info.setLayoutCount = layouts.size();
     layout_info.pPushConstantRanges = &push_constant_range;
     layout_info.pushConstantRangeCount = 1;
 
@@ -901,7 +959,7 @@ bool VulkanEngine::InitMeshPipeline()
         return false;
     }
     VkShaderModule frag_shader{};
-    if (Utils::LoadShaderModule(m_device_dispatch, "../data/shader/triangle.frag.spv", &frag_shader) == false)
+    if (Utils::LoadShaderModule(m_device_dispatch, "../data/shader/textured.frag.spv", &frag_shader) == false)
     {
         return false;
     }
@@ -938,6 +996,58 @@ bool VulkanEngine::InitMeshPipeline()
 
 void VulkanEngine::InitDefaultData()
 {
+    // load default textures
+    // 3 default textures, white, black, grey. 1 pixel each
+    uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
+    m_white_image = AllocateImage((void*)&white, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM,
+                                  VK_IMAGE_USAGE_SAMPLED_BIT, false, "white_image");
+
+    uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 0));
+    m_black_image = AllocateImage((void*)&black, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM,
+                                  VK_IMAGE_USAGE_SAMPLED_BIT, false, "black_image");
+
+    uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66f, 0.66f, 0.66f, 1));
+    m_grey_image = AllocateImage((void*)&grey, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM,
+                                 VK_IMAGE_USAGE_SAMPLED_BIT, false, "grey_image");
+
+    // checkerboard image
+    uint32_t magenta = glm::packUnorm4x8(glm::vec4(1, 0, 1, 1));
+    std::array<uint32_t, 16 * 16> pixels; // for 16x16 checkerboard texture
+    for (uint16_t x = 0; x < 16; x++)
+    {
+        for (uint16_t y = 0; y < 16; y++)
+        {
+            size_t idx = y * 16u + x;
+            pixels[idx] = ((x % 2) ^ (y % 2)) ? magenta : black;
+        }
+    }
+
+    m_checkerboard_image = AllocateImage(pixels.data(), VkExtent3D{16, 16, 1}, VK_FORMAT_R8G8B8A8_UNORM,
+                                         VK_IMAGE_USAGE_SAMPLED_BIT, false, "checkerboard_image");
+
+    m_deletion_queue.PushFunction("default images", [this]() {
+        DestroyImage(m_white_image);
+        DestroyImage(m_black_image);
+        DestroyImage(m_grey_image);
+        DestroyImage(m_checkerboard_image);
+    });
+
+    // Create the default samplers
+    VkSamplerCreateInfo sampler_create_info{};
+    sampler_create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler_create_info.magFilter = VK_FILTER_NEAREST;
+    sampler_create_info.minFilter = VK_FILTER_NEAREST;
+    m_device_dispatch.createSampler(&sampler_create_info, nullptr, &m_default_sampler_nearest);
+    sampler_create_info.magFilter = VK_FILTER_LINEAR;
+    sampler_create_info.minFilter = VK_FILTER_LINEAR;
+    m_device_dispatch.createSampler(&sampler_create_info, nullptr, &m_default_sampler_linear);
+
+    m_deletion_queue.PushFunction("default samplers", [this]() {
+        m_device_dispatch.destroySampler(m_default_sampler_nearest, nullptr);
+        m_device_dispatch.destroySampler(m_default_sampler_linear, nullptr);
+    });
+
+    // load testing mesh
     auto loaded_meshes = Utils::LoadGltfMeshes(this, std::filesystem::path{"../data/resources/BarramundiFish.glb"});
     if (loaded_meshes.has_value() == false || loaded_meshes->empty())
     {

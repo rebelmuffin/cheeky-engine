@@ -13,6 +13,7 @@ namespace Utils
         std::ifstream file(file_path, std::ios::ate | std::ios::binary);
         if (file.is_open() == false)
         {
+            std::cout << "[!] Given shader does not exist at path: " << file_path << std::endl;
             return false;
         }
 
@@ -40,6 +41,7 @@ namespace Utils
         if (result != VK_SUCCESS)
         {
             std::cout << "[!] Failed to load shader at: " << file_path << std::endl;
+            return false;
         }
 
         *out_shader_module = shader_module;

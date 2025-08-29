@@ -23,7 +23,8 @@ namespace Utils
 
     VkDescriptorSetLayout DescriptorLayoutBuilder::Build(vkb::DispatchTable device_dispatch,
                                                          VkShaderStageFlags shader_stages,
-                                                         VkDescriptorSetLayoutCreateFlags flags)
+                                                         VkDescriptorSetLayoutCreateFlags flags,
+                                                         VkDescriptorSetLayoutBindingFlagsCreateInfo* binding_flags)
     {
         for (VkDescriptorSetLayoutBinding& binding : m_bindings)
         {
@@ -32,7 +33,7 @@ namespace Utils
 
         VkDescriptorSetLayoutCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        info.pNext = nullptr;
+        info.pNext = binding_flags; // if there is bindings flags in pNext, it is used
         info.pBindings = m_bindings.data();
         info.bindingCount = uint32_t(m_bindings.size());
         info.flags = flags;
@@ -43,7 +44,8 @@ namespace Utils
     }
 
     void DescriptorAllocator::InitPool(vkb::DispatchTable device_dispatch, uint32_t max_sets,
-                                       std::span<DescriptorPoolSizeRatio> pool_ratios)
+                                       std::span<DescriptorPoolSizeRatio> pool_ratios,
+                                       VkDescriptorPoolCreateFlags pool_flags)
     {
         std::vector<VkDescriptorPoolSize> pool_sizes;
         pool_sizes.reserve(pool_ratios.size());
@@ -59,6 +61,7 @@ namespace Utils
         info.maxSets = max_sets;
         info.poolSizeCount = uint32_t(pool_sizes.size());
         info.pPoolSizes = pool_sizes.data();
+        info.flags = pool_flags;
 
         VK_CHECK(device_dispatch.createDescriptorPool(&info, nullptr, &m_pool));
     }
@@ -90,9 +93,11 @@ namespace Utils
     }
 
     void DescriptorAllocatorDynamic::Init(vkb::DispatchTable device_dispatch, uint32_t initial_max_sets,
-                                          std::span<DescriptorPoolSizeRatio> pool_ratios)
+                                          std::span<DescriptorPoolSizeRatio> pool_ratios,
+                                          VkDescriptorPoolCreateFlags pool_flags)
     {
         // create the first pool
+        m_pool_flags = pool_flags;
         VkDescriptorPool new_pool = AllocateNewPool(device_dispatch, initial_max_sets, pool_ratios);
         m_ready_pools.push_back(new_pool);
         m_size_ratios = std::vector<DescriptorPoolSizeRatio>(pool_ratios.begin(), pool_ratios.end());
@@ -187,6 +192,7 @@ namespace Utils
         info.maxSets = max_sets;
         info.poolSizeCount = uint32_t(pool_sizes.size());
         info.pPoolSizes = pool_sizes.data();
+        info.flags = m_pool_flags;
 
         m_sets_per_pool = max_sets * 2; // next time we will double the pool size
         if (m_sets_per_pool > 4092)

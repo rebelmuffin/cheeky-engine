@@ -111,7 +111,7 @@ class VulkanEngine
 
     // allocate an image and copy the given data inside. RGBA8 format is assumed.
     AllocatedImage AllocateImage(void* image_data, VkExtent3D image_extent, VkFormat format, VkImageUsageFlags usage,
-                                 bool mipmapped = false);
+                                 bool mipmapped = false, const char* debug_name = "unnamed_image");
     void DestroyImage(const AllocatedImage& image);
 
     void RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request);
@@ -134,6 +134,7 @@ class VulkanEngine
     void InitSyncStructures();
     void InitFrameDescriptors();
     void InitBackgroundDescriptors();
+    void InitDefaultDescriptors();
     bool InitPipelines();
     bool InitBackgroundPipelines();
     bool InitMeshPipeline();
@@ -162,13 +163,22 @@ class VulkanEngine
     PFN_vkGetDeviceProcAddr m_get_device_proc_addr;
     PFN_vkGetInstanceProcAddr m_get_instance_proc_addr;
 
+    // images used for drawing
     AllocatedImage m_draw_image;
     AllocatedImage m_depth_image;
 
+    // default images used for debugging and fallback
+    AllocatedImage m_white_image;
+    AllocatedImage m_black_image;
+    AllocatedImage m_grey_image;
+    AllocatedImage m_checkerboard_image;
+
+    // samplers we use for these
+    VkSampler m_default_sampler_nearest;
+    VkSampler m_default_sampler_linear;
+
     VkExtent2D m_draw_extent;
     float m_render_scale = 1.0f;
-    VkDescriptorSet m_background_compute_descriptors;
-    VkDescriptorSetLayout m_background_compute_descriptor_layout;
     float m_backbuffer_scale;
 
     VkPipelineLayout m_gradient_pipeline_layout;
@@ -196,8 +206,15 @@ class VulkanEngine
     VkExtent2D m_window_extent;
     SDL_Window* m_window;
 
-    Utils::DescriptorAllocator m_background_descriptor_allocator;
     VmaAllocator m_allocator;
+
+    Utils::DescriptorAllocator m_background_descriptor_allocator;
+    VkDescriptorSet m_background_compute_descriptors;
+    VkDescriptorSetLayout m_background_compute_descriptor_layout;
+
+    Utils::DescriptorAllocatorDynamic m_single_image_descriptor_allocator;
+    VkDescriptorSet m_single_image_descriptors;
+    VkDescriptorSetLayout m_single_image_descriptor_layout;
 
     bool m_use_validation_layers;
     bool m_force_all_uploads_immediate;
@@ -220,4 +237,6 @@ class VulkanEngine
     float m_camera_pitch_rad = 0.0f;
     glm::vec3 m_camera_position{0.0f, 0.0f, -1.0f};
     bool m_rotating_camera = true;
+    bool m_use_linear_sampling = true;
+    AllocatedImage* m_active_image = &m_checkerboard_image;
 };

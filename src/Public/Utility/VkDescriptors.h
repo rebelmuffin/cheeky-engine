@@ -13,7 +13,8 @@ namespace Utils
         void AddBinding(uint32_t binding, VkDescriptorType descriptor_type);
         void Clear();
         VkDescriptorSetLayout Build(vkb::DispatchTable device_dispatch, VkShaderStageFlags shader_stages,
-                                    VkDescriptorSetLayoutCreateFlags flags = 0);
+                                    VkDescriptorSetLayoutCreateFlags flags = 0,
+                                    VkDescriptorSetLayoutBindingFlagsCreateInfo* bindings_flags = nullptr);
 
       private:
         std::vector<VkDescriptorSetLayoutBinding> m_bindings;
@@ -29,7 +30,7 @@ namespace Utils
     {
       public:
         void InitPool(vkb::DispatchTable device_dispatch, uint32_t max_sets,
-                      std::span<DescriptorPoolSizeRatio> pool_ratios);
+                      std::span<DescriptorPoolSizeRatio> pool_ratios, VkDescriptorPoolCreateFlags pool_flags = 0);
         void ClearDescriptors(vkb::DispatchTable device_dispatch);
         void DestroyPool(vkb::DispatchTable device_dispatch);
         VkDescriptorSet Allocate(vkb::DispatchTable device_dispatch, VkDescriptorSetLayout layout_set);
@@ -43,7 +44,7 @@ namespace Utils
     {
       public:
         void Init(vkb::DispatchTable device_dispatch, uint32_t initial_max_sets,
-                  std::span<DescriptorPoolSizeRatio> pool_ratios);
+                  std::span<DescriptorPoolSizeRatio> pool_ratios, VkDescriptorPoolCreateFlags pool_flags = 0);
         void ClearDescriptors(vkb::DispatchTable device_dispatch);
         void DestroyPools(vkb::DispatchTable device_dispatch);
         VkDescriptorSet Allocate(vkb::DispatchTable device_dispatch, VkDescriptorSetLayout layout_set);
@@ -57,6 +58,7 @@ namespace Utils
         std::vector<VkDescriptorPool> m_full_pools;
         std::vector<DescriptorPoolSizeRatio> m_size_ratios;
         uint32_t m_sets_per_pool;
+        VkDescriptorPoolCreateFlags m_pool_flags;
     };
 
     // Helper class to write descriptors.
