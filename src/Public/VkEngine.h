@@ -92,14 +92,27 @@ class VulkanEngine
     {
         return m_instance_dispatch;
     }
+    VmaAllocator& Allocator()
+    {
+        return m_allocator;
+    }
 
     AllocatedBuffer CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage,
                                  const char* debug_name = "unnamed_buffer");
     void DestroyBuffer(const AllocatedBuffer& buffer);
     GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
-    AllocatedImage AllocateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage,
+
+    // allocate an empty image with given dimensions.
+    AllocatedImage AllocateImage(VkExtent3D image_extent, VkFormat format, VkImageUsageFlags usage,
                                  VmaMemoryUsage memory_usage, VkImageAspectFlagBits aspect_flags,
-                                 VkMemoryPropertyFlags additional_flags = 0, const char* debug_name = "unnamed_image");
+                                 VkMemoryPropertyFlags additional_flags = 0, bool mipmapped = false,
+                                 const char* debug_name = "unnamed_image");
+
+    // allocate an image and copy the given data inside. RGBA8 format is assumed.
+    AllocatedImage AllocateImage(void* image_data, VkExtent3D image_extent, VkFormat format, VkImageUsageFlags usage,
+                                 bool mipmapped = false);
+    void DestroyImage(const AllocatedImage& image);
+
     void RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request);
 
     float test_mesh_opacity{1.0f};

@@ -25,6 +25,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <memory>
@@ -299,17 +300,23 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
     return buffers;
 }
 
-AllocatedImage VulkanEngine::AllocateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage,
+AllocatedImage VulkanEngine::AllocateImage(VkExtent3D image_extent, VkFormat format, VkImageUsageFlags usage,
                                            VmaMemoryUsage memory_usage, VkImageAspectFlagBits aspect_flags,
-                                           VkMemoryPropertyFlags additional_flags, const char* debug_name)
+                                           VkMemoryPropertyFlags additional_flags, bool mipmapped,
+                                           const char* debug_name)
 {
     AllocatedImage image{};
-
-    VkExtent3D image_extent{width, height, 1};
     image.image_extent = image_extent;
     image.image_format = format;
 
     VkImageCreateInfo image_info = Utils::ImageCreateInfo(format, usage, image_extent);
+    if (mipmapped)
+    {
+        // log2(max_dimension) - 3 gives a reasonable mip count
+        double mipLevels = std::log2(std::max(image_extent.height, image_extent.width)) - 3.0f;
+        // more than 10 is useless though
+        image_info.mipLevels = std::max(static_cast<uint32_t>(mipLevels), 10u);
+    }
 
     VmaAllocationCreateInfo allocation_info{};
     allocation_info.usage = memory_usage;
@@ -319,9 +326,49 @@ AllocatedImage VulkanEngine::AllocateImage(uint32_t width, uint32_t height, VkFo
     SetAllocationName(image.allocation, debug_name);
 
     VkImageViewCreateInfo image_view_info = Utils::ImageViewCreateInfo(format, image.image, aspect_flags);
+    image_view_info.subresourceRange.levelCount = image_info.mipLevels;
     VK_CHECK(m_device_dispatch.createImageView(&image_view_info, nullptr, &image.image_view));
 
     return image;
+}
+
+AllocatedImage VulkanEngine::AllocateImage(void* image_data, VkExtent3D image_extent, VkFormat format,
+                                           VkImageUsageFlags usage, bool mipmapped)
+{
+    // we'll try to use the BAR, which is addressable by both CPU and GPU. If cannot use, we'll just do a staging buffer
+    // and copy from that.
+    const uint32_t image_data_size =
+        image_extent.width * image_extent.height * image_extent.depth * 4; // assuming RGBA8, 1 byte for each component
+    VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_AUTO;
+    VkMemoryPropertyFlags memory_flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                                         VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT |
+                                         VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+    AllocatedImage image =
+        AllocateImage(image_extent, format, usage, memory_usage, VK_IMAGE_ASPECT_COLOR_BIT, memory_flags, mipmapped);
+
+    VkMemoryPropertyFlags memory_properties;
+    vmaGetAllocationMemoryProperties(m_allocator, image.allocation, &memory_properties);
+
+    if (memory_properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+    {
+        // this is mappable! We simply map it and immediately copy the data over.
+        void* allocated_buffer = image.allocation->GetMappedData();
+        memcpy(allocated_buffer, image_data, image_data_size);
+    }
+    else
+    {
+        // #TODO: implement image upload request
+        std::cerr << "[!] Trying to copy image data to GPU only memory, not doing it!" << std::endl;
+    }
+
+    return image;
+}
+
+void VulkanEngine::DestroyImage(const AllocatedImage& image)
+{
+    m_device_dispatch.destroyImageView(image.image_view, nullptr);
+    vmaDestroyImage(m_allocator, image.image, image.allocation);
 }
 
 void VulkanEngine::RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request)
@@ -1009,30 +1056,28 @@ void VulkanEngine::CreateDrawImage()
     VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
     VkImageAspectFlagBits aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
     VkMemoryPropertyFlags additional_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    constexpr bool mipmapped = false;
 
-    m_draw_image = AllocateImage(image_extent.width, image_extent.height, image_format, usage_flags, memory_usage,
-                                 aspect_flags, additional_flags, "image_draw");
+    m_draw_image = AllocateImage(image_extent, image_format, usage_flags, memory_usage, aspect_flags, additional_flags,
+                                 mipmapped, "image_draw");
 
-    m_deletion_queue.PushFunction("draw image", [this]() {
-        m_device_dispatch.destroyImageView(m_draw_image.image_view, nullptr);
-        vmaDestroyImage(m_allocator, m_draw_image.image, m_draw_image.allocation);
-    });
+    m_deletion_queue.PushFunction("draw image", [this]() { DestroyImage(m_draw_image); });
 }
 
 void VulkanEngine::CreateDepthImage()
 {
+    VkExtent3D image_extent{m_draw_extent.width, m_draw_extent.height, 1};
     VkFormat image_format = VK_FORMAT_D32_SFLOAT;
     VkImageUsageFlags usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
     VkImageAspectFlagBits aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
     VkMemoryPropertyFlags additional_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    m_depth_image = AllocateImage(m_draw_extent.width, m_draw_extent.height, image_format, usage_flags, memory_usage,
-                                  aspect_flags, additional_flags, "image_depth");
+    constexpr bool mipmapped = false;
 
-    m_deletion_queue.PushFunction("depth image", [this]() {
-        m_device_dispatch.destroyImageView(m_depth_image.image_view, nullptr);
-        vmaDestroyImage(m_allocator, m_depth_image.image, m_depth_image.allocation);
-    });
+    m_depth_image = AllocateImage(image_extent, image_format, usage_flags, memory_usage, aspect_flags, additional_flags,
+                                  mipmapped, "image_depth");
+
+    m_deletion_queue.PushFunction("depth image", [this]() { DestroyImage(m_depth_image); });
 }
 
 void VulkanEngine::DestroySwapchain()
