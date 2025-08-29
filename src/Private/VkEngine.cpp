@@ -302,7 +302,8 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
 
 AllocatedImage VulkanEngine::AllocateImage(VkExtent3D image_extent, VkFormat format, VkImageUsageFlags usage,
                                            VmaMemoryUsage memory_usage, VkImageAspectFlagBits aspect_flags,
-                                           VkMemoryPropertyFlags additional_flags, bool mipmapped,
+                                           VkMemoryPropertyFlags required_memory_flags,
+                                           VmaAllocationCreateFlags allocation_flags, bool mipmapped,
                                            const char* debug_name)
 {
     AllocatedImage image{};
@@ -320,9 +321,12 @@ AllocatedImage VulkanEngine::AllocateImage(VkExtent3D image_extent, VkFormat for
 
     VmaAllocationCreateInfo allocation_info{};
     allocation_info.usage = memory_usage;
-    allocation_info.requiredFlags = additional_flags;
+    allocation_info.requiredFlags = required_memory_flags;
+    allocation_info.flags = allocation_flags;
 
+    VkResult result =
     vmaCreateImage(m_allocator, &image_info, &allocation_info, &image.image, &image.allocation, nullptr);
+    VK_CHECK(result);
     SetAllocationName(image.allocation, debug_name);
 
     VkImageViewCreateInfo image_view_info = Utils::ImageViewCreateInfo(format, image.image, aspect_flags);
@@ -340,12 +344,14 @@ AllocatedImage VulkanEngine::AllocateImage(void* image_data, VkExtent3D image_ex
     const uint32_t image_data_size =
         image_extent.width * image_extent.height * image_extent.depth * 4; // assuming RGBA8, 1 byte for each component
     VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_AUTO;
-    VkMemoryPropertyFlags memory_flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                                         VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT |
-                                         VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    VkMemoryPropertyFlags required_memory_flags = 0; // actually anything is fine, we want the most performant one
+    VmaAllocationCreateFlags allocation_flags =
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT |
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT; // this makes is so that we might get a
+                                                                      // non-mappable memory
 
-    AllocatedImage image =
-        AllocateImage(image_extent, format, usage, memory_usage, VK_IMAGE_ASPECT_COLOR_BIT, memory_flags, mipmapped);
+    AllocatedImage image = AllocateImage(image_extent, format, usage, memory_usage, VK_IMAGE_ASPECT_COLOR_BIT,
+                                         required_memory_flags, allocation_flags, mipmapped);
 
     VkMemoryPropertyFlags memory_properties;
     vmaGetAllocationMemoryProperties(m_allocator, image.allocation, &memory_properties);
@@ -353,8 +359,7 @@ AllocatedImage VulkanEngine::AllocateImage(void* image_data, VkExtent3D image_ex
     if (memory_properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
     {
         // this is mappable! We simply map it and immediately copy the data over.
-        void* allocated_buffer = image.allocation->GetMappedData();
-        memcpy(allocated_buffer, image_data, image_data_size);
+        vmaCopyMemoryToAllocation(m_allocator, image_data, image.allocation, 0, image_data_size);
     }
     else
     {
@@ -1053,13 +1058,14 @@ void VulkanEngine::CreateDrawImage()
     usage_flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     usage_flags |= VK_IMAGE_USAGE_STORAGE_BIT;
     usage_flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     VkImageAspectFlagBits aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
-    VkMemoryPropertyFlags additional_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    VkMemoryPropertyFlags required_memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    VmaAllocationCreateFlags allocation_flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
     constexpr bool mipmapped = false;
 
-    m_draw_image = AllocateImage(image_extent, image_format, usage_flags, memory_usage, aspect_flags, additional_flags,
-                                 mipmapped, "image_draw");
+    m_draw_image = AllocateImage(image_extent, image_format, usage_flags, memory_usage, aspect_flags,
+                                 required_memory_flags, allocation_flags, mipmapped, "image_draw");
 
     m_deletion_queue.PushFunction("draw image", [this]() { DestroyImage(m_draw_image); });
 }
@@ -1069,13 +1075,14 @@ void VulkanEngine::CreateDepthImage()
     VkExtent3D image_extent{m_draw_extent.width, m_draw_extent.height, 1};
     VkFormat image_format = VK_FORMAT_D32_SFLOAT;
     VkImageUsageFlags usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     VkImageAspectFlagBits aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
-    VkMemoryPropertyFlags additional_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    VkMemoryPropertyFlags required_memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    VmaAllocationCreateFlags allocation_flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
     constexpr bool mipmapped = false;
 
-    m_depth_image = AllocateImage(image_extent, image_format, usage_flags, memory_usage, aspect_flags, additional_flags,
-                                  mipmapped, "image_depth");
+    m_depth_image = AllocateImage(image_extent, image_format, usage_flags, memory_usage, aspect_flags,
+                                  required_memory_flags, allocation_flags, mipmapped, "image_depth");
 
     m_deletion_queue.PushFunction("depth image", [this]() { DestroyImage(m_depth_image); });
 }

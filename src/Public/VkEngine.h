@@ -105,7 +105,8 @@ class VulkanEngine
     // allocate an empty image with given dimensions.
     AllocatedImage AllocateImage(VkExtent3D image_extent, VkFormat format, VkImageUsageFlags usage,
                                  VmaMemoryUsage memory_usage, VkImageAspectFlagBits aspect_flags,
-                                 VkMemoryPropertyFlags additional_flags = 0, bool mipmapped = false,
+                                 VkMemoryPropertyFlags required_memory_flags = 0,
+                                 VmaAllocationCreateFlags allocation_flags = 0, bool mipmapped = false,
                                  const char* debug_name = "unnamed_image");
 
     // allocate an image and copy the given data inside. RGBA8 format is assumed.
