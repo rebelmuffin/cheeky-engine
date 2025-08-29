@@ -7,6 +7,7 @@
 
 # ignore compiled SPIR-V
 /data/shader/**/*.spv
+/data/shader/*.spv
 
 # ignore generated subprojects
 /subprojects/*
