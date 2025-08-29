@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Utility/DeletionQueue.h"
+#include "Utility/UploadRequest.h"
 #include "Utility/VkDescriptors.h"
 #include "Utility/VkLoader.h"
 #include "VkBootstrapDispatch.h"
@@ -39,16 +40,6 @@ struct FrameData
     Utils::DeletionQueue deletion_queue;
 };
 
-// The pending mesh upload structure is used to keep a list of pending uploads to execute on next draw.
-// Staging buffer is deleted after this operation, can probably recycle it instead but eh.
-struct PendingMeshUpload
-{
-    size_t vertex_buffer_size;
-    size_t index_buffer_size;
-    GPUMeshBuffers target_mesh;
-    AllocatedBuffer staging_buffer;
-};
-
 constexpr int FRAME_OVERLAP = 2;
 
 class VulkanEngine
@@ -56,6 +47,7 @@ class VulkanEngine
   public:
     VulkanEngine(uint32_t window_width, uint32_t window_height, SDL_Window* window, float backbuffer_scale,
                  bool use_validation_layers, bool immediate_uploads);
+    VulkanEngine(const VulkanEngine&) = delete; // no copy pls
 
     bool is_initialised{false};
     int frame_number{0};
@@ -86,6 +78,21 @@ class VulkanEngine
     float GetRenderScale() const;
     void SetRenderScale(float scale);
 
+    // these are used by things that write to the GPU memory like uploads.
+    // can probably be interfaced to avoid making them public on the engine.
+    FrameData& GetCurrentFrame()
+    {
+        return m_frames[frame_number % FRAME_OVERLAP];
+    }
+    vkb::DispatchTable& DeviceDispatchTable()
+    {
+        return m_device_dispatch;
+    }
+    vkb::InstanceDispatchTable& InstanceDispatchTable()
+    {
+        return m_instance_dispatch;
+    }
+
     AllocatedBuffer CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage,
                                  const char* debug_name = "unnamed_buffer");
     void DestroyBuffer(const AllocatedBuffer& buffer);
@@ -93,17 +100,18 @@ class VulkanEngine
     AllocatedImage AllocateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage,
                                  VmaMemoryUsage memory_usage, VkImageAspectFlagBits aspect_flags,
                                  VkMemoryPropertyFlags additional_flags = 0, const char* debug_name = "unnamed_image");
+    void RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request);
 
     float test_mesh_opacity{1.0f};
 
   private:
     // draw loop
     void Draw(double delta_ms);
-    void FinishPendingUploads(VkCommandBuffer cmd);
     void DrawBackground(VkCommandBuffer cmd);
     void DrawGeometry(VkCommandBuffer cmd);
     void DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view);
 
+    void FinishPendingUploads(VkCommandBuffer cmd);
     void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 
     bool InitVulkan();
@@ -162,10 +170,6 @@ class VulkanEngine
     VkExtent2D m_swapchain_extent;
 
     FrameData m_frames[FRAME_OVERLAP];
-    inline FrameData& GetCurrentFrame()
-    {
-        return m_frames[frame_number % FRAME_OVERLAP];
-    }
 
     // immediate submit structures. For copying stuff to gpu
     VkFence m_immediate_fence;
@@ -182,9 +186,13 @@ class VulkanEngine
     VmaAllocator m_allocator;
 
     bool m_use_validation_layers;
-    bool m_immediate_uploads_enabled;
+    bool m_force_all_uploads_immediate;
 
-    std::vector<PendingMeshUpload> m_pending_uploads;
+    // uploads that are pending to be done on next frame.
+    std::vector<std::unique_ptr<Utils::IUploadRequest>> m_pending_uploads;
+
+    // uploads that have been completed this frame, but need to have their resources freed.
+    std::vector<std::unique_ptr<Utils::IUploadRequest>> m_completed_uploads;
     Utils::DeletionQueue m_deletion_queue;
 
     uint64_t m_last_update_us = 0;

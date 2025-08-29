@@ -1,6 +1,7 @@
 #include "VkEngine.h"
 #include "ThirdParty/ImGUI.h"
 #include "ThirdParty/VkMemAlloc.h"
+#include "Utility/UploadRequest.h"
 #include "Utility/VkDescriptors.h"
 #include "Utility/VkImages.h"
 #include "Utility/VkInitialisers.h"
@@ -26,6 +27,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <memory>
 #include <thread>
 #include <vector>
 
@@ -38,7 +40,7 @@
 VulkanEngine::VulkanEngine(uint32_t window_width, uint32_t window_height, SDL_Window* window, float backbuffer_scale,
                            bool use_validation_layers, bool immediate_uploads)
     : m_backbuffer_scale(backbuffer_scale), m_window_extent({window_width, window_height}), m_window(window),
-      m_use_validation_layers(use_validation_layers), m_immediate_uploads_enabled(immediate_uploads)
+      m_use_validation_layers(use_validation_layers), m_force_all_uploads_immediate(immediate_uploads)
 {
 }
 
@@ -232,33 +234,6 @@ void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
     ++frame_number;
 }
 
-void VulkanEngine::FinishPendingUploads(VkCommandBuffer cmd)
-{
-    for (PendingMeshUpload& mesh : m_pending_uploads)
-    {
-        VkBufferCopy vertex_copy{};
-        vertex_copy.dstOffset = 0;
-        vertex_copy.srcOffset = 0;
-        vertex_copy.size = mesh.vertex_buffer_size;
-
-        VkBufferCopy index_copy{};
-        index_copy.dstOffset = 0;
-        index_copy.srcOffset = mesh.vertex_buffer_size;
-        index_copy.size = mesh.index_buffer_size;
-
-        m_device_dispatch.cmdCopyBuffer(cmd, mesh.staging_buffer.buffer, mesh.target_mesh.vertex_buffer.buffer, 1,
-                                        &vertex_copy);
-        m_device_dispatch.cmdCopyBuffer(cmd, mesh.staging_buffer.buffer, mesh.target_mesh.index_buffer.buffer, 1,
-                                        &index_copy);
-
-        // this will get deleted in a few frames, definitely after the GPU is done with it. I'm a genius
-        GetCurrentFrame().deletion_queue.PushFunction(
-            "staging buffer", [this, buffer = mesh.staging_buffer]() { DestroyBuffer(buffer); });
-
-        m_pending_uploads.clear();
-    }
-}
-
 void VulkanEngine::DrawBackground(VkCommandBuffer cmd)
 {
     ComputeEffect& effect = m_compute_effects[m_current_effect];
@@ -353,6 +328,44 @@ void VulkanEngine::DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view)
     m_device_dispatch.cmdBeginRendering(cmd, &rendering_info);
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
     m_device_dispatch.cmdEndRendering(cmd);
+}
+
+void VulkanEngine::FinishPendingUploads(VkCommandBuffer cmd)
+{
+    // some uploads might need to wait until next frame to execute
+    std::vector<std::unique_ptr<Utils::IUploadRequest>> next_frame_uploads;
+
+    for (std::unique_ptr<Utils::IUploadRequest>& request : m_pending_uploads)
+    {
+        Utils::UploadExecutionResult result = request->ExecuteUpload(*this, cmd);
+        if (result == Utils::UploadExecutionResult::RetryNextFrame)
+        {
+            next_frame_uploads.push_back(std::move(request));
+            continue;
+        }
+        else if (result == Utils::UploadExecutionResult::Failed)
+        {
+            std::cerr << "[!] Upload request \"" << request->DebugName() << "\" failed to execute. Ignoring."
+                      << std::endl;
+        }
+
+        m_completed_uploads.emplace_back(std::move(request));
+        GetCurrentFrame().deletion_queue.PushFunction(
+            "upload request", [this, request = m_completed_uploads.back().get()]() {
+                request->DestroyResources(*this);
+
+                // is this a bad way to do this? Search is the easiest but idk
+                std::erase_if(m_completed_uploads, [request](const std::unique_ptr<Utils::IUploadRequest>& ptr) {
+                    return ptr.get() == request;
+                });
+            });
+    }
+
+    // nothing inside m_pending_uploads is valid anymore
+    m_pending_uploads.clear();
+
+    // move the next frame uploads into the pending uploads
+    m_pending_uploads = std::move(next_frame_uploads);
 }
 
 void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function)
@@ -523,32 +536,49 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
     memcpy(data, vertices.data(), vertex_buffer_size);
     memcpy(static_cast<char*>(data) + vertex_buffer_size, indices.data(), index_buffer_size);
 
-    if (m_immediate_uploads_enabled)
-    {
-        ImmediateSubmit([this, staging, vertex_buffer_size, index_buffer_size, buffers](VkCommandBuffer cmd) {
-            VkBufferCopy vertex_copy{};
-            vertex_copy.dstOffset = 0;
-            vertex_copy.srcOffset = 0;
-            vertex_copy.size = vertex_buffer_size;
-
-            VkBufferCopy index_copy{};
-            index_copy.dstOffset = 0;
-            index_copy.srcOffset = vertex_buffer_size;
-            index_copy.size = index_buffer_size;
-
-            m_device_dispatch.cmdCopyBuffer(cmd, staging.buffer, buffers.vertex_buffer.buffer, 1, &vertex_copy);
-            m_device_dispatch.cmdCopyBuffer(cmd, staging.buffer, buffers.index_buffer.buffer, 1, &index_copy);
-        });
-
-        // destroy the staging buffer. We have no use for it anymore
-        DestroyBuffer(staging);
-    }
-    else
-    {
-        m_pending_uploads.push_back({vertex_buffer_size, index_buffer_size, buffers, staging});
-    }
+    std::unique_ptr<Utils::IUploadRequest> upload_request = std::make_unique<Utils::MeshUploadRequest>(
+        vertex_buffer_size, index_buffer_size, buffers, staging, Utils::UploadType::Deferred);
+    RequestUpload(std::move(upload_request));
 
     return buffers;
+}
+
+AllocatedImage VulkanEngine::AllocateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage,
+                                           VmaMemoryUsage memory_usage, VkImageAspectFlagBits aspect_flags,
+                                           VkMemoryPropertyFlags additional_flags, const char* debug_name)
+{
+    AllocatedImage image{};
+
+    VkExtent3D image_extent{width, height, 1};
+    image.image_extent = image_extent;
+    image.image_format = format;
+
+    VkImageCreateInfo image_info = Utils::ImageCreateInfo(format, usage, image_extent);
+
+    VmaAllocationCreateInfo allocation_info{};
+    allocation_info.usage = memory_usage;
+    allocation_info.requiredFlags = additional_flags;
+
+    vmaCreateImage(m_allocator, &image_info, &allocation_info, &image.image, &image.allocation, nullptr);
+    SetAllocationName(image.allocation, debug_name);
+
+    VkImageViewCreateInfo image_view_info = Utils::ImageViewCreateInfo(format, image.image, aspect_flags);
+    VK_CHECK(m_device_dispatch.createImageView(&image_view_info, nullptr, &image.image_view));
+
+    return image;
+}
+
+void VulkanEngine::RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request)
+{
+    if (m_force_all_uploads_immediate || upload_request->GetUploadType() == Utils::UploadType::Immediate)
+    {
+        ImmediateSubmit([this, upload_request = upload_request.get()](VkCommandBuffer cmd) {
+            upload_request->ExecuteUpload(*this, cmd);
+        });
+        return;
+    }
+
+    m_pending_uploads.push_back(std::move(upload_request));
 }
 
 bool VulkanEngine::InitVulkan()
@@ -697,32 +727,6 @@ void VulkanEngine::CreateDepthImage()
         vmaDestroyImage(m_allocator, m_depth_image.image, m_depth_image.allocation);
     });
 }
-
-AllocatedImage VulkanEngine::AllocateImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage,
-                                           VmaMemoryUsage memory_usage, VkImageAspectFlagBits aspect_flags,
-                                           VkMemoryPropertyFlags additional_flags, const char* debug_name)
-{
-    AllocatedImage image{};
-
-    VkExtent3D image_extent{width, height, 1};
-    image.image_extent = image_extent;
-    image.image_format = format;
-
-    VkImageCreateInfo image_info = Utils::ImageCreateInfo(format, usage, image_extent);
-
-    VmaAllocationCreateInfo allocation_info{};
-    allocation_info.usage = memory_usage;
-    allocation_info.requiredFlags = additional_flags;
-
-    vmaCreateImage(m_allocator, &image_info, &allocation_info, &image.image, &image.allocation, nullptr);
-    SetAllocationName(image.allocation, debug_name);
-
-    VkImageViewCreateInfo image_view_info = Utils::ImageViewCreateInfo(format, image.image, aspect_flags);
-    VK_CHECK(m_device_dispatch.createImageView(&image_view_info, nullptr, &image.image_view));
-
-    return image;
-}
-
 void VulkanEngine::InitCommands()
 {
     VkCommandPoolCreateInfo commandPoolInfo =
@@ -738,11 +742,6 @@ void VulkanEngine::InitCommands()
 
         m_deletion_queue.PushFunction(
             "command pool", [i, this]() { m_device_dispatch.destroyCommandPool(m_frames[i].command_pool, nullptr); });
-    }
-
-    if (m_immediate_uploads_enabled == false)
-    {
-        return;
     }
 
     // immediate command buffer for short tasks
@@ -773,11 +772,6 @@ void VulkanEngine::InitSyncStructures()
             m_device_dispatch.destroySemaphore(m_frames[i].render_semaphore, nullptr);
             m_device_dispatch.destroySemaphore(m_frames[i].swapchain_semaphore, nullptr);
         });
-    }
-
-    if (m_immediate_uploads_enabled == false)
-    {
-        return;
     }
 
     // immediate command buffer for short tasks

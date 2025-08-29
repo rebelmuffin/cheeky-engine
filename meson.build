@@ -59,6 +59,7 @@ executable(
     'src/Private/Utility/VkImages.cpp',
     'src/Private/Utility/VkDescriptors.cpp',
     'src/Private/Utility/DeletionQueue.cpp',
+    'src/Private/Utility/UploadRequest.cpp',
     shader_gen_src,
     dependencies: [
         vulkan_dep,
