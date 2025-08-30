@@ -3,3 +3,17 @@ DerivePointerAlignment: false
 PointerAlignment: Left
 NamespaceIndentation: All
 BreakTemplateDeclarations: true
+BinPackParameters: false
+BinPackArguments: false
+PackConstructorInitializers: CurrentLine
+Cpp11BracedListStyle: false
+AllowAllArgumentsOnNextLine: true
+AlignAfterOpenBracket: BlockIndent
+BraceWrapping:
+  BeforeLambdaBody: true
+BreakConstructorInitializers: AfterColon
+BreakInheritanceList: AfterColon
+ColumnLimit: 110
+AllowShortFunctionsOnASingleLine: true
+AllowShortLambdasOnASingleLine: false
+

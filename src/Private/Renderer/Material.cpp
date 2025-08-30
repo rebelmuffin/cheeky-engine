@@ -18,13 +18,15 @@ namespace Renderer
         descriptor_layout_builder.AddBinding(1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);  // colour sampler
         descriptor_layout_builder.AddBinding(2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);  // metal_roughness sampler
 
-        descriptor_layout = descriptor_layout_builder.Build(*interface.device_dispatch_table,
-                                                            VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
+        descriptor_layout = descriptor_layout_builder.Build(
+            *interface.device_dispatch_table, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT
+        );
 
         // create the layouts for each pipeline
-        std::array<VkDescriptorSetLayout, 2> set_layouts{*interface.scene_data_descriptor_layout, descriptor_layout};
+        std::array<VkDescriptorSetLayout, 2> set_layouts{ *interface.scene_data_descriptor_layout,
+                                                          descriptor_layout };
 
-        VkPushConstantRange range{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants)};
+        VkPushConstantRange range{ VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants) };
 
         // for all pipelines, 2 sets and 1 push constant
         VkPipelineLayoutCreateInfo pipeline_layout_info;
@@ -50,14 +52,18 @@ namespace Renderer
 
         // load in the shaders
         VkShaderModule frag_shader;
-        if (Utils::LoadShaderModule(*interface.device_dispatch_table, "../data/shader/gltf_pbr.frag.spv", &frag_shader))
+        if (Utils::LoadShaderModule(
+                *interface.device_dispatch_table, "../data/shader/gltf_pbr.frag.spv", &frag_shader
+            ))
         {
             std::cerr << "[!] Failed to load glTF PBR fragment shader." << std::endl;
             return false;
         }
 
         VkShaderModule vert_shader;
-        if (Utils::LoadShaderModule(*interface.device_dispatch_table, "../data/shader/gltf_pbr.vert.spv", &vert_shader))
+        if (Utils::LoadShaderModule(
+                *interface.device_dispatch_table, "../data/shader/gltf_pbr.vert.spv", &vert_shader
+            ))
         {
             std::cerr << "[!] Failed to load glTF PBR vertex shader." << std::endl;
             return false;
@@ -68,8 +74,10 @@ namespace Renderer
         pipeline_builder.SetLayout(layout)
             .AddFragmentShader(frag_shader)
             .AddVertexShader(vert_shader)
-            .SetCullMode(VK_CULL_MODE_BACK_BIT,
-                         VK_FRONT_FACE_COUNTER_CLOCKWISE) // idk why the meshes end up having counter clockwise tris
+            .SetCullMode(
+                VK_CULL_MODE_BACK_BIT,
+                VK_FRONT_FACE_COUNTER_CLOCKWISE
+            ) // idk why the meshes end up having counter clockwise tris
             .SetInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
             .SetPolygonMode(VK_POLYGON_MODE_FILL)
             .SetColorAttachmentFormat(interface.draw_image->image_format)
@@ -95,23 +103,40 @@ namespace Renderer
         device_dispatch.destroyDescriptorSetLayout(descriptor_layout, nullptr);
     }
 
-    MaterialInstance Material_GLTF_PBR::CreateInstance(vkb::DispatchTable& device_dispatch, MaterialPass pass,
-                                                       const Resources& resources,
-                                                       Utils::DescriptorAllocatorDynamic& descriptor_allocator)
+    MaterialInstance Material_GLTF_PBR::CreateInstance(
+        vkb::DispatchTable& device_dispatch,
+        MaterialPass pass,
+        const Resources& resources,
+        Utils::DescriptorAllocatorDynamic& descriptor_allocator
+    )
     {
         // create the material descriptor set
         VkDescriptorSet descriptor_set = descriptor_allocator.Allocate(device_dispatch, descriptor_layout);
 
         // 0 is uniform buffer which is MaterialParameters
-        descriptor_writer.WriteBuffer(0, resources.uniform_buffer, sizeof(MaterialParameters), resources.buffer_offset,
-                                      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        descriptor_writer.WriteBuffer(
+            0,
+            resources.uniform_buffer,
+            sizeof(MaterialParameters),
+            resources.buffer_offset,
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+        );
 
         // 1 is colour image and 2 is metal_roughness image
-        descriptor_writer.WriteImage(1, resources.colour_image.image_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                     resources.colour_sampler, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
-        descriptor_writer.WriteImage(1, resources.metal_roughness_image.image_view,
-                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, resources.metal_roughness_sampler,
-                                     VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+        descriptor_writer.WriteImage(
+            1,
+            resources.colour_image.image_view,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            resources.colour_sampler,
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+        );
+        descriptor_writer.WriteImage(
+            1,
+            resources.metal_roughness_image.image_view,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            resources.metal_roughness_sampler,
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
+        );
 
         descriptor_writer.UpdateSet(device_dispatch, descriptor_set);
 
@@ -128,6 +153,6 @@ namespace Renderer
             break;
         }
 
-        return MaterialInstance{pipeline, descriptor_set, pass};
+        return MaterialInstance{ pipeline, descriptor_set, pass };
     }
 } // namespace Renderer

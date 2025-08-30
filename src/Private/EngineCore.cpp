@@ -14,12 +14,18 @@ EngineCore::EngineCore(int width, int height)
 
     SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
-    m_window = SDL_CreateWindow("Vulkan Engine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height,
-                                window_flags);
+    m_window = SDL_CreateWindow(
+        "Vulkan Engine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, window_flags
+    );
 
-    m_renderer =
-        std::make_unique<Renderer::VulkanEngine>(width, height, m_window, 1.0f, /* use_validation_layers = */ true,
-                                                 /* immediate_uploads = */ false);
+    m_renderer = std::make_unique<Renderer::VulkanEngine>(
+        width,
+        height,
+        m_window,
+        1.0f,
+        /* use_validation_layers = */ true,
+        /* immediate_uploads = */ false
+    );
     if (m_renderer->Init() == false)
     {
         m_initialisation_failure = true;
@@ -36,9 +42,7 @@ EngineCore::~EngineCore()
     SDL_DestroyWindow(m_window);
 }
 
-void EngineCore::Update()
-{
-}
+void EngineCore::Update() {}
 
 void EngineCore::RunMainLoop()
 {
@@ -70,9 +74,10 @@ void EngineCore::RunMainLoop()
         }
 
         // update delta time
-        int64_t now_us =
-            std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock().now().time_since_epoch())
-                .count();
+        int64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                             std::chrono::steady_clock().now().time_since_epoch()
+        )
+                             .count();
         m_last_delta_ms = static_cast<double>(now_us - m_last_update_us) / 1000.0;
         m_last_update_us = now_us;
 
@@ -120,24 +125,30 @@ void EngineCore::OnImgui()
         ImDrawList* draw_list = ImGui::GetForegroundDrawList();
         double delta_s = m_last_delta_ms / 1000.0;
         std::ostringstream stream;
-        stream << "FPS: " << std::setw(5) << int64_t(1.0 / delta_s) << " | " << std::fixed << std::setprecision(2)
-               << m_last_delta_ms << "ms";
+        stream << "FPS: " << std::setw(5) << int64_t(1.0 / delta_s) << " | " << std::fixed
+               << std::setprecision(2) << m_last_delta_ms << "ms";
         std::string fps_text = stream.str();
-        draw_list->AddText({0.0f, imgui_menu_cursor_y}, ImGui::GetColorU32(ImGuiCol_Text), fps_text.data(),
-                           fps_text.data() + fps_text.size());
+        draw_list->AddText(
+            { 0.0f, imgui_menu_cursor_y },
+            ImGui::GetColorU32(ImGuiCol_Text),
+            fps_text.data(),
+            fps_text.data() + fps_text.size()
+        );
     }
 
     if (m_show_compute_effects)
     {
         if (ImGui::Begin("Compute Effects", &m_show_compute_effects))
         {
-            auto copy_vec_to_array = +[](const glm::vec4& vec, float* data) {
+            auto copy_vec_to_array = +[](const glm::vec4& vec, float* data)
+            {
                 data[0] = vec.x;
                 data[1] = vec.y;
                 data[2] = vec.z;
                 data[3] = vec.w;
             };
-            auto copy_array_to_vec = +[](const float* data, glm::vec4& vec) {
+            auto copy_array_to_vec = +[](const float* data, glm::vec4& vec)
+            {
                 vec.x = data[0];
                 vec.y = data[1];
                 vec.z = data[2];
@@ -145,7 +156,8 @@ void EngineCore::OnImgui()
             };
 
             static int current_selection = 0;
-            Renderer::ComputeEffect* current_effect = &m_renderer->ComputeEffects()[m_renderer->CurrentComputeEffect()];
+            Renderer::ComputeEffect* current_effect =
+                &m_renderer->ComputeEffects()[m_renderer->CurrentComputeEffect()];
             Renderer::PushConstants* constants = &current_effect->push_constants;
             static float data1[4];
             static float data2[4];
@@ -188,7 +200,4 @@ void EngineCore::OnImgui()
     }
 }
 
-bool EngineCore::InitialisationFailed()
-{
-    return m_initialisation_failure;
-}
+bool EngineCore::InitialisationFailed() { return m_initialisation_failure; }

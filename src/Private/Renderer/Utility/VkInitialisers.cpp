@@ -73,8 +73,11 @@ namespace Renderer::Utils
         return info;
     }
 
-    VkSubmitInfo2 SubmitInfo(VkCommandBufferSubmitInfo* cmd, VkSemaphoreSubmitInfo* signal_semaphore_info,
-                             VkSemaphoreSubmitInfo* wait_semaphore_info)
+    VkSubmitInfo2 SubmitInfo(
+        VkCommandBufferSubmitInfo* cmd,
+        VkSemaphoreSubmitInfo* signal_semaphore_info,
+        VkSemaphoreSubmitInfo* wait_semaphore_info
+    )
     {
         VkSubmitInfo2 info{};
         info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
@@ -88,8 +91,9 @@ namespace Renderer::Utils
         return info;
     }
 
-    VkPresentInfoKHR PresentInfo(VkSwapchainKHR* swapchain, VkSemaphore* wait_semaphore,
-                                 uint32_t* swapchain_image_index)
+    VkPresentInfoKHR PresentInfo(
+        VkSwapchainKHR* swapchain, VkSemaphore* wait_semaphore, uint32_t* swapchain_image_index
+    )
     {
         VkPresentInfoKHR info{};
         info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -156,8 +160,11 @@ namespace Renderer::Utils
         return info;
     }
 
-    VkRenderingInfo RenderingInfo(VkRenderingAttachmentInfo* color_attachment_info,
-                                  VkRenderingAttachmentInfo* depth_attachment_info, VkExtent2D draw_extent)
+    VkRenderingInfo RenderingInfo(
+        VkRenderingAttachmentInfo* color_attachment_info,
+        VkRenderingAttachmentInfo* depth_attachment_info,
+        VkExtent2D draw_extent
+    )
     {
         VkRenderingInfo info{};
         info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -166,13 +173,14 @@ namespace Renderer::Utils
         info.colorAttachmentCount = 1;
         info.pColorAttachments = color_attachment_info;
         info.pDepthAttachment = depth_attachment_info;
-        info.renderArea = {{0, 0}, {draw_extent.width, draw_extent.height}};
+        info.renderArea = { { 0, 0 }, { draw_extent.width, draw_extent.height } };
 
         return info;
     }
 
-    VkPipelineShaderStageCreateInfo ShaderStageCreateInfo(const char* name, VkShaderModule shader,
-                                                          VkShaderStageFlagBits stage)
+    VkPipelineShaderStageCreateInfo ShaderStageCreateInfo(
+        const char* name, VkShaderModule shader, VkShaderStageFlagBits stage
+    )
     {
         VkPipelineShaderStageCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;

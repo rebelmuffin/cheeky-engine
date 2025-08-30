@@ -2,6 +2,7 @@
 
 #include "Renderer/Utility/VkLoader.h"
 #include "Renderer/VkTypes.h"
+#include <vulkan/vulkan_core.h>
 
 namespace Renderer
 {
@@ -44,23 +45,23 @@ namespace Renderer::Utils
     class MeshUploadRequest : public IUploadRequest
     {
       public:
-        /// MeshUploadRequest will take ownership of the staging buffer and destroy it after the upload is complete.
-        MeshUploadRequest(size_t vertex_buffer_size, size_t index_buffer_size, const GPUMeshBuffers& target_mesh,
-                          const AllocatedBuffer& staging_buffer, UploadType upload_type,
-                          std::string_view debug_name = "unnamed_mesh_upload");
+        /// MeshUploadRequest will take ownership of the staging buffer and destroy it after the upload is
+        /// complete.
+        MeshUploadRequest(
+            size_t vertex_buffer_size,
+            size_t index_buffer_size,
+            const GPUMeshBuffers& target_mesh,
+            const AllocatedBuffer& staging_buffer,
+            UploadType upload_type,
+            std::string_view debug_name = "unnamed_mesh_upload"
+        );
         virtual ~MeshUploadRequest() = default;
 
         UploadExecutionResult ExecuteUpload(VulkanEngine& engine, VkCommandBuffer cmd) override;
         void DestroyResources(VulkanEngine& engine) override;
 
-        std::string_view DebugName() const override
-        {
-            return m_debug_name;
-        }
-        UploadType GetUploadType() const override
-        {
-            return m_upload_type;
-        }
+        std::string_view DebugName() const override { return m_debug_name; }
+        UploadType GetUploadType() const override { return m_upload_type; }
 
       private:
         size_t m_vertex_buffer_size;

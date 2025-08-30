@@ -68,8 +68,11 @@ namespace Renderer
         void DestroyResources(vkb::DispatchTable& device_dispatch);
 
         // create a material instance that can be used to render objects using the given resources.
-        MaterialInstance CreateInstance(vkb::DispatchTable& device_dispatch, MaterialPass pass,
-                                        const Resources& resources,
-                                        Utils::DescriptorAllocatorDynamic& descriptor_allocator);
+        MaterialInstance CreateInstance(
+            vkb::DispatchTable& device_dispatch,
+            MaterialPass pass,
+            const Resources& resources,
+            Utils::DescriptorAllocatorDynamic& descriptor_allocator
+        );
     };
 } // namespace Renderer

@@ -48,13 +48,19 @@ namespace Renderer
     class VulkanEngine
     {
       public:
-        VulkanEngine(uint32_t window_width, uint32_t window_height, SDL_Window* window, float backbuffer_scale,
-                     bool use_validation_layers, bool immediate_uploads);
+        VulkanEngine(
+            uint32_t window_width,
+            uint32_t window_height,
+            SDL_Window* window,
+            float backbuffer_scale,
+            bool use_validation_layers,
+            bool immediate_uploads
+        );
         VulkanEngine(const VulkanEngine&) = delete; // no copy pls
 
-        bool is_initialised{false};
-        int frame_number{0};
-        bool stop_rendering{false};
+        bool is_initialised{ false };
+        int frame_number{ 0 };
+        bool stop_rendering{ false };
 
         // initializes everything in the engine
         bool Init();
@@ -65,66 +71,64 @@ namespace Renderer
         // run main loop
         void Update(double delta_ms);
 
-        std::vector<ComputeEffect>& ComputeEffects()
-        {
-            return m_compute_effects;
-        }
-        std::size_t CurrentComputeEffect()
-        {
-            return m_current_effect;
-        }
-        void SetCurrentComputeEffect(std::size_t target)
-        {
-            m_current_effect = target;
-        }
+        std::vector<ComputeEffect>& ComputeEffects() { return m_compute_effects; }
+        std::size_t CurrentComputeEffect() { return m_current_effect; }
+        void SetCurrentComputeEffect(std::size_t target) { m_current_effect = target; }
 
         float GetRenderScale() const;
         void SetRenderScale(float scale);
 
         // these are used by things that write to the GPU memory like uploads.
         // can probably be interfaced to avoid making them public on the engine.
-        FrameData& GetCurrentFrame()
-        {
-            return m_frames[frame_number % FRAME_OVERLAP];
-        }
-        vkb::DispatchTable& DeviceDispatchTable()
-        {
-            return m_device_dispatch;
-        }
-        vkb::InstanceDispatchTable& InstanceDispatchTable()
-        {
-            return m_instance_dispatch;
-        }
-        VmaAllocator& Allocator()
-        {
-            return m_allocator;
-        }
+        FrameData& GetCurrentFrame() { return m_frames[frame_number % FRAME_OVERLAP]; }
+        vkb::DispatchTable& DeviceDispatchTable() { return m_device_dispatch; }
+        vkb::InstanceDispatchTable& InstanceDispatchTable() { return m_instance_dispatch; }
+        VmaAllocator& Allocator() { return m_allocator; }
 
-        AllocatedBuffer CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage,
-                                     VmaAllocationCreateFlags allocation_flags = 0,
-                                     const char* debug_name = "unnamed_buffer");
-        AllocatedBuffer CreateBuffer(void* buffer_data, size_t buffer_size, VkBufferUsageFlags usage,
-                                     const char* debug_name = "unnamed_buffer");
+        AllocatedBuffer CreateBuffer(
+            size_t allocation_size,
+            VkBufferUsageFlags usage,
+            VmaMemoryUsage memory_usage,
+            VmaAllocationCreateFlags allocation_flags = 0,
+            const char* debug_name = "unnamed_buffer"
+        );
+        AllocatedBuffer CreateBuffer(
+            void* buffer_data,
+            size_t buffer_size,
+            VkBufferUsageFlags usage,
+            const char* debug_name = "unnamed_buffer"
+        );
         void DestroyBuffer(const AllocatedBuffer& buffer);
 
         // allocate an empty image with given dimensions.
-        AllocatedImage AllocateImage(VkExtent3D image_extent, VkFormat format, VkImageUsageFlags usage,
-                                     VmaMemoryUsage memory_usage, VkImageAspectFlagBits aspect_flags,
-                                     VkMemoryPropertyFlags required_memory_flags = 0,
-                                     VmaAllocationCreateFlags allocation_flags = 0, bool mipmapped = false,
-                                     const char* debug_name = "unnamed_image");
+        AllocatedImage AllocateImage(
+            VkExtent3D image_extent,
+            VkFormat format,
+            VkImageUsageFlags usage,
+            VmaMemoryUsage memory_usage,
+            VkImageAspectFlagBits aspect_flags,
+            VkMemoryPropertyFlags required_memory_flags = 0,
+            VmaAllocationCreateFlags allocation_flags = 0,
+            bool mipmapped = false,
+            const char* debug_name = "unnamed_image"
+        );
 
         // allocate an image and copy the given data inside. RGBA8 format is assumed.
-        AllocatedImage AllocateImage(void* image_data, VkExtent3D image_extent, VkFormat format,
-                                     VkImageUsageFlags usage, bool mipmapped = false,
-                                     const char* debug_name = "unnamed_image");
+        AllocatedImage AllocateImage(
+            void* image_data,
+            VkExtent3D image_extent,
+            VkFormat format,
+            VkImageUsageFlags usage,
+            bool mipmapped = false,
+            const char* debug_name = "unnamed_image"
+        );
         void DestroyImage(const AllocatedImage& image);
 
         GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
         void RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request);
 
-        float test_mesh_opacity{1.0f};
+        float test_mesh_opacity{ 1.0f };
 
       private:
         void FinishPendingUploads(VkCommandBuffer cmd);
@@ -167,7 +171,8 @@ namespace Renderer
 
         vkb::InstanceDispatchTable m_instance_dispatch;
         vkb::DispatchTable m_device_dispatch;
-        // there are functions that aren't implemented by vkb's dispatch tables. Need to lookup manually :(
+        // there are functions that aren't implemented by vkb's dispatch tables. Need to lookup
+        // manually :(
         PFN_vkGetDeviceProcAddr m_get_device_proc_addr;
         PFN_vkGetInstanceProcAddr m_get_instance_proc_addr;
 
@@ -246,7 +251,7 @@ namespace Renderer
         bool m_draw_engine_settings = false;
         float m_camera_yaw_rad = 0.0f;
         float m_camera_pitch_rad = 0.0f;
-        glm::vec3 m_camera_position{0.0f, 0.0f, -1.0f};
+        glm::vec3 m_camera_position{ 0.0f, 0.0f, -1.0f };
         bool m_rotating_camera = true;
         bool m_use_linear_sampling = true;
         AllocatedImage* m_active_image = &m_checkerboard_image;

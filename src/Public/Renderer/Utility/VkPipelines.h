@@ -6,8 +6,9 @@
 
 namespace Renderer::Utils
 {
-    bool LoadShaderModule(const vkb::DispatchTable& device_dispatch, const char* file_path,
-                          VkShaderModule* out_shader_module);
+    bool LoadShaderModule(
+        const vkb::DispatchTable& device_dispatch, const char* file_path, VkShaderModule* out_shader_module
+    );
 
     class PipelineBuilder
     {

@@ -31,7 +31,8 @@ namespace Renderer
 namespace Renderer::Utils
 {
     /// Loads meshes from a glTF file. Supports both binary and json gltf. Returns nullopt on failure.
-    std::optional<std::vector<std::shared_ptr<MeshAsset>>> LoadGltfMeshes(VulkanEngine* engine,
-                                                                          std::filesystem::path filePath);
+    std::optional<std::vector<std::shared_ptr<MeshAsset>>> LoadGltfMeshes(
+        VulkanEngine* engine, std::filesystem::path filePath
+    );
 
 } // namespace Renderer::Utils

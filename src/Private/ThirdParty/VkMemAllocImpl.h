@@ -24,9 +24,9 @@ inline void VmaLeakLog(const char* format, ...)
     va_end(args);
 }
 
-#define VMA_LEAK_LOG_FORMAT(format, ...)                                                                               \
-    {                                                                                                                  \
-        VmaLeakLog(format, __VA_ARGS__);                                                                               \
+#define VMA_LEAK_LOG_FORMAT(format, ...)                                                                     \
+    {                                                                                                        \
+        VmaLeakLog(format, __VA_ARGS__);                                                                     \
     }
 #endif
 

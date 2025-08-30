@@ -5,8 +5,9 @@
 
 namespace Renderer::Utils
 {
-    bool LoadShaderModule(const vkb::DispatchTable& device_dispatch, const char* file_path,
-                          VkShaderModule* out_shader_module)
+    bool LoadShaderModule(
+        const vkb::DispatchTable& device_dispatch, const char* file_path, VkShaderModule* out_shader_module
+    )
     {
         // open with cursor at the end
         std::ifstream file(file_path, std::ios::ate | std::ios::binary);
@@ -47,10 +48,7 @@ namespace Renderer::Utils
         return true;
     }
 
-    PipelineBuilder::PipelineBuilder()
-    {
-        Clear();
-    }
+    PipelineBuilder::PipelineBuilder() { Clear(); }
 
     void PipelineBuilder::Clear()
     {
@@ -146,8 +144,8 @@ namespace Renderer::Utils
 
     PipelineBuilder PipelineBuilder::DisableBlending()
     {
-        m_color_blend_attachment.colorWriteMask =
-            VK_COLOR_COMPONENT_A_BIT | VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
+        m_color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_A_BIT | VK_COLOR_COMPONENT_R_BIT |
+                                                  VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
         m_color_blend_attachment.blendEnable = VK_FALSE;
 
         return *this;
@@ -155,8 +153,8 @@ namespace Renderer::Utils
 
     PipelineBuilder PipelineBuilder::EnableBlendingAdditive()
     {
-        m_color_blend_attachment.colorWriteMask =
-            VK_COLOR_COMPONENT_A_BIT | VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
+        m_color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_A_BIT | VK_COLOR_COMPONENT_R_BIT |
+                                                  VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
         m_color_blend_attachment.blendEnable = VK_TRUE;
         m_color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
         m_color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
@@ -170,8 +168,8 @@ namespace Renderer::Utils
 
     PipelineBuilder PipelineBuilder::EnableBlendingAlpha()
     {
-        m_color_blend_attachment.colorWriteMask =
-            VK_COLOR_COMPONENT_A_BIT | VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
+        m_color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_A_BIT | VK_COLOR_COMPONENT_R_BIT |
+                                                  VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
         m_color_blend_attachment.blendEnable = VK_TRUE;
         m_color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
         m_color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -250,7 +248,7 @@ namespace Renderer::Utils
         vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
         vertex_input_info.pNext = nullptr;
 
-        VkDynamicState state[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+        VkDynamicState state[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
         VkPipelineDynamicStateCreateInfo dynamic_info{};
         dynamic_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
         dynamic_info.dynamicStateCount = sizeof(state) / sizeof(VkDynamicState);
@@ -272,8 +270,9 @@ namespace Renderer::Utils
         pipeline_info.layout = m_pipeline_layout;
 
         VkPipeline new_pipeline;
-        VkResult result =
-            device_dispatch.createGraphicsPipelines(VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &new_pipeline);
+        VkResult result = device_dispatch.createGraphicsPipelines(
+            VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &new_pipeline
+        );
         if (result != VK_SUCCESS)
         {
             std::cout << "[!] Failed to create pipeline." << std::endl;

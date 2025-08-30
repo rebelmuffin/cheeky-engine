@@ -4,8 +4,13 @@
 
 namespace Renderer::Utils
 {
-    void TransitionImage(vkb::DispatchTable* device_dispatch, VkCommandBuffer cmd, VkImage image,
-                         VkImageLayout current_layout, VkImageLayout target_layout)
+    void TransitionImage(
+        vkb::DispatchTable* device_dispatch,
+        VkCommandBuffer cmd,
+        VkImage image,
+        VkImageLayout current_layout,
+        VkImageLayout target_layout
+    )
     {
         VkImageMemoryBarrier2 imageBarrier{};
         imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -35,8 +40,14 @@ namespace Renderer::Utils
         device_dispatch->cmdPipelineBarrier2(cmd, &depInfo);
     }
 
-    void CopyImageToImage(vkb::DispatchTable* device_dispatch, VkCommandBuffer cmd, VkImage source_image,
-                          VkImage dest_image, VkExtent2D source_size, VkExtent2D dest_size)
+    void CopyImageToImage(
+        vkb::DispatchTable* device_dispatch,
+        VkCommandBuffer cmd,
+        VkImage source_image,
+        VkImage dest_image,
+        VkExtent2D source_size,
+        VkExtent2D dest_size
+    )
     {
         VkImageBlit2 blit_region{};
         blit_region.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2;

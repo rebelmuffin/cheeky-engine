@@ -5,7 +5,7 @@ namespace Renderer::Utils
 {
     void DeletionQueue::PushFunction(const char* debug_name, const FunctionType& func)
     {
-        m_deletors.push_back({func, debug_name});
+        m_deletors.push_back({ func, debug_name });
     }
 
     void DeletionQueue::Flush()

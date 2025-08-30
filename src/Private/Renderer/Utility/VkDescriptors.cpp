@@ -16,15 +16,14 @@ namespace Renderer::Utils
         m_bindings.push_back(layout_binding);
     }
 
-    void DescriptorLayoutBuilder::Clear()
-    {
-        m_bindings.clear();
-    }
+    void DescriptorLayoutBuilder::Clear() { m_bindings.clear(); }
 
-    VkDescriptorSetLayout DescriptorLayoutBuilder::Build(vkb::DispatchTable device_dispatch,
-                                                         VkShaderStageFlags shader_stages,
-                                                         VkDescriptorSetLayoutCreateFlags flags,
-                                                         VkDescriptorSetLayoutBindingFlagsCreateInfo* binding_flags)
+    VkDescriptorSetLayout DescriptorLayoutBuilder::Build(
+        vkb::DispatchTable device_dispatch,
+        VkShaderStageFlags shader_stages,
+        VkDescriptorSetLayoutCreateFlags flags,
+        VkDescriptorSetLayoutBindingFlagsCreateInfo* binding_flags
+    )
     {
         for (VkDescriptorSetLayoutBinding& binding : m_bindings)
         {
@@ -43,16 +42,21 @@ namespace Renderer::Utils
         return layout_set;
     }
 
-    void DescriptorAllocator::InitPool(vkb::DispatchTable device_dispatch, uint32_t max_sets,
-                                       std::span<DescriptorPoolSizeRatio> pool_ratios,
-                                       VkDescriptorPoolCreateFlags pool_flags)
+    void DescriptorAllocator::InitPool(
+        vkb::DispatchTable device_dispatch,
+        uint32_t max_sets,
+        std::span<DescriptorPoolSizeRatio> pool_ratios,
+        VkDescriptorPoolCreateFlags pool_flags
+    )
     {
         std::vector<VkDescriptorPoolSize> pool_sizes;
         pool_sizes.reserve(pool_ratios.size());
         for (DescriptorPoolSizeRatio ratio : pool_ratios)
         {
             pool_sizes.push_back(
-                VkDescriptorPoolSize{.type = ratio.type, .descriptorCount = uint32_t(ratio.ratio * float(max_sets))});
+                VkDescriptorPoolSize{ .type = ratio.type,
+                                      .descriptorCount = uint32_t(ratio.ratio * float(max_sets)) }
+            );
         }
 
         VkDescriptorPoolCreateInfo info{};
@@ -77,7 +81,9 @@ namespace Renderer::Utils
         m_pool = VK_NULL_HANDLE;
     }
 
-    VkDescriptorSet DescriptorAllocator::Allocate(vkb::DispatchTable device_dispatch, VkDescriptorSetLayout layout_set)
+    VkDescriptorSet DescriptorAllocator::Allocate(
+        vkb::DispatchTable device_dispatch, VkDescriptorSetLayout layout_set
+    )
     {
         VkDescriptorSetAllocateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -92,9 +98,12 @@ namespace Renderer::Utils
         return descriptor_set;
     }
 
-    void DescriptorAllocatorDynamic::Init(vkb::DispatchTable device_dispatch, uint32_t initial_max_sets,
-                                          std::span<DescriptorPoolSizeRatio> pool_ratios,
-                                          VkDescriptorPoolCreateFlags pool_flags)
+    void DescriptorAllocatorDynamic::Init(
+        vkb::DispatchTable device_dispatch,
+        uint32_t initial_max_sets,
+        std::span<DescriptorPoolSizeRatio> pool_ratios,
+        VkDescriptorPoolCreateFlags pool_flags
+    )
     {
         // create the first pool
         m_pool_flags = pool_flags;
@@ -133,8 +142,9 @@ namespace Renderer::Utils
         m_full_pools.clear();
     }
 
-    VkDescriptorSet DescriptorAllocatorDynamic::Allocate(vkb::DispatchTable device_dispatch,
-                                                         VkDescriptorSetLayout layout_set)
+    VkDescriptorSet DescriptorAllocatorDynamic::Allocate(
+        vkb::DispatchTable device_dispatch, VkDescriptorSetLayout layout_set
+    )
     {
         VkDescriptorPool pool = GetPool(device_dispatch);
 
@@ -150,9 +160,15 @@ namespace Renderer::Utils
         while (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL)
         {
             m_full_pools.emplace_back(pool);
-            // we can avoid this search if we pop the pool from GetPool and add it back if allocation succeeds,
-            // look into doing that if it ever becomes a performance issue. I doubt it (28/08/2025)
-            std::erase_if(m_ready_pools, [pool](VkDescriptorPool& p) { return p == pool; });
+            // we can avoid this search if we pop the pool from GetPool and add it back if allocation
+            // succeeds, look into doing that if it ever becomes a performance issue. I doubt it (28/08/2025)
+            std::erase_if(
+                m_ready_pools,
+                [pool](VkDescriptorPool& p)
+                {
+                    return p == pool;
+                }
+            );
 
             pool = GetPool(device_dispatch);
             info.descriptorPool = pool;
@@ -175,15 +191,18 @@ namespace Renderer::Utils
         return new_pool;
     }
 
-    VkDescriptorPool DescriptorAllocatorDynamic::AllocateNewPool(vkb::DispatchTable device_dispatch, uint32_t max_sets,
-                                                                 std::span<DescriptorPoolSizeRatio> pool_ratios)
+    VkDescriptorPool DescriptorAllocatorDynamic::AllocateNewPool(
+        vkb::DispatchTable device_dispatch, uint32_t max_sets, std::span<DescriptorPoolSizeRatio> pool_ratios
+    )
     {
         std::vector<VkDescriptorPoolSize> pool_sizes;
         pool_sizes.reserve(pool_ratios.size());
         for (DescriptorPoolSizeRatio ratio : pool_ratios)
         {
             pool_sizes.push_back(
-                VkDescriptorPoolSize{.type = ratio.type, .descriptorCount = uint32_t(ratio.ratio * float(max_sets))});
+                VkDescriptorPoolSize{ .type = ratio.type,
+                                      .descriptorCount = uint32_t(ratio.ratio * float(max_sets)) }
+            );
         }
 
         VkDescriptorPoolCreateInfo info{};
@@ -206,8 +225,13 @@ namespace Renderer::Utils
         return new_pool;
     }
 
-    void DescriptorWriter::WriteImage(uint32_t binding, VkImageView image_view, VkImageLayout layout, VkSampler sampler,
-                                      VkDescriptorType descriptor_type)
+    void DescriptorWriter::WriteImage(
+        uint32_t binding,
+        VkImageView image_view,
+        VkImageLayout layout,
+        VkSampler sampler,
+        VkDescriptorType descriptor_type
+    )
     {
         VkDescriptorImageInfo& image_info = image_infos.emplace_back();
         image_info.imageLayout = layout;
@@ -226,8 +250,13 @@ namespace Renderer::Utils
         writes.push_back(write_set);
     }
 
-    void DescriptorWriter::WriteBuffer(uint32_t binding, VkBuffer buffer, VkDeviceSize size, VkDeviceSize offset,
-                                       VkDescriptorType descriptor_type)
+    void DescriptorWriter::WriteBuffer(
+        uint32_t binding,
+        VkBuffer buffer,
+        VkDeviceSize size,
+        VkDeviceSize offset,
+        VkDescriptorType descriptor_type
+    )
     {
         VkDescriptorBufferInfo& buffer_info = buffer_infos.emplace_back();
         buffer_info.buffer = buffer;
