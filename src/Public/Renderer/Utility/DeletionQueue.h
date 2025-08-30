@@ -3,7 +3,7 @@
 #include <deque>
 #include <functional>
 
-namespace Utils
+namespace Renderer::Utils
 {
     using FunctionType = std::function<void()>;
 
@@ -22,4 +22,4 @@ namespace Utils
       private:
         std::deque<DeletionItem> m_deletors;
     };
-} // namespace Utils
+} // namespace Renderer::Utils

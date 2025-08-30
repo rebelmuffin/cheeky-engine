@@ -1,7 +1,7 @@
-#include "Utility/DeletionQueue.h"
+#include "Renderer/Utility/DeletionQueue.h"
 #include <iostream>
 
-namespace Utils
+namespace Renderer::Utils
 {
     void DeletionQueue::PushFunction(const char* debug_name, const FunctionType& func)
     {
@@ -21,4 +21,4 @@ namespace Utils
         m_deletors.clear();
     }
 
-} // namespace Utils
+} // namespace Renderer::Utils

@@ -1,9 +1,10 @@
 #pragma once
 
-#include "VkTypes.h"
+#include "Renderer/VkTypes.h"
+
 #include <VkBootstrapDispatch.h>
 
-namespace Utils
+namespace Renderer::Utils
 {
     bool LoadShaderModule(const vkb::DispatchTable& device_dispatch, const char* file_path,
                           VkShaderModule* out_shader_module);
@@ -46,4 +47,4 @@ namespace Utils
 
         const char* m_name;
     };
-} // namespace Utils
+} // namespace Renderer::Utils

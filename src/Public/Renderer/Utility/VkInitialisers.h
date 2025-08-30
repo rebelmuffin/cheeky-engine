@@ -1,9 +1,9 @@
 #pragma once
 
-#include "VkTypes.h"
+#include "Renderer/VkTypes.h"
 #include <vulkan/vulkan_core.h>
 
-namespace Utils
+namespace Renderer::Utils
 {
     VkCommandPoolCreateInfo CommandPoolCreateInfo(uint32_t queue_family_index, VkCommandPoolCreateFlags flags);
     VkCommandBufferAllocateInfo CommandBufferAllocateInfo(VkCommandPool command_pool, uint32_t count);
@@ -28,4 +28,4 @@ namespace Utils
                                   VkRenderingAttachmentInfo* depth_attachment_info, VkExtent2D draw_extent);
     VkPipelineShaderStageCreateInfo ShaderStageCreateInfo(const char* name, VkShaderModule shader,
                                                           VkShaderStageFlagBits stage);
-} // namespace Utils
+} // namespace Renderer::Utils

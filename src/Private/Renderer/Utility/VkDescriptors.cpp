@@ -1,10 +1,10 @@
-#include "Utility/VkDescriptors.h"
-#include "VkBootstrapDispatch.h"
-#include "VkTypes.h"
+#include "Renderer/Utility/VkDescriptors.h"
+#include "Renderer/VkTypes.h"
 
+#include <VkBootstrapDispatch.h>
 #include <vulkan/vulkan_core.h>
 
-namespace Utils
+namespace Renderer::Utils
 {
     void DescriptorLayoutBuilder::AddBinding(uint32_t binding, VkDescriptorType descriptor_type)
     {
@@ -264,4 +264,4 @@ namespace Utils
         Clear();
     }
 
-} // namespace Utils
+} // namespace Renderer::Utils

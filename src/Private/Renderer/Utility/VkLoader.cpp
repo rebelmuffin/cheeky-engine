@@ -1,14 +1,11 @@
-#include "Utility/VkLoader.h"
-#include "Utility/VkInitialisers.h"
-#include "VkEngine.h"
+#include "Renderer/Utility/VkLoader.h"
+#include "Renderer/Utility/VkInitialisers.h"
+#include "Renderer/VkEngine.h"
 
-#include "stb_image.h"
-#include <cstdint>
+#include "ThirdParty/fastgltf.h"
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 #undef GLM_ENABLE_EXPERIMENTAL
-
-#include "ThirdParty/fastgltf.h"
 
 #include <iostream>
 
@@ -21,7 +18,7 @@ namespace
     }
 } // namespace
 
-namespace Utils
+namespace Renderer::Utils
 {
     std::optional<std::vector<std::shared_ptr<MeshAsset>>> LoadGltfMeshes(VulkanEngine* engine,
                                                                           std::filesystem::path filePath)
@@ -170,4 +167,4 @@ namespace Utils
 
         return mesh_assets;
     }
-} // namespace Utils
+} // namespace Renderer::Utils

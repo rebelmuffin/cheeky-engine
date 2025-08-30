@@ -1,10 +1,10 @@
-#include "Utility/UploadRequest.h"
+#include "Renderer/Utility/UploadRequest.h"
 
-#include "VkEngine.h"
+#include "Renderer/VkEngine.h"
 
 #include <cstddef>
 
-namespace Utils
+namespace Renderer::Utils
 {
     MeshUploadRequest::MeshUploadRequest(size_t vertex_buffer_size, size_t index_buffer_size,
                                          const GPUMeshBuffers& target_mesh, const AllocatedBuffer& staging_buffer,
@@ -38,4 +38,4 @@ namespace Utils
     {
         engine.DestroyBuffer(m_staging_buffer);
     }
-} // namespace Utils
+} // namespace Renderer::Utils

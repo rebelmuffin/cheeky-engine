@@ -1,7 +1,4 @@
-#pragma once
-
-// We need to use this header to include third party projects that might have warnings in them.
-
+// a single translation unit should include vk_mem_alloc with VMA_IMPLEMENTATION for linking
 #ifdef __GNUC__
 #pragma GCC system_header
 #endif
@@ -11,6 +8,7 @@
 #pragma clang diagnostic ignored "-Weverything"
 #endif
 
+// to support logging memory leak errors
 #ifdef CHEEKY_ENABLE_MEMORY_TRACKING
 
 #include <cstdarg>

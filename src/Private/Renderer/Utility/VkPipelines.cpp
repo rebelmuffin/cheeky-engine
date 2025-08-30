@@ -1,10 +1,9 @@
-#include "Utility/VkPipelines.h"
-
-#include "Utility/VkInitialisers.h"
+#include "Renderer/Utility/VkPipelines.h"
+#include "Renderer/Utility/VkInitialisers.h"
 
 #include <fstream>
 
-namespace Utils
+namespace Renderer::Utils
 {
     bool LoadShaderModule(const vkb::DispatchTable& device_dispatch, const char* file_path,
                           VkShaderModule* out_shader_module)
@@ -285,4 +284,4 @@ namespace Utils
             return new_pipeline;
         }
     }
-} // namespace Utils
+} // namespace Renderer::Utils

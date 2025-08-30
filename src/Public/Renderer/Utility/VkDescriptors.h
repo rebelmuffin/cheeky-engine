@@ -1,11 +1,12 @@
 #pragma once
 
-#include "VkTypes.h"
+#include "Renderer/VkTypes.h"
+
 #include <VkBootstrapDispatch.h>
 #include <span>
 #include <vulkan/vulkan_core.h>
 
-namespace Utils
+namespace Renderer::Utils
 {
     class DescriptorLayoutBuilder
     {
@@ -76,4 +77,4 @@ namespace Utils
         void Clear();
         void UpdateSet(vkb::DispatchTable device_dispatch, VkDescriptorSet set);
     };
-} // namespace Utils
+} // namespace Renderer::Utils

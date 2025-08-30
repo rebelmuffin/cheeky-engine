@@ -1,6 +1,6 @@
 #pragma once
 
-#include "VkEngine.h"
+#include "Renderer/VkEngine.h"
 
 struct SDL_Window;
 
@@ -21,7 +21,7 @@ class EngineCore
     void OnImgui();
 
     SDL_Window* m_window;
-    std::unique_ptr<VulkanEngine> m_renderer;
+    std::unique_ptr<Renderer::VulkanEngine> m_renderer;
 
     double m_last_delta_ms = 0;
     int64_t m_last_update_us = 0;

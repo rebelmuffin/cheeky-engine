@@ -1,11 +1,14 @@
 #pragma once
 
-#include "VkLoader.h"
-#include "VkTypes.h"
+#include "Renderer/Utility/VkLoader.h"
+#include "Renderer/VkTypes.h"
 
-class VulkanEngine;
+namespace Renderer
+{
+    class VulkanEngine;
+}
 
-namespace Utils
+namespace Renderer::Utils
 {
     enum class UploadExecutionResult
     {
@@ -67,4 +70,4 @@ namespace Utils
         UploadType m_upload_type;
         std::string m_debug_name;
     };
-} // namespace Utils
+} // namespace Renderer::Utils

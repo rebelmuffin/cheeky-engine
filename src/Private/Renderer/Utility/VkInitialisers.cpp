@@ -1,6 +1,6 @@
-#include "Utility/VkInitialisers.h"
+#include "Renderer/Utility/VkInitialisers.h"
 
-namespace Utils
+namespace Renderer::Utils
 {
     VkCommandPoolCreateInfo CommandPoolCreateInfo(uint32_t queue_family_index, VkCommandPoolCreateFlags flags)
     {
@@ -184,4 +184,4 @@ namespace Utils
         return info;
     }
 
-} // namespace Utils
+} // namespace Renderer::Utils

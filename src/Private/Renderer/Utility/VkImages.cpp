@@ -1,7 +1,8 @@
-#include "Utility/VkImages.h"
-#include "VkBootstrapDispatch.h"
+#include "Renderer/Utility/VkImages.h"
 
-namespace Utils
+#include <VkBootstrapDispatch.h>
+
+namespace Renderer::Utils
 {
     void TransitionImage(vkb::DispatchTable* device_dispatch, VkCommandBuffer cmd, VkImage image,
                          VkImageLayout current_layout, VkImageLayout target_layout)
@@ -81,4 +82,4 @@ namespace Utils
 
         return subImage;
     }
-} // namespace Utils
+} // namespace Renderer::Utils

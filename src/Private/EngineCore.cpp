@@ -17,8 +17,9 @@ EngineCore::EngineCore(int width, int height)
     m_window = SDL_CreateWindow("Vulkan Engine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height,
                                 window_flags);
 
-    m_renderer = std::make_unique<VulkanEngine>(width, height, m_window, 1.0f, /* use_validation_layers = */ true,
-                                                /* immediate_uploads = */ false);
+    m_renderer =
+        std::make_unique<Renderer::VulkanEngine>(width, height, m_window, 1.0f, /* use_validation_layers = */ true,
+                                                 /* immediate_uploads = */ false);
     if (m_renderer->Init() == false)
     {
         m_initialisation_failure = true;
@@ -144,8 +145,8 @@ void EngineCore::OnImgui()
             };
 
             static int current_selection = 0;
-            ComputeEffect* current_effect = &m_renderer->ComputeEffects()[m_renderer->CurrentComputeEffect()];
-            PushConstants* constants = &current_effect->push_constants;
+            Renderer::ComputeEffect* current_effect = &m_renderer->ComputeEffects()[m_renderer->CurrentComputeEffect()];
+            Renderer::PushConstants* constants = &current_effect->push_constants;
             static float data1[4];
             static float data2[4];
             static float data3[4];
