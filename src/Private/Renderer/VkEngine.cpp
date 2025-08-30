@@ -320,12 +320,13 @@ namespace Renderer
         // we set up the flags so that the memory can end up in either BAR or VRAM that is
         // inaccessible by host. If it ends up in bar, we can simply map it and copy into it. If
         // not, we need to create a staging buffer and upload it with a command.
+        VkBufferUsageFlags created_buffer_usage = usage | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
         VmaMemoryUsage allocation_usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
         VmaAllocationCreateFlags allocation_flags =
             VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
             VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
         AllocatedBuffer buffer =
-            CreateBuffer(buffer_size, usage, allocation_usage, allocation_flags, debug_name);
+            CreateBuffer(buffer_size, created_buffer_usage, allocation_usage, allocation_flags, debug_name);
 
         VkMemoryPropertyFlags memory_properties;
         vmaGetAllocationMemoryProperties(m_allocator, buffer.allocation, &memory_properties);
@@ -337,8 +338,22 @@ namespace Renderer
         }
         else
         {
-            // #TODO: implement image upload request
-            std::cerr << "[!] Trying to copy image data to GPU only memory, not doing it!" << std::endl;
+            VkBufferUsageFlags staging_buffer_usage = usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+            VmaMemoryUsage staging_memory_usage = VMA_MEMORY_USAGE_AUTO;
+            VmaAllocationCreateFlags allocation_flags =
+                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+            AllocatedBuffer staging_buffer = CreateBuffer(
+                buffer_size, staging_buffer_usage, staging_memory_usage, allocation_flags, debug_name
+            );
+
+            vmaCopyMemoryToAllocation(m_allocator, buffer_data, staging_buffer.allocation, 0, buffer_size);
+
+            // no offsets, just an honest to god copy
+            std::unique_ptr<Utils::IUploadRequest> upload_request =
+                std::make_unique<Utils::BufferUploadRequest>(
+                    buffer_size, staging_buffer, buffer, Utils::UploadType::Deferred, 0, 0, debug_name
+                );
+            RequestUpload(std::move(upload_request));
         }
 
         return buffer;
@@ -396,7 +411,7 @@ namespace Renderer
         void* image_data,
         VkExtent3D image_extent,
         VkFormat format,
-        VkImageUsageFlags usage,
+        VkImageUsageFlags image_usage,
         bool mipmapped,
         const char* debug_name
     )
@@ -406,21 +421,28 @@ namespace Renderer
         const size_t image_data_size = size_t(image_extent.width) * size_t(image_extent.height) *
                                        size_t(image_extent.depth) *
                                        4ul; // assuming RGBA8, 1 byte for each component
+
+        // because we might be allocating into non host visible memory, we need to make sure the target image
+        // can be copied into
+        VkImageUsageFlags target_image_usage = image_usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_AUTO;
         VkMemoryPropertyFlags required_memory_flags =
             0; // actually anything is fine, we want the most performant one
         VmaAllocationCreateFlags allocation_flags =
             VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT |
             VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT; // this makes is so that
-                                                                          // we might get a
-                                                                          // non-mappable memory
+        // we might get a
+        // non-mappable memory
+
+        VkImageAspectFlagBits aspect_flags =
+            VK_IMAGE_ASPECT_COLOR_BIT; // we assume RGBA8 so has to be colour.
 
         AllocatedImage image = AllocateImage(
             image_extent,
             format,
-            usage,
+            target_image_usage,
             memory_usage,
-            VK_IMAGE_ASPECT_COLOR_BIT,
+            aspect_flags,
             required_memory_flags,
             allocation_flags,
             mipmapped,
@@ -437,8 +459,40 @@ namespace Renderer
         }
         else
         {
-            // #TODO: implement image upload request
-            std::cerr << "[!] Trying to copy image data to GPU only memory, not doing it!" << std::endl;
+            // since the wise allocator decided that the most optimal place for the image to be read from is
+            // not host visible, we need to create a staging image that is visible on host and copy that over
+            // with a command buffer.
+            VkImageUsageFlags staging_image_usage = image_usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+            VmaMemoryUsage staging_memory_usage = VMA_MEMORY_USAGE_AUTO;
+            VmaAllocationCreateFlags allocation_flags =
+                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+            AllocatedImage staging_image = AllocateImage(
+                image_extent,
+                format,
+                staging_image_usage,
+                staging_memory_usage,
+                aspect_flags,
+                0,
+                allocation_flags,
+                false,
+                debug_name
+            );
+
+            // don't forget this! (I forgot it and spent legit 1.5 hours debugging why the FUCK the texture is
+            // black).
+            vmaCopyMemoryToAllocation(m_allocator, image_data, staging_image.allocation, 0, image_data_size);
+
+            std::unique_ptr<Utils::IUploadRequest> upload_request =
+                std::make_unique<Utils::ImageUploadRequest>(
+                    image_extent,
+                    staging_image,
+                    image,
+                    Utils::UploadType::Deferred,
+                    VkOffset3D{},
+                    VkOffset3D{},
+                    debug_name
+                );
+            RequestUpload(std::move(upload_request));
         }
 
         return image;

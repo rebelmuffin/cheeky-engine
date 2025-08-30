@@ -71,4 +71,68 @@ namespace Renderer::Utils
         UploadType m_upload_type;
         std::string m_debug_name;
     };
+
+    class BufferUploadRequest : public IUploadRequest
+    {
+      public:
+        /// BufferUploadRequest will take ownership of the staging buffer and destroy it after the upload is
+        /// complete.
+        BufferUploadRequest(
+            size_t buffer_size,
+            AllocatedBuffer staging_buffer,
+            AllocatedBuffer target_buffer,
+            UploadType upload_type,
+            size_t src_offset = 0,
+            size_t dst_offset = 0,
+            std::string_view debug_name = "unnamed_buffer_upload"
+        );
+        virtual ~BufferUploadRequest() = default;
+
+        UploadExecutionResult ExecuteUpload(VulkanEngine& engine, VkCommandBuffer cmd) override;
+        void DestroyResources(VulkanEngine& engine) override;
+
+        std::string_view DebugName() const override { return m_debug_name; }
+        UploadType GetUploadType() const override { return m_upload_type; }
+
+      private:
+        size_t m_buffer_size;
+        size_t m_src_offset;
+        size_t m_dst_offset;
+        AllocatedBuffer m_staging_buffer;
+        AllocatedBuffer m_target_buffer;
+        UploadType m_upload_type;
+        std::string m_debug_name;
+    };
+
+    class ImageUploadRequest : public IUploadRequest
+    {
+      public:
+        /// ImageUploadRequest will take ownership of the staging image and destroy it after the upload is
+        /// complete.
+        ImageUploadRequest(
+            VkExtent3D image_extent,
+            AllocatedImage staging_image,
+            AllocatedImage target_image,
+            UploadType upload_type,
+            VkOffset3D src_offset = {},
+            VkOffset3D dst_offset = {},
+            std::string_view debug_name = "unnamed_image_upload"
+        );
+        virtual ~ImageUploadRequest() = default;
+
+        UploadExecutionResult ExecuteUpload(VulkanEngine& engine, VkCommandBuffer cmd) override;
+        void DestroyResources(VulkanEngine& engine) override;
+
+        std::string_view DebugName() const override { return m_debug_name; }
+        UploadType GetUploadType() const override { return m_upload_type; }
+
+      private:
+        VkExtent3D m_image_extent;
+        VkOffset3D m_src_offset;
+        VkOffset3D m_dst_offset;
+        AllocatedImage m_staging_image;
+        AllocatedImage m_target_image;
+        UploadType m_upload_type;
+        std::string m_debug_name;
+    };
 } // namespace Renderer::Utils
