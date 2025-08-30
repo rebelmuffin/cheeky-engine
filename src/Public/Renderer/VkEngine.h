@@ -101,9 +101,11 @@ namespace Renderer
         }
 
         AllocatedBuffer CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage, VmaMemoryUsage memory_usage,
+                                     VmaAllocationCreateFlags allocation_flags = 0,
+                                     const char* debug_name = "unnamed_buffer");
+        AllocatedBuffer CreateBuffer(void* buffer_data, size_t buffer_size, VkBufferUsageFlags usage,
                                      const char* debug_name = "unnamed_buffer");
         void DestroyBuffer(const AllocatedBuffer& buffer);
-        GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
         // allocate an empty image with given dimensions.
         AllocatedImage AllocateImage(VkExtent3D image_extent, VkFormat format, VkImageUsageFlags usage,
@@ -117,6 +119,8 @@ namespace Renderer
                                      VkImageUsageFlags usage, bool mipmapped = false,
                                      const char* debug_name = "unnamed_image");
         void DestroyImage(const AllocatedImage& image);
+
+        GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
         void RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request);
 

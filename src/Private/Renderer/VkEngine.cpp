@@ -261,7 +261,8 @@ namespace Renderer
 #pragma region Allocation_Destruction
 
     AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocation_size, VkBufferUsageFlags usage,
-                                               VmaMemoryUsage memory_usage, const char* debug_name)
+                                               VmaMemoryUsage memory_usage, VmaAllocationCreateFlags allocation_flags,
+                                               const char* debug_name)
     {
         VkBufferCreateInfo buffer_info{};
         buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -271,7 +272,7 @@ namespace Renderer
 
         VmaAllocationCreateInfo alloc_create_info{};
         alloc_create_info.usage = memory_usage;
-        alloc_create_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        alloc_create_info.flags = allocation_flags;
         AllocatedBuffer buffer;
 
         VK_CHECK(vmaCreateBuffer(m_allocator, &buffer_info, &alloc_create_info, &buffer.buffer, &buffer.allocation,
@@ -281,49 +282,38 @@ namespace Renderer
         return buffer;
     }
 
+    AllocatedBuffer VulkanEngine::CreateBuffer(void* buffer_data, size_t buffer_size, VkBufferUsageFlags usage,
+                                               const char* debug_name)
+    {
+        // we set up the flags so that the memory can end up in either BAR or VRAM that is inaccessible by host. If it
+        // ends up in bar, we can simply map it and copy into it. If not, we need to create a staging buffer and upload
+        // it with a command.
+        VmaMemoryUsage allocation_usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+        VmaAllocationCreateFlags allocation_flags = VMA_ALLOCATION_CREATE_MAPPED_BIT |
+                                                    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                                                    VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
+        AllocatedBuffer buffer = CreateBuffer(buffer_size, usage, allocation_usage, allocation_flags, debug_name);
+
+        VkMemoryPropertyFlags memory_properties;
+        vmaGetAllocationMemoryProperties(m_allocator, buffer.allocation, &memory_properties);
+
+        if (memory_properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+        {
+            // this is mappable! We simply map it and immediately copy the data over.
+            vmaCopyMemoryToAllocation(m_allocator, buffer_data, buffer.allocation, 0, buffer_size);
+        }
+        else
+        {
+            // #TODO: implement image upload request
+            std::cerr << "[!] Trying to copy image data to GPU only memory, not doing it!" << std::endl;
+        }
+
+        return buffer;
+    }
+
     void VulkanEngine::DestroyBuffer(const AllocatedBuffer& buffer)
     {
         vmaDestroyBuffer(m_allocator, buffer.buffer, buffer.allocation);
-    }
-
-    GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
-    {
-        const size_t vertex_buffer_size = vertices.size() * sizeof(Vertex);
-        const size_t index_buffer_size = indices.size() * sizeof(uint32_t);
-
-        GPUMeshBuffers buffers{};
-
-        // storage and shader device address to make VB an SSBO that we can access through vertex pulling. Transfer so
-        // we can copy into them.
-        VkBufferUsageFlags vertex_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                          VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-        buffers.vertex_buffer =
-            CreateBuffer(vertex_buffer_size, vertex_usage, VMA_MEMORY_USAGE_GPU_ONLY, "buffer_mesh_vertex");
-
-        VkBufferDeviceAddressInfo device_address{};
-        device_address.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        device_address.pNext = nullptr;
-        device_address.buffer = buffers.vertex_buffer.buffer;
-        buffers.vertex_buffer_address = m_device_dispatch.getBufferDeviceAddress(&device_address);
-
-        VkBufferUsageFlags index_usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-        buffers.index_buffer =
-            CreateBuffer(index_buffer_size, index_usage, VMA_MEMORY_USAGE_GPU_ONLY, "buffer_mesh_index");
-
-        // the buffers are created. Now we need to do the same thing basically and create a staging buffer.
-
-        AllocatedBuffer staging = CreateBuffer(vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                               VMA_MEMORY_USAGE_CPU_ONLY, "buffer_mesh_staging");
-
-        vmaCopyMemoryToAllocation(m_allocator, vertices.data(), staging.allocation, 0, vertex_buffer_size);
-        vmaCopyMemoryToAllocation(m_allocator, indices.data(), staging.allocation, vertex_buffer_size,
-                                  index_buffer_size);
-
-        std::unique_ptr<Utils::IUploadRequest> upload_request = std::make_unique<Utils::MeshUploadRequest>(
-            vertex_buffer_size, index_buffer_size, buffers, staging, Utils::UploadType::Deferred);
-        RequestUpload(std::move(upload_request));
-
-        return buffers;
     }
 
     AllocatedImage VulkanEngine::AllocateImage(VkExtent3D image_extent, VkFormat format, VkImageUsageFlags usage,
@@ -400,6 +390,47 @@ namespace Renderer
     {
         m_device_dispatch.destroyImageView(image.image_view, nullptr);
         vmaDestroyImage(m_allocator, image.image, image.allocation);
+    }
+
+    GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
+    {
+        const size_t vertex_buffer_size = vertices.size() * sizeof(Vertex);
+        const size_t index_buffer_size = indices.size() * sizeof(uint32_t);
+
+        GPUMeshBuffers buffers{};
+
+        // storage and shader device address to make VB an SSBO that we can access through vertex pulling. Transfer so
+        // we can copy into them.
+        VkBufferUsageFlags vertex_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                          VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        buffers.vertex_buffer = CreateBuffer(vertex_buffer_size, vertex_usage, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, 0,
+                                             "buffer_mesh_vertex");
+
+        VkBufferDeviceAddressInfo device_address{};
+        device_address.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        device_address.pNext = nullptr;
+        device_address.buffer = buffers.vertex_buffer.buffer;
+        buffers.vertex_buffer_address = m_device_dispatch.getBufferDeviceAddress(&device_address);
+
+        VkBufferUsageFlags index_usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        buffers.index_buffer =
+            CreateBuffer(index_buffer_size, index_usage, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, 0, "buffer_mesh_index");
+
+        // the buffers are created. Now we need to do the same thing basically and create a staging buffer.
+
+        AllocatedBuffer staging =
+            CreateBuffer(vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                         VMA_MEMORY_USAGE_CPU_ONLY, VMA_ALLOCATION_CREATE_MAPPED_BIT, "buffer_mesh_staging");
+
+        vmaCopyMemoryToAllocation(m_allocator, vertices.data(), staging.allocation, 0, vertex_buffer_size);
+        vmaCopyMemoryToAllocation(m_allocator, indices.data(), staging.allocation, vertex_buffer_size,
+                                  index_buffer_size);
+
+        std::unique_ptr<Utils::IUploadRequest> upload_request = std::make_unique<Utils::MeshUploadRequest>(
+            vertex_buffer_size, index_buffer_size, buffers, staging, Utils::UploadType::Deferred);
+        RequestUpload(std::move(upload_request));
+
+        return buffers;
     }
 
     void VulkanEngine::RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request)
@@ -592,7 +623,7 @@ namespace Renderer
         // won't need to read from system memory. if that is not the case, lol
         AllocatedBuffer scene_data_buffer =
             CreateBuffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                         VMA_MEMORY_USAGE_CPU_TO_GPU, "scene data buffer");
+                         VMA_MEMORY_USAGE_CPU_TO_GPU, VMA_ALLOCATION_CREATE_MAPPED_BIT, "scene data buffer");
         // delete it next frame
         GetCurrentFrame().deletion_queue.PushFunction("scene data buffer",
                                                       [this, buffer = scene_data_buffer]() { DestroyBuffer(buffer); });
