@@ -50,10 +50,10 @@ includes = include_directories('src/Public', 'subprojects') # is this okay?
 
 executable(
     'cheeky-vk-new',
-    'src/Private/ThirdParty/VkMemAllocImpl.cpp',
     'src/Private/main.cpp',
     'src/Private/EngineCore.cpp',
     'src/Private/Renderer/VkEngine.cpp',
+    'src/Private/Renderer/Material.cpp',
     'src/Private/Renderer/Utility/VkLoader.cpp',
     'src/Private/Renderer/Utility/VkPipelines.cpp',
     'src/Private/Renderer/Utility/VkInitialisers.cpp',
@@ -61,6 +61,7 @@ executable(
     'src/Private/Renderer/Utility/VkDescriptors.cpp',
     'src/Private/Renderer/Utility/DeletionQueue.cpp',
     'src/Private/Renderer/Utility/UploadRequest.cpp',
+    'src/Private/ThirdParty/VkMemAllocImpl.cpp',
     shader_gen_src,
     dependencies: [
         vulkan_dep,

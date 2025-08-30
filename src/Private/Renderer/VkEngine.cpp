@@ -1,5 +1,6 @@
 #include "Renderer/VkEngine.h"
 
+#include "Renderer/MaterialInterface.h"
 #include "Renderer/Utility/UploadRequest.h"
 #include "Renderer/Utility/VkDescriptors.h"
 #include "Renderer/Utility/VkImages.h"
@@ -88,7 +89,9 @@ namespace Renderer
     VulkanEngine::VulkanEngine(uint32_t window_width, uint32_t window_height, SDL_Window* window,
                                float backbuffer_scale, bool use_validation_layers, bool immediate_uploads)
         : m_backbuffer_scale(backbuffer_scale), m_window_extent({window_width, window_height}), m_window(window),
-          m_use_validation_layers(use_validation_layers), m_force_all_uploads_immediate(immediate_uploads)
+          m_use_validation_layers(use_validation_layers), m_force_all_uploads_immediate(immediate_uploads),
+          m_material_interface{
+              &m_device_dispatch, &m_allocator, &m_draw_image, &m_depth_image, &m_scene_data_descriptor_layout, this}
     {
     }
 

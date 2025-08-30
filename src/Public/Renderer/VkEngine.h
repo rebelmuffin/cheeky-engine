@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Renderer/MaterialInterface.h"
 #include "Renderer/Utility/DeletionQueue.h"
 #include "Renderer/Utility/UploadRequest.h"
 #include "Renderer/Utility/VkDescriptors.h"
@@ -234,6 +235,9 @@ namespace Renderer
 
         GPUSceneData m_scene_data; // this is the scene data that is uploaded each frame.
         VkDescriptorSetLayout m_scene_data_descriptor_layout;
+
+        // interfaces
+        MaterialEngineInterface m_material_interface;
 
         bool m_draw_engine_settings = false;
         float m_camera_yaw_rad = 0.0f;
