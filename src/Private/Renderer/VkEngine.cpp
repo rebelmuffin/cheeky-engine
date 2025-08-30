@@ -135,10 +135,10 @@ namespace Renderer
             frame.deletion_queue.Flush();
         }
 
-        m_deletion_queue.Flush();
-
         // swapchain isn't handled by the deletion queue because it gets recreated at runtime
         DestroySwapchain();
+
+        m_deletion_queue.Flush();
 
         VK_DEVICE_CALL(m_device, vkDestroyDevice, nullptr);
         vkb::destroy_debug_utils_messenger(m_instance, m_debug_messenger);
@@ -867,6 +867,10 @@ namespace Renderer
 
         // all stages maybe a bit heavy-handed but meh
         m_scene_data_descriptor_layout = builder.Build(m_device_dispatch, VK_SHADER_STAGE_ALL_GRAPHICS);
+
+        m_deletion_queue.PushFunction("scene descriptor layout", [this]() {
+            m_device_dispatch.destroyDescriptorSetLayout(m_scene_data_descriptor_layout, nullptr);
+        });
     }
 
     void VulkanEngine::InitBackgroundDescriptors()
@@ -1004,10 +1008,6 @@ namespace Renderer
             std::cout << "[!] Failed to create Mesh pipeline layout." << std::endl;
             return false;
         }
-
-        m_deletion_queue.PushFunction("mesh pipeline layout", [this]() {
-            m_device_dispatch.destroyPipelineLayout(m_mesh_pipeline_layout, nullptr);
-        });
 
         VkShaderModule vertex_shader{};
         if (Utils::LoadShaderModule(m_device_dispatch, "../data/shader/mesh.vert.spv", &vertex_shader) == false)
