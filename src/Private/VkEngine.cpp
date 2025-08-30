@@ -355,8 +355,8 @@ AllocatedImage VulkanEngine::AllocateImage(void* image_data, VkExtent3D image_ex
 {
     // we'll try to use the BAR, which is addressable by both CPU and GPU. If cannot use, we'll just do a staging buffer
     // and copy from that.
-    const uint32_t image_data_size =
-        image_extent.width * image_extent.height * image_extent.depth * 4; // assuming RGBA8, 1 byte for each component
+    const size_t image_data_size = size_t(image_extent.width) * size_t(image_extent.height) *
+                                   size_t(image_extent.depth) * 4ul; // assuming RGBA8, 1 byte for each component
     VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_AUTO;
     VkMemoryPropertyFlags required_memory_flags = 0; // actually anything is fine, we want the most performant one
     VmaAllocationCreateFlags allocation_flags =
