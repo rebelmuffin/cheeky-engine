@@ -11,6 +11,7 @@
 #include <vector>
 
 #include <vk_mem_alloc.h>
+#include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
@@ -23,7 +24,7 @@
         VkResult err = x;                                                                                              \
         if (err)                                                                                                       \
         {                                                                                                              \
-            std::cout << "Detected Vulkan error: " << static_cast<uint64_t>(err) << std::endl;                         \
+            std::cout << "Detected Vulkan error: " << string_VkResult(err) << std::endl;                               \
             abort();                                                                                                   \
         }                                                                                                              \
     } while (0)
