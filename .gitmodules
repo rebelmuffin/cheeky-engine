@@ -1,3 +1,6 @@
 [submodule "subprojects/fastgltf"]
 	path = subprojects/fastgltf
 	url = https://github.com/spnda/fastgltf.git
+[submodule "subprojects/vkbootstrap"]
+	path = subprojects/vkbootstrap
+	url = https://github.com/charles-lunarg/vk-bootstrap
