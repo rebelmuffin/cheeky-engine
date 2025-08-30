@@ -493,6 +493,9 @@ namespace Renderer
             m_allocator, indices.data(), staging.allocation, vertex_buffer_size, index_buffer_size
         );
 
+        // we can't do normal buffer upload here because we do two uploads from a single staging buffer.
+        // that is not possible with buffer upload requests because those take ownership of the staging buffer
+        // so after one is done, and the other gets to the upload, the staging buffer will be destroyed.
         std::unique_ptr<Utils::IUploadRequest> upload_request = std::make_unique<Utils::MeshUploadRequest>(
             vertex_buffer_size, index_buffer_size, buffers, staging, Utils::UploadType::Deferred
         );
@@ -511,6 +514,8 @@ namespace Renderer
                     upload_request->ExecuteUpload(*this, cmd);
                 }
             );
+
+            upload_request->DestroyResources(*this);
             return;
         }
 
