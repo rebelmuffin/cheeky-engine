@@ -28,7 +28,7 @@ namespace Renderer
 
     struct MaterialInstance
     {
-        MaterialPipeline* pipeline;
+        const MaterialPipeline* pipeline;
         VkDescriptorSet material_set;
         MaterialPass pass;
     };
@@ -40,6 +40,7 @@ namespace Renderer
         MaterialPipeline transparent_pipeline;
 
         VkDescriptorSetLayout descriptor_layout;
+        bool loaded = false;
 
         // This is what gets written into the uniform buffer
         struct MaterialParameters
@@ -62,8 +63,6 @@ namespace Renderer
             uint32_t buffer_offset;
         };
 
-        Utils::DescriptorWriter descriptor_writer;
-
         bool BuildPipelines(MaterialEngineInterface& interface);
         void DestroyResources(vkb::DispatchTable& device_dispatch);
 
@@ -73,6 +72,6 @@ namespace Renderer
             MaterialPass pass,
             const Resources& resources,
             Utils::DescriptorAllocatorDynamic& descriptor_allocator
-        );
+        ) const;
     };
 } // namespace Renderer
