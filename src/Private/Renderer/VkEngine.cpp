@@ -141,9 +141,9 @@ namespace Renderer
 
         m_material_interface = MaterialEngineInterface{ &m_device_dispatch,
                                                         &m_allocator,
-                                                        &main_scene->depth_image,
-                                                        &main_scene->depth_image,
-                                                        &m_scene_data_descriptor_layout,
+                                                        VKENGINE_DRAW_IMAGE_FORMAT,
+                                                        VKENGINE_DEPTH_IMAGE_FORMAT,
+                                                        m_scene_data_descriptor_layout,
                                                         this };
 
         return true;
@@ -1432,8 +1432,8 @@ namespace Renderer
                               .SetInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
                               .SetPolygonMode(VK_POLYGON_MODE_FILL)
                               .SetCullMode(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_CLOCKWISE)
-                              .SetColorAttachmentFormat(VK_FORMAT_R16G16B16A16_SFLOAT)
-                              .SetDepthFormat(VK_FORMAT_D32_SFLOAT)
+                              .SetColorAttachmentFormat(VKENGINE_DRAW_IMAGE_FORMAT)
+                              .SetDepthFormat(VKENGINE_DEPTH_IMAGE_FORMAT)
                               .SetMultisamplingNone()
                               .EnableBlendingAlpha()
                               .EnableDepthTest(VK_COMPARE_OP_GREATER_OR_EQUAL)
@@ -1692,7 +1692,7 @@ namespace Renderer
     {
         VkExtent3D image_extent{ width, height, 1 };
 
-        VkFormat image_format = VK_FORMAT_R16G16B16A16_SFLOAT;
+        VkFormat image_format = VKENGINE_DRAW_IMAGE_FORMAT;
         VkImageUsageFlags usage_flags{};
         usage_flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         usage_flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -1720,7 +1720,7 @@ namespace Renderer
     AllocatedImage VulkanEngine::CreateDepthImage(uint32_t width, uint32_t height)
     {
         VkExtent3D image_extent{ width, height, 1 };
-        VkFormat image_format = VK_FORMAT_D32_SFLOAT;
+        VkFormat image_format = VKENGINE_DEPTH_IMAGE_FORMAT;
         VkImageUsageFlags usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
         VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
         VkImageAspectFlagBits aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;

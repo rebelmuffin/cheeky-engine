@@ -15,9 +15,9 @@ namespace Renderer
         // internals of the engine that aren't normally exposed
         vkb::DispatchTable* device_dispatch_table;
         VmaAllocator* allocator;
-        AllocatedImage* draw_image;
-        AllocatedImage* depth_image;
-        VkDescriptorSetLayout* scene_data_descriptor_layout;
+        VkFormat draw_image_format;
+        VkFormat depth_image_format;
+        VkDescriptorSetLayout scene_data_descriptor_layout;
 
         // provide the engine itself as well to provide access to the engine's public interface
         VulkanEngine* engine;

@@ -8,10 +8,15 @@
 #include "Renderer/Utility/VkDescriptors.h"
 #include "Renderer/Utility/VkLoader.h"
 #include "Renderer/VkTypes.h"
-#include "VkBootstrapDispatch.h"
+
+#include <VkBootstrapDispatch.h>
 #include <vulkan/vulkan_core.h>
 
 struct SDL_Window;
+
+// we don't support having separate formats for scenes, these are unified across the engine.
+constexpr VkFormat VKENGINE_DRAW_IMAGE_FORMAT = VK_FORMAT_R16G16B16A16_SFLOAT;
+constexpr VkFormat VKENGINE_DEPTH_IMAGE_FORMAT = VK_FORMAT_D32_SFLOAT;
 
 namespace Renderer
 {

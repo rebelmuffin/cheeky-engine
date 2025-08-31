@@ -23,7 +23,7 @@ namespace Renderer
         );
 
         // create the layouts for each pipeline
-        std::array<VkDescriptorSetLayout, 2> set_layouts{ *interface.scene_data_descriptor_layout,
+        std::array<VkDescriptorSetLayout, 2> set_layouts{ interface.scene_data_descriptor_layout,
                                                           descriptor_layout };
 
         VkPushConstantRange range{ VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants) };
@@ -80,8 +80,8 @@ namespace Renderer
             ) // idk why the meshes end up having counter clockwise tris
             .SetInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
             .SetPolygonMode(VK_POLYGON_MODE_FILL)
-            .SetColorAttachmentFormat(interface.draw_image->image_format)
-            .SetDepthFormat(interface.depth_image->image_format)
+            .SetColorAttachmentFormat(interface.draw_image_format)
+            .SetDepthFormat(interface.depth_image_format)
             .EnableDepthTest(VK_COMPARE_OP_GREATER_OR_EQUAL) // greater or equal for inverse depth
             .SetMultisamplingNone()
             .DisableBlending(); // disabled for opaque one
