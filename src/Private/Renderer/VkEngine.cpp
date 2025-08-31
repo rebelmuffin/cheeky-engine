@@ -1370,12 +1370,12 @@ namespace Renderer
     void VulkanEngine::InitDefaultData()
     {
         // create the main scene
-        glm::u32vec2 backbuffer_size{ m_window_extent.width, m_window_extent.height };
+        glm::vec2 backbuffer_size{ m_window_extent.width, m_window_extent.height };
         backbuffer_size *= m_backbuffer_scale;
 
         Renderer::Scene new_scene{};
-        new_scene.draw_image = CreateDrawImage(backbuffer_size.x, backbuffer_size.y);
-        new_scene.depth_image = CreateDepthImage(backbuffer_size.x, backbuffer_size.y);
+        new_scene.draw_image = CreateDrawImage((uint32_t)backbuffer_size.x, (uint32_t)backbuffer_size.y);
+        new_scene.depth_image = CreateDepthImage((uint32_t)backbuffer_size.x, (uint32_t)backbuffer_size.y);
         new_scene.scene_name = "main scene";
         new_scene.render_scale = 1.0f;
 
