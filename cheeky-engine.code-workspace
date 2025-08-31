@@ -1,0 +1,271 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+				"label": "Build All (gcc)",
+				"type": "process",
+				"command": "/usr/bin/meson",
+				"args": [
+					"compile",
+					"-C",
+					"build"
+				],
+				"isBuildCommand": true,
+				"group": {
+					"isDefault": true,
+					"kind": "build"
+				},
+				"presentation": {
+					"reveal": "always",
+					"panel": "shared"
+				},
+				"options": {
+					"env": {
+						"CXX": "/usr/bin/g++",
+						"CC": "/usr/bin/gcc"
+					}
+				},
+				"problemMatcher": []
+			},
+			{
+				"label": "Build All (clang)",
+				"type": "process",
+				"command": "/usr/bin/meson",
+				"args": [
+					"compile",
+					"-C",
+					"build-clang"
+				],
+				"isBuildCommand": true,
+				"group": {
+					"kind": "build"
+				},
+				"presentation": {
+					"reveal": "always",
+					"panel": "shared"
+				},
+				"options": {
+					"env": {
+						"CXX": "/usr/bin/clang++",
+						"CC": "/usr/bin/clang"
+					}
+				},
+				"problemMatcher": []
+			},
+			{
+				"label": "Reconfigure (gcc)",
+				"type": "process",
+				"command": "/usr/bin/meson",
+				"args": [
+					"build",
+					"--reconfigure",
+					"--clearcache"
+				],
+				"presentation": {
+					"reveal": "always",
+					"panel": "shared"
+				}
+			},
+			{
+				"label": "Reconfigure (clang)",
+				"type": "process",
+				"command": "/usr/bin/meson",
+				"args": [
+					"build-clang",
+					"--reconfigure",
+					"--clearcache"
+				],
+				"presentation": {
+					"reveal": "always",
+					"panel": "shared"
+				}
+			},
+			{
+				"label": "Format Codebase",
+				"type": "shell",
+				"command": "./format_codebase.sh",
+				"group": "none",
+				"options": {
+					"cwd": "${workspaceFolder}"
+				},
+				"presentation": {
+					"echo": true,
+					"reveal": "always",
+					"focus": false,
+					"panel": "shared",
+					"showReuseMessage": true,
+					"clear": false
+				},
+				"problemMatcher": []
+			}
+		]
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "Launch Cheeky (gdb)",
+				"program": "${workspaceRoot}/build/cheeky-vk-new",
+				"cwd": "${workspaceRoot}/build",
+				"linux": {
+					"MIMode": "gdb",
+					"miDebuggerPath": "/usr/bin/gdb",
+					"targetArchitecture": "x64"
+				},
+				"type": "cppdbg",
+				"request": "launch",
+				"preLaunchTask": "Build All (gcc)",
+				"externalConsole": false,
+				"internalConsoleOptions": "openOnSessionStart",
+				"environment": [
+					{
+						"name": "MANGOHUD",
+						"value": "0"
+					}
+				]
+			},
+			{
+				"name": "Launch Cheeky (lldb)",
+				"program": "${workspaceRoot}/build/cheeky-vk-new",
+				"cwd": "${workspaceRoot}/build",
+				"linux": {
+					"MIMode": "lldb",
+					"miDebuggerPath": "/usr/bin/lldb-mi",
+					"targetArchitecture": "x64"
+				},
+				"type": "cppdbg",
+				"request": "launch",
+				"preLaunchTask": "Build All (gcc)",
+				"externalConsole": false,
+				"internalConsoleOptions": "openOnSessionStart",
+				"environment": [
+					{
+						"name": "MANGOHUD",
+						"value": "0"
+					}
+				]
+			},
+			{
+				"name": "Launch with RenderDoc",
+				"program": "/usr/bin/renderdoccmd",
+				"cwd": "${workspaceRoot}/build",
+				"linux": {
+					"MIMode": "lldb",
+					"miDebuggerPath": "/usr/bin/lldb-mi",
+					"targetArchitecture": "x64"
+				},
+				"args": [
+					"capture",
+					"--capture-file",
+					"${workspaceRoot}/captures/capture",
+					"${workspaceRoot}/build/cheeky-vk-new",
+				],
+				"type": "cppdbg",
+				"request": "launch",
+				"preLaunchTask": "Build All (gcc)",
+				"externalConsole": false,
+				"internalConsoleOptions": "openOnSessionStart",
+				"environment": [
+					{
+						"name": "MANGOHUD",
+						"value": "0"
+					},
+				]
+			}
+		]
+	},
+	"settings": {
+		"C_Cpp.default.configurationProvider": "mesonbuild.mesonbuild",
+		"C_Cpp.default.browse.limitSymbolsToIncludedHeaders": true,
+		"mesonbuild.configureOnOpen": false,
+		"mesonbuild.buildFolder": "build",
+		"clangd.enableCodeCompletion": true,
+		"files.associations": {
+			"*.css": "tailwindcss",
+			"ostream": "cpp",
+			"any": "cpp",
+			"complex": "cpp",
+			"format": "cpp",
+			"array": "cpp",
+			"__config": "cpp",
+			"*.inc": "cpp",
+			"variant": "cpp",
+			"functional": "cpp",
+			"vector": "cpp",
+			"iostream": "cpp",
+			"deque": "cpp",
+			"list": "cpp",
+			"string": "cpp",
+			"string_view": "cpp",
+			"span": "cpp",
+			"map": "cpp",
+			"set": "cpp",
+			"cctype": "cpp",
+			"cmath": "cpp",
+			"cstdarg": "cpp",
+			"cstddef": "cpp",
+			"cstdio": "cpp",
+			"cstdlib": "cpp",
+			"cstring": "cpp",
+			"ctime": "cpp",
+			"cwchar": "cpp",
+			"cwctype": "cpp",
+			"atomic": "cpp",
+			"bit": "cpp",
+			"*.tcc": "cpp",
+			"charconv": "cpp",
+			"chrono": "cpp",
+			"cinttypes": "cpp",
+			"compare": "cpp",
+			"concepts": "cpp",
+			"cstdint": "cpp",
+			"forward_list": "cpp",
+			"unordered_map": "cpp",
+			"exception": "cpp",
+			"algorithm": "cpp",
+			"iterator": "cpp",
+			"memory": "cpp",
+			"memory_resource": "cpp",
+			"optional": "cpp",
+			"random": "cpp",
+			"ratio": "cpp",
+			"system_error": "cpp",
+			"tuple": "cpp",
+			"type_traits": "cpp",
+			"utility": "cpp",
+			"initializer_list": "cpp",
+			"iomanip": "cpp",
+			"iosfwd": "cpp",
+			"istream": "cpp",
+			"limits": "cpp",
+			"mutex": "cpp",
+			"new": "cpp",
+			"semaphore": "cpp",
+			"shared_mutex": "cpp",
+			"sstream": "cpp",
+			"stdexcept": "cpp",
+			"stop_token": "cpp",
+			"streambuf": "cpp",
+			"thread": "cpp",
+			"typeinfo": "cpp",
+			"__bit_reference": "cpp",
+			"__locale": "cpp",
+			"__split_buffer": "cpp",
+			"__threading_support": "cpp",
+			"__verbose_abort": "cpp",
+			"ios": "cpp",
+			"locale": "cpp",
+			"bitset": "cpp",
+			"print": "cpp",
+			"__node_handle": "cpp",
+			"__tree": "cpp",
+			"*.ipp": "cpp"
+		},
+	}
+}
