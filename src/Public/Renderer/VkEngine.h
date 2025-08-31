@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Renderer/MaterialInterface.h"
+#include "Renderer/RenderObject.h"
+#include "Renderer/Scene.h"
 #include "Renderer/Utility/DeletionQueue.h"
 #include "Renderer/Utility/UploadRequest.h"
 #include "Renderer/Utility/VkDescriptors.h"
@@ -128,7 +130,14 @@ namespace Renderer
 
         void RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request);
 
+        // helpers for creating scenes
+        AllocatedImage CreateDrawImage(uint32_t width, uint32_t height);
+        AllocatedImage CreateDepthImage(uint32_t width, uint32_t height);
+
         float test_mesh_opacity{ 1.0f };
+
+        Scene* main_scene; // this is the scene that is rendered on the main window swapchain.
+        std::vector<Scene> render_scenes;
 
       private:
         void FinishPendingUploads(VkCommandBuffer cmd);
@@ -136,8 +145,8 @@ namespace Renderer
 
         // draw loop
         void Draw(double delta_ms);
-        void DrawBackground(VkCommandBuffer cmd);
-        void DrawGeometry(VkCommandBuffer cmd);
+        void DrawSceneBackground(const Scene& scene, VkCommandBuffer cmd);
+        void DrawSceneGeometry(const Scene& scene, VkCommandBuffer cmd);
         void DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view);
 
         bool InitVulkan();
@@ -154,8 +163,6 @@ namespace Renderer
         void InitImgui();
 
         void CreateSwapchain(uint32_t width, uint32_t height);
-        void CreateDrawImage();
-        void CreateDepthImage();
 
         void DestroySwapchain();
         void ResizeSwapchain();
@@ -176,10 +183,6 @@ namespace Renderer
         PFN_vkGetDeviceProcAddr m_get_device_proc_addr;
         PFN_vkGetInstanceProcAddr m_get_instance_proc_addr;
 
-        // images used for drawing
-        AllocatedImage m_draw_image;
-        AllocatedImage m_depth_image;
-
         // default images used for debugging and fallback
         AllocatedImage m_white_image;
         AllocatedImage m_black_image;
@@ -190,8 +193,6 @@ namespace Renderer
         VkSampler m_default_sampler_nearest;
         VkSampler m_default_sampler_linear;
 
-        VkExtent2D m_draw_extent;
-        float m_render_scale = 1.0f;
         float m_backbuffer_scale;
 
         VkPipelineLayout m_gradient_pipeline_layout;
@@ -242,7 +243,6 @@ namespace Renderer
         uint64_t m_last_update_us = 0;
         bool m_resize_requested = false;
 
-        GPUSceneData m_scene_data; // this is the scene data that is uploaded each frame.
         VkDescriptorSetLayout m_scene_data_descriptor_layout;
 
         // interfaces

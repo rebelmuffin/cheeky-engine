@@ -1,6 +1,7 @@
 #include "Renderer/VkEngine.h"
 
 #include "Renderer/MaterialInterface.h"
+#include "Renderer/RenderObject.h"
 #include "Renderer/Utility/UploadRequest.h"
 #include "Renderer/Utility/VkDescriptors.h"
 #include "Renderer/Utility/VkImages.h"
@@ -14,6 +15,7 @@
 #include <SDL_video.h>
 #include <SDL_vulkan.h>
 #include <VkBootstrap.h>
+#include <array>
 #include <glm/fwd.hpp>
 #include <imgui.h>
 #include <vk_mem_alloc.h>
@@ -108,13 +110,7 @@ namespace Renderer
         m_window_extent({ window_width, window_height }),
         m_window(window),
         m_use_validation_layers(use_validation_layers),
-        m_force_all_uploads_immediate(immediate_uploads),
-        m_material_interface{ &m_device_dispatch,
-                              &m_allocator,
-                              &m_draw_image,
-                              &m_depth_image,
-                              &m_scene_data_descriptor_layout,
-                              this }
+        m_force_all_uploads_immediate(immediate_uploads)
     {
     }
 
@@ -127,8 +123,6 @@ namespace Renderer
 
         InitAllocator();
         CreateSwapchain(m_window_extent.width, m_window_extent.height);
-        CreateDrawImage();
-        CreateDepthImage();
         InitCommands();
         InitSyncStructures();
         InitFrameDescriptors();
@@ -145,6 +139,13 @@ namespace Renderer
 
         InitDefaultData();
 
+        m_material_interface = MaterialEngineInterface{ &m_device_dispatch,
+                                                        &m_allocator,
+                                                        &main_scene->depth_image,
+                                                        &main_scene->depth_image,
+                                                        &m_scene_data_descriptor_layout,
+                                                        this };
+
         return true;
     }
 
@@ -160,6 +161,18 @@ namespace Renderer
 
         // swapchain isn't handled by the deletion queue because it gets recreated at runtime
         DestroySwapchain();
+
+        // destroy the scenes
+        for (Scene& scene : render_scenes)
+        {
+            // #FIXME: this will cause a double delete if there are scenes rendering onto the same image.
+            // Solve this by keeping track of the allocated resources separately.
+            DestroyImage(scene.draw_image);
+            DestroyImage(scene.depth_image);
+        }
+
+        render_scenes.clear();
+        main_scene = nullptr;
 
         m_deletion_queue.Flush();
 
@@ -187,14 +200,39 @@ namespace Renderer
             {
                 ImGui::Text("Frame: %d", frame_number);
                 ImGui::Text("Backbuffer Scale: %.2f", m_backbuffer_scale);
-                ImGui::Text("Render Resolution: %dx%d", m_draw_extent.width, m_draw_extent.height);
                 ImGui::Text(
                     "Swapchain Resolution: %dx%d", m_swapchain_extent.width, m_swapchain_extent.height
                 );
                 ImGui::Text("Window Resolution: %dx%d", m_window_extent.width, m_window_extent.height);
             }
 
-            ImGui::SliderFloat("Render Scale", &m_render_scale, 0.1f, 1.0f);
+            if (ImGui::TreeNodeEx(
+                    "scene_list",
+                    ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed,
+                    "Scenes: %zu",
+                    render_scenes.size()
+                ))
+            {
+                for (Scene& scene : render_scenes)
+                {
+                    ImGuiTreeNodeFlags flags{};
+                    if (&scene == main_scene)
+                    {
+                        flags = ImGuiTreeNodeFlags_DefaultOpen;
+                    }
+
+                    if (ImGui::TreeNodeEx(scene.scene_name.data(), flags))
+                    {
+                        ImGui::Text(
+                            "Draw Resolution: %dx%d", scene.draw_extent.width, scene.draw_extent.height
+                        );
+                        ImGui::SliderFloat("Render Scale", &scene.render_scale, 0.1f, 1.0f);
+                        ImGui::TreePop();
+                    }
+                }
+                ImGui::TreePop();
+            }
+
             ImGui::SliderFloat("Mesh Opacity", &test_mesh_opacity, 0.0f, 1.0f);
             ImGui::Checkbox("Linear Sampling", &m_use_linear_sampling);
             VmaAllocationInfo alloc_info;
@@ -225,9 +263,9 @@ namespace Renderer
 
             if (ImGui::CollapsingHeader("Scene Lighting"))
             {
-                ImGui::ColorEdit3("Ambient Colour", &m_scene_data.ambient_colour.r);
-                ImGui::ColorEdit3("Light Colour", &m_scene_data.light_colour.r);
-                ImGui::SliderFloat3("Light Direction", &m_scene_data.light_direction.x, -1.0f, 1.0f);
+                ImGui::ColorEdit3("Ambient Colour", &main_scene->ambient_colour.r);
+                ImGui::ColorEdit3("Light Colour", &main_scene->light_colour.r);
+                ImGui::SliderFloat3("Light Direction", &main_scene->light_direction.x, -1.0f, 1.0f);
             }
 
             ImGui::End();
@@ -257,27 +295,11 @@ namespace Renderer
         glm::mat4 rotation = glm::rotate(m_camera_pitch_rad, glm::vec3(1, 0, 0)) *
                              glm::rotate(m_camera_yaw_rad, glm::vec3(0, 1, 0));
 
-        // we translate first because we want to move the world, not the camera. When we make a real
-        // camera, the order should be reversed
-        glm::mat4 view = glm::translate(m_camera_position) * rotation;
-        glm::mat4 projection = glm::perspective(
-            glm::radians(70.f), (float)m_draw_extent.width / (float)m_draw_extent.height, 10000.f, 0.1f
-        );
-
-        // invert the Y direction on projection matrix so that we are more similar
-        // to opengl and gltf axis
-        projection[1][1] *= -1;
-
-        m_scene_data.view = view;
-        m_scene_data.projection = projection;
-        m_scene_data.view_projection = projection * view;
+        main_scene->camera_position = m_camera_position;
+        main_scene->camera_rotation = rotation;
 
         Draw(delta_ms);
     }
-
-    float VulkanEngine::GetRenderScale() const { return m_render_scale; }
-
-    void VulkanEngine::SetRenderScale(float scale) { m_render_scale = std::clamp(scale, 0.1f, 1.0f); }
 
 #pragma region Allocation_Destruction
 
@@ -674,13 +696,6 @@ namespace Renderer
             return; // try again next frame
         }
 
-        m_draw_extent.height = uint32_t(
-            (float)std::min(m_swapchain_extent.height, m_draw_image.image_extent.height) * m_render_scale
-        );
-        m_draw_extent.width = uint32_t(
-            (float)std::min(m_swapchain_extent.width, m_draw_image.image_extent.width) * m_render_scale
-        );
-
         VkCommandBuffer cmd = GetCurrentFrame().command_buffer;
         VK_CHECK(m_device_dispatch.resetCommandBuffer(cmd, 0));
 
@@ -692,30 +707,44 @@ namespace Renderer
         FinishPendingUploads(cmd);
 
         // draw onto draw image.
-        VkImageLayout current = VK_IMAGE_LAYOUT_UNDEFINED;
-        VkImageLayout target = VK_IMAGE_LAYOUT_GENERAL;
-        Utils::TransitionImage(&m_device_dispatch, cmd, m_draw_image.image, current, target);
-        DrawBackground(cmd);
-        current = target;
-        target = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        Utils::TransitionImage(&m_device_dispatch, cmd, m_draw_image.image, current, target);
-        DrawGeometry(cmd);
-        current = target;
-        target = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        Utils::TransitionImage(&m_device_dispatch, cmd, m_draw_image.image, current, target);
+        for (Scene& scene : render_scenes)
+        {
+            // might be drawing on a subsection of the image.
+            glm::vec2 viewport_extent = scene.viewport_extent;
+            if (viewport_extent.x == 0.0f && viewport_extent.y == 0.0f)
+            {
+                viewport_extent =
+                    glm::vec2(scene.draw_image.image_extent.height, scene.draw_image.image_extent.width);
+            }
 
-        // copy draw into swapchain
-        current = VK_IMAGE_LAYOUT_UNDEFINED;
-        target = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            scene.draw_extent.height = uint32_t(viewport_extent.x * scene.render_scale);
+            scene.draw_extent.width = uint32_t(viewport_extent.y * scene.render_scale);
+
+            VkImageLayout current = VK_IMAGE_LAYOUT_UNDEFINED;
+            VkImageLayout target = VK_IMAGE_LAYOUT_GENERAL;
+            Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image.image, current, target);
+            DrawSceneBackground(scene, cmd);
+            current = target;
+            target = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image.image, current, target);
+            DrawSceneGeometry(scene, cmd);
+            current = target;
+            target = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image.image, current, target);
+        }
+
+        // copy the main draw into swapchain
+        VkImageLayout current = VK_IMAGE_LAYOUT_UNDEFINED;
+        VkImageLayout target = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         Utils::TransitionImage(
             &m_device_dispatch, cmd, m_swapchain_images[swapchain_image_index], current, target
         );
         Utils::CopyImageToImage(
             &m_device_dispatch,
             cmd,
-            m_draw_image.image,
+            main_scene->draw_image.image,
             m_swapchain_images[swapchain_image_index],
-            m_draw_extent,
+            main_scene->draw_extent,
             m_swapchain_extent
         );
         current = target;
@@ -764,7 +793,7 @@ namespace Renderer
         ++frame_number;
     }
 
-    void VulkanEngine::DrawBackground(VkCommandBuffer cmd)
+    void VulkanEngine::DrawSceneBackground(const Scene& scene, VkCommandBuffer cmd)
     {
         ComputeEffect& effect = m_compute_effects[m_current_effect];
         m_device_dispatch.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
@@ -790,13 +819,13 @@ namespace Renderer
 
         m_device_dispatch.cmdDispatch(
             cmd,
-            uint32_t(std::ceil(float(m_draw_extent.width) / 16.0f)),
-            uint32_t(std::ceil(float(m_draw_extent.height) / 16.0f)),
+            uint32_t(std::ceil(float(scene.draw_extent.width) / 16.0f)),
+            uint32_t(std::ceil(float(scene.draw_extent.height) / 16.0f)),
             1
         );
     }
 
-    void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
+    void VulkanEngine::DrawSceneGeometry(const Scene& scene, VkCommandBuffer cmd)
     {
         // create the scene data!
         // cpu to gpu so we can skip uploading it. Hopefully the data is small enough to fit in the
@@ -817,23 +846,123 @@ namespace Renderer
             }
         );
 
+        // we translate first because we want to move the world, not the camera. When we make a real
+        // camera, the order should be reversed
+        glm::mat4 view = glm::translate(scene.camera_position) * scene.camera_rotation;
+        glm::mat4 projection = glm::perspective(
+            glm::radians(scene.camera_vertical_fov),
+            (float)scene.draw_extent.width / (float)scene.draw_extent.height,
+            10000.f,
+            0.1f
+        );
+
+        // invert the Y direction on projection matrix so that we are more similar
+        // to opengl and gltf axis
+        projection[1][1] *= -1;
+
+        GPUSceneData scene_data{};
+        scene_data.view = view;
+        scene_data.projection = projection;
+        scene_data.view_projection = projection * view;
+        scene_data.ambient_colour = scene.ambient_colour;
+        scene_data.light_colour = scene.light_colour;
+        scene_data.light_direction = scene.light_direction;
+
+        // #TODO: replace with vmaCopyMemoryToAllocation instead of manual mapping
         void* mappedData;
         vmaMapMemory(m_allocator, scene_data_buffer.allocation, &mappedData);
-        GPUSceneData* scene_data = (GPUSceneData*)mappedData;
-        *scene_data = m_scene_data; // write into the mapped memory. This is technically random
-                                    // access so might be very slow but it's okay for now
+        GPUSceneData* mapped_scene_data = (GPUSceneData*)mappedData;
+        *mapped_scene_data = scene_data; // write into the mapped memory. This is technically random
+                                         // access so might be very slow but it's okay for now
         vmaUnmapMemory(m_allocator, scene_data_buffer.allocation);
 
         // now we just need to bind it
         VkDescriptorSet scene_data_descriptor =
             GetCurrentFrame().frame_descriptors.Allocate(m_device_dispatch, m_scene_data_descriptor_layout);
 
-        // bind scene data
+        // update scene data descriptor
         Utils::DescriptorWriter writer{};
         writer.WriteBuffer(
             0, scene_data_buffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
         );
         writer.UpdateSet(m_device_dispatch, scene_data_descriptor);
+
+        VkViewport viewport{};
+        viewport.x = scene.viewport_position.x;
+        viewport.y = scene.viewport_position.y;
+        viewport.width = float(scene.draw_extent.width);
+        viewport.height = float(scene.draw_extent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+
+        m_device_dispatch.cmdSetViewport(cmd, 0, 1, &viewport);
+
+        VkRect2D scissor{};
+        scissor.offset = VkOffset2D{ 0, 0 };
+        scissor.extent = scene.draw_extent;
+
+        m_device_dispatch.cmdSetScissor(cmd, 0, 1, &scissor);
+
+        VkRenderingAttachmentInfo color_attachment =
+            Utils::AttachmentInfo(scene.draw_image.image_view, nullptr);
+
+        VkClearValue clear_value{};
+        clear_value.depthStencil.depth = 0.0f; // zero is far in reversed depth
+
+        VkRenderingAttachmentInfo depth_attachment = Utils::AttachmentInfo(
+            scene.depth_image.image_view, &clear_value, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+        );
+
+        VkRenderingInfo render_info =
+            Utils::RenderingInfo(&color_attachment, &depth_attachment, scene.draw_extent);
+
+        m_device_dispatch.cmdBeginRendering(cmd, &render_info);
+
+        DrawContext ctx{};
+        for (const std::unique_ptr<SceneItem>& item : scene.scene_items)
+        {
+            item->Draw(ctx);
+        }
+
+        for (const RenderObject& render_object : ctx.render_objects)
+        {
+            std::array<VkDescriptorSet, 2> sets{ scene_data_descriptor,
+                                                 render_object.material->material_set };
+
+            VkBindDescriptorSetsInfo bind_sets_info{};
+            bind_sets_info.sType = VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO;
+            bind_sets_info.pDescriptorSets = sets.data();
+            bind_sets_info.descriptorSetCount = sets.size();
+            bind_sets_info.dynamicOffsetCount = 0;
+            bind_sets_info.pDynamicOffsets = nullptr;
+            bind_sets_info.layout = render_object.material->pipeline->layout;
+            bind_sets_info.stageFlags = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
+            m_device_dispatch.cmdBindDescriptorSets2(cmd, &bind_sets_info);
+
+            GPUDrawPushConstants push_constants{};
+            push_constants.opacity = 1.0f;
+            push_constants.vertex_buffer_address = render_object.vertex_buffer_address;
+            push_constants.world_matrix = render_object.transform;
+
+            VkPushConstantsInfo push_constants_info{};
+            push_constants_info.sType = VK_STRUCTURE_TYPE_PUSH_CONSTANTS_INFO;
+            push_constants_info.layout = render_object.material->pipeline->layout;
+            push_constants_info.offset = 0;
+            push_constants_info.size = sizeof(push_constants);
+            push_constants_info.pValues = &push_constants;
+            push_constants_info.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+            m_device_dispatch.cmdPushConstants2(cmd, &push_constants_info);
+
+            m_device_dispatch.cmdBindIndexBuffer(cmd, render_object.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+
+            m_device_dispatch.cmdDrawIndexed(
+                cmd, render_object.index_count, 1, render_object.first_index, 0, 0
+            );
+        }
+
+        // TEST GEOMETRY BELOW //
 
         m_device_dispatch.cmdBindDescriptorSets(
             cmd,
@@ -868,36 +997,7 @@ namespace Renderer
             nullptr
         );
 
-        VkRenderingAttachmentInfo color_attachment = Utils::AttachmentInfo(m_draw_image.image_view, nullptr);
-
-        VkClearValue clear_value{};
-        clear_value.depthStencil.depth = 0.0f; // zero is far in reversed depth
-
-        VkRenderingAttachmentInfo depth_attachment = Utils::AttachmentInfo(
-            m_depth_image.image_view, &clear_value, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-        );
-
-        VkRenderingInfo render_info =
-            Utils::RenderingInfo(&color_attachment, &depth_attachment, m_draw_extent);
-
-        m_device_dispatch.cmdBeginRendering(cmd, &render_info);
-
         m_device_dispatch.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_mesh_pipeline);
-        VkViewport viewport{};
-        viewport.x = 0;
-        viewport.y = 0;
-        viewport.width = float(m_draw_extent.width);
-        viewport.height = float(m_draw_extent.height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-
-        m_device_dispatch.cmdSetViewport(cmd, 0, 1, &viewport);
-
-        VkRect2D scissor{};
-        scissor.offset = VkOffset2D{ 0, 0 };
-        scissor.extent = m_draw_extent;
-
-        m_device_dispatch.cmdSetScissor(cmd, 0, 1, &scissor);
 
         GPUDrawPushConstants push_constants;
         push_constants.vertex_buffer_address = m_default_mesh->buffers.vertex_buffer_address;
@@ -1164,12 +1264,6 @@ namespace Renderer
             m_device_dispatch, m_background_compute_descriptor_layout
         );
 
-        Utils::DescriptorWriter writer{};
-        writer.WriteImage(
-            0, m_draw_image.image_view, VK_IMAGE_LAYOUT_GENERAL, 0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
-        );
-        writer.UpdateSet(m_device_dispatch, m_background_compute_descriptors);
-
         m_deletion_queue.PushFunction(
             "background descriptors",
             [this]()
@@ -1338,7 +1432,7 @@ namespace Renderer
                               .SetInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
                               .SetPolygonMode(VK_POLYGON_MODE_FILL)
                               .SetCullMode(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_CLOCKWISE)
-                              .SetColorAttachmentFormat(m_draw_image.image_format)
+                              .SetColorAttachmentFormat(VK_FORMAT_R16G16B16A16_SFLOAT)
                               .SetDepthFormat(VK_FORMAT_D32_SFLOAT)
                               .SetMultisamplingNone()
                               .EnableBlendingAlpha()
@@ -1366,6 +1460,31 @@ namespace Renderer
 
     void VulkanEngine::InitDefaultData()
     {
+        // create the main scene
+        glm::u32vec2 backbuffer_size{ m_window_extent.width, m_window_extent.height };
+        backbuffer_size *= m_backbuffer_scale;
+        AllocatedImage draw_image = CreateDrawImage(backbuffer_size.x, backbuffer_size.y);
+        AllocatedImage depth_image = CreateDepthImage(backbuffer_size.x, backbuffer_size.y);
+
+        Renderer::Scene& new_scene = render_scenes.emplace_back();
+        new_scene.draw_image = draw_image;
+        new_scene.depth_image = depth_image;
+        new_scene.scene_name = "main scene";
+        new_scene.render_scale = 1.0f;
+
+        new_scene.camera_position = glm::vec3(0.0f, 0.0f, -1.0f);
+        new_scene.camera_rotation = glm::mat4{ 1.0f }; // no rotation
+        new_scene.camera_vertical_fov = 70.0f;
+
+        main_scene = &new_scene;
+
+        // background descriptor for main scene. This is a shitty place for it but easiest for now.
+        Utils::DescriptorWriter writer{};
+        writer.WriteImage(
+            0, main_scene->draw_image.image_view, VK_IMAGE_LAYOUT_GENERAL, 0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+        );
+        writer.UpdateSet(m_device_dispatch, m_background_compute_descriptors);
+
         // load default textures
         // 3 default textures, white, black, grey. 1 pixel each
         uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
@@ -1569,14 +1688,9 @@ namespace Renderer
         m_swapchain_image_views = vkb_swapchain.get_image_views().value();
     }
 
-    void VulkanEngine::CreateDrawImage()
+    AllocatedImage VulkanEngine::CreateDrawImage(uint32_t width, uint32_t height)
     {
-        VkExtent3D image_extent{ uint32_t(float(m_window_extent.width) * m_backbuffer_scale),
-                                 uint32_t(float(m_window_extent.height) * m_backbuffer_scale),
-                                 1 };
-
-        // draw image defines the resolution we render at. Can be different to swapchain resolution
-        m_draw_extent = VkExtent2D{ image_extent.width, image_extent.height };
+        VkExtent3D image_extent{ width, height, 1 };
 
         VkFormat image_format = VK_FORMAT_R16G16B16A16_SFLOAT;
         VkImageUsageFlags usage_flags{};
@@ -1590,7 +1704,7 @@ namespace Renderer
         VmaAllocationCreateFlags allocation_flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
         constexpr bool mipmapped = false;
 
-        m_draw_image = AllocateImage(
+        return AllocateImage(
             image_extent,
             image_format,
             usage_flags,
@@ -1601,19 +1715,11 @@ namespace Renderer
             mipmapped,
             "image_draw"
         );
-
-        m_deletion_queue.PushFunction(
-            "draw image",
-            [this]()
-            {
-                DestroyImage(m_draw_image);
-            }
-        );
     }
 
-    void VulkanEngine::CreateDepthImage()
+    AllocatedImage VulkanEngine::CreateDepthImage(uint32_t width, uint32_t height)
     {
-        VkExtent3D image_extent{ m_draw_extent.width, m_draw_extent.height, 1 };
+        VkExtent3D image_extent{ width, height, 1 };
         VkFormat image_format = VK_FORMAT_D32_SFLOAT;
         VkImageUsageFlags usage_flags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
         VmaMemoryUsage memory_usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
@@ -1622,7 +1728,7 @@ namespace Renderer
         VmaAllocationCreateFlags allocation_flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
         constexpr bool mipmapped = false;
 
-        m_depth_image = AllocateImage(
+        return AllocateImage(
             image_extent,
             image_format,
             usage_flags,
@@ -1632,14 +1738,6 @@ namespace Renderer
             allocation_flags,
             mipmapped,
             "image_depth"
-        );
-
-        m_deletion_queue.PushFunction(
-            "depth image",
-            [this]()
-            {
-                DestroyImage(m_depth_image);
-            }
         );
     }
 

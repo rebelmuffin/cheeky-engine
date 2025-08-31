@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Renderer/Material.h"
 #include "Renderer/VkTypes.h"
 
 #include <filesystem>
@@ -9,10 +10,16 @@
 
 namespace Renderer
 {
+    struct GLTFMaterial
+    {
+        MaterialInstance material;
+    };
+
     struct GeoSurface
     {
         uint32_t first_index;
         uint32_t index_count;
+        std::shared_ptr<GLTFMaterial> material;
     };
 
     struct MeshAsset
