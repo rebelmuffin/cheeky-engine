@@ -1,13 +1,13 @@
 #include "EngineCore.h"
+#include "CVars.h"
 
 #include "ThirdParty/ImGUI.h"
-#include "imgui.h"
-
 #include <SDL.h>
+#include <imgui.h>
 
 #include <chrono>
 
-EngineCore::EngineCore(int width, int height)
+EngineCore::EngineCore(CVars cvars)
 {
     // We initialize SDL and create a window with it.
     SDL_Init(SDL_INIT_VIDEO);
@@ -15,16 +15,21 @@ EngineCore::EngineCore(int width, int height)
     SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
     m_window = SDL_CreateWindow(
-        "Vulkan Engine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, window_flags
+        "Vulkan Engine",
+        SDL_WINDOWPOS_UNDEFINED,
+        SDL_WINDOWPOS_UNDEFINED,
+        cvars.width,
+        cvars.height,
+        window_flags
     );
 
     m_renderer = std::make_unique<Renderer::VulkanEngine>(
-        width,
-        height,
+        cvars.width,
+        cvars.height,
         m_window,
-        1.0f,
-        /* use_validation_layers = */ true,
-        /* immediate_uploads = */ false
+        cvars.backbuffer_scale,
+        cvars.use_validation_layers,
+        cvars.force_immediate_uploads
     );
     if (m_renderer->Init() == false)
     {

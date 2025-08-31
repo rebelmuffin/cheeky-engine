@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CVars.h"
 #include "Renderer/VkEngine.h"
 
 struct SDL_Window;
@@ -10,7 +11,7 @@ struct SDL_Window;
 class EngineCore
 {
   public:
-    EngineCore(int width, int height);
+    EngineCore(CVars cvars);
     ~EngineCore();
 
     void RunMainLoop();
