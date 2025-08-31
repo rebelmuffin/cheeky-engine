@@ -133,23 +133,11 @@
 			{
 				"name": "Launch Cheeky (lldb)",
 				"program": "${workspaceRoot}/build/cheeky-vk-new",
-				"cwd": "${workspaceRoot}/build",
-				"linux": {
-					"MIMode": "lldb",
-					"miDebuggerPath": "/usr/bin/lldb-mi",
-					"targetArchitecture": "x64"
-				},
-				"type": "cppdbg",
+				"cwd": "${workspaceRoot}/build-clang",
+				"type": "lldb",
 				"request": "launch",
-				"preLaunchTask": "Build All (gcc)",
-				"externalConsole": false,
+				"preLaunchTask": "Build All (clang)",
 				"internalConsoleOptions": "openOnSessionStart",
-				"environment": [
-					{
-						"name": "MANGOHUD",
-						"value": "0"
-					}
-				]
 			},
 			{
 				"name": "Launch with RenderDoc",
