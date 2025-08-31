@@ -10,7 +10,7 @@
 			{
 				"label": "Build All (gcc)",
 				"type": "process",
-				"command": "/usr/bin/meson",
+				"command": "meson",
 				"args": [
 					"compile",
 					"-C",
@@ -18,7 +18,7 @@
 				],
 				"isBuildCommand": true,
 				"group": {
-					"isDefault": true,
+					"isDefault": false,
 					"kind": "build"
 				},
 				"presentation": {
@@ -27,8 +27,8 @@
 				},
 				"options": {
 					"env": {
-						"CXX": "/usr/bin/g++",
-						"CC": "/usr/bin/gcc"
+						"CXX": "g++",
+						"CC": "gcc"
 					}
 				},
 				"problemMatcher": []
@@ -36,7 +36,7 @@
 			{
 				"label": "Build All (clang)",
 				"type": "process",
-				"command": "/usr/bin/meson",
+				"command": "meson",
 				"args": [
 					"compile",
 					"-C",
@@ -44,7 +44,8 @@
 				],
 				"isBuildCommand": true,
 				"group": {
-					"kind": "build"
+					"kind": "build",
+					"isDefault": true
 				},
 				"presentation": {
 					"reveal": "always",
@@ -52,8 +53,8 @@
 				},
 				"options": {
 					"env": {
-						"CXX": "/usr/bin/clang++",
-						"CC": "/usr/bin/clang"
+						"CXX": "clang++",
+						"CC": "clang"
 					}
 				},
 				"problemMatcher": []
@@ -61,7 +62,7 @@
 			{
 				"label": "Reconfigure (gcc)",
 				"type": "process",
-				"command": "/usr/bin/meson",
+				"command": "meson",
 				"args": [
 					"build",
 					"--reconfigure",
@@ -75,7 +76,7 @@
 			{
 				"label": "Reconfigure (clang)",
 				"type": "process",
-				"command": "/usr/bin/meson",
+				"command": "meson",
 				"args": [
 					"build-clang",
 					"--reconfigure",

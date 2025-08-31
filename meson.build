@@ -49,7 +49,7 @@ stb_image_dep = dependency('stb_image')
 tinyobjloader_dep = dependency('tinyobjloader')
 
 # includes
-includes = include_directories('src/Public', 'subprojects') # is this okay?
+includes = include_directories('/usr/local/include', 'src/Public', 'subprojects') # is this okay?
 
 executable(
     'cheeky-vk-new',
@@ -78,7 +78,7 @@ executable(
         vkbootstrap_dep,
         stb_image_dep,
         tinyobjloader_dep,
-        fastgltf_dep
+        fastgltf_dep,
     ],
     include_directories: includes,
 )
