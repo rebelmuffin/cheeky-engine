@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Renderer/Material.h"
 #include "Renderer/MaterialInterface.h"
 #include "Renderer/RenderObject.h"
 #include "Renderer/Scene.h"
@@ -91,6 +92,7 @@ namespace Renderer
         vkb::DispatchTable& DeviceDispatchTable() { return m_device_dispatch; }
         vkb::InstanceDispatchTable& InstanceDispatchTable() { return m_instance_dispatch; }
         VmaAllocator& Allocator() { return m_allocator; }
+        const Material_GLTF_PBR& PBRMaterial() { return m_gltf_pbr_material; }
 
         AllocatedBuffer CreateBuffer(
             size_t allocation_size,
@@ -163,7 +165,7 @@ namespace Renderer
         void InitDefaultDescriptors();
         bool InitPipelines();
         bool InitBackgroundPipelines();
-        bool InitMeshPipeline();
+        bool InitMaterialPipelines();
         void InitDefaultData();
         void InitImgui();
 
@@ -204,9 +206,11 @@ namespace Renderer
         std::vector<ComputeEffect> m_compute_effects{};
         std::size_t m_current_effect = 0;
 
-        VkPipeline m_mesh_pipeline;
-        VkPipelineLayout m_mesh_pipeline_layout;
+        // test mesh and material instance
         std::shared_ptr<MeshAsset> m_default_mesh;
+        MaterialInstance m_test_pbr_instance;
+        Utils::DescriptorAllocatorDynamic m_test_pbr_allocator;
+        AllocatedBuffer m_test_pbr_uniform;
 
         std::vector<VkImage> m_swapchain_images;
         std::vector<VkImageView> m_swapchain_image_views;
@@ -249,6 +253,9 @@ namespace Renderer
         bool m_resize_requested = false;
 
         VkDescriptorSetLayout m_scene_data_descriptor_layout;
+
+        // materials (pipelines)
+        Material_GLTF_PBR m_gltf_pbr_material;
 
         // interfaces
         MaterialEngineInterface m_material_interface;

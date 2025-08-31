@@ -40,7 +40,7 @@ namespace Renderer
 
     struct MeshSceneItem : public SceneItem
     {
-        virtual ~MeshSceneItem();
+        virtual ~MeshSceneItem() = default;
 
         void Draw(DrawContext& ctx) override;
 

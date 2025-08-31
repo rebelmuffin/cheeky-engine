@@ -1,7 +1,9 @@
 #include "Renderer/VkEngine.h"
 
+#include "Renderer/Material.h"
 #include "Renderer/MaterialInterface.h"
 #include "Renderer/RenderObject.h"
+#include "Renderer/Renderable.h"
 #include "Renderer/Utility/UploadRequest.h"
 #include "Renderer/Utility/VkDescriptors.h"
 #include "Renderer/Utility/VkImages.h"
@@ -16,6 +18,7 @@
 #include <SDL_vulkan.h>
 #include <VkBootstrap.h>
 #include <array>
+#include <glm/ext/vector_float4.hpp>
 #include <glm/fwd.hpp>
 #include <imgui.h>
 #include <vk_mem_alloc.h>
@@ -129,6 +132,15 @@ namespace Renderer
         InitBackgroundDescriptors();
         InitDefaultDescriptors();
 
+        // InitPipelines is where we initialise materials for the first time so the material interface needs
+        // to be ready by then.
+        m_material_interface = MaterialEngineInterface{ &m_device_dispatch,
+                                                        &m_allocator,
+                                                        VKENGINE_DRAW_IMAGE_FORMAT,
+                                                        VKENGINE_DEPTH_IMAGE_FORMAT,
+                                                        m_scene_data_descriptor_layout,
+                                                        this };
+
         if (InitPipelines() == false)
         {
             return false;
@@ -138,13 +150,6 @@ namespace Renderer
         InitImgui();
 
         InitDefaultData();
-
-        m_material_interface = MaterialEngineInterface{ &m_device_dispatch,
-                                                        &m_allocator,
-                                                        VKENGINE_DRAW_IMAGE_FORMAT,
-                                                        VKENGINE_DEPTH_IMAGE_FORMAT,
-                                                        m_scene_data_descriptor_layout,
-                                                        this };
 
         return true;
     }
@@ -706,6 +711,36 @@ namespace Renderer
 
         FinishPendingUploads(cmd);
 
+        // all our testing images need to be in read state. This sucks, idk how to fix it.
+        Utils::TransitionImage(
+            &m_device_dispatch,
+            cmd,
+            m_white_image.image,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        );
+        Utils::TransitionImage(
+            &m_device_dispatch,
+            cmd,
+            m_black_image.image,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        );
+        Utils::TransitionImage(
+            &m_device_dispatch,
+            cmd,
+            m_grey_image.image,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        );
+        Utils::TransitionImage(
+            &m_device_dispatch,
+            cmd,
+            m_checkerboard_image.image,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        );
+
         // draw onto draw image.
         for (Scene& scene : render_scenes)
         {
@@ -929,31 +964,34 @@ namespace Renderer
             std::array<VkDescriptorSet, 2> sets{ scene_data_descriptor,
                                                  render_object.material->material_set };
 
-            VkBindDescriptorSetsInfo bind_sets_info{};
-            bind_sets_info.sType = VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO;
-            bind_sets_info.pDescriptorSets = sets.data();
-            bind_sets_info.descriptorSetCount = sets.size();
-            bind_sets_info.dynamicOffsetCount = 0;
-            bind_sets_info.pDynamicOffsets = nullptr;
-            bind_sets_info.layout = render_object.material->pipeline->layout;
-            bind_sets_info.stageFlags = VK_PIPELINE_BIND_POINT_GRAPHICS;
+            m_device_dispatch.cmdBindPipeline(
+                cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, render_object.material->pipeline->pipeline
+            );
 
-            m_device_dispatch.cmdBindDescriptorSets2(cmd, &bind_sets_info);
+            m_device_dispatch.cmdBindDescriptorSets(
+                cmd,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                render_object.material->pipeline->layout,
+                0,
+                sets.size(),
+                sets.data(),
+                0,
+                nullptr
+            );
 
             GPUDrawPushConstants push_constants{};
             push_constants.opacity = 1.0f;
             push_constants.vertex_buffer_address = render_object.vertex_buffer_address;
             push_constants.world_matrix = render_object.transform;
 
-            VkPushConstantsInfo push_constants_info{};
-            push_constants_info.sType = VK_STRUCTURE_TYPE_PUSH_CONSTANTS_INFO;
-            push_constants_info.layout = render_object.material->pipeline->layout;
-            push_constants_info.offset = 0;
-            push_constants_info.size = sizeof(push_constants);
-            push_constants_info.pValues = &push_constants;
-            push_constants_info.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
-            m_device_dispatch.cmdPushConstants2(cmd, &push_constants_info);
+            m_device_dispatch.cmdPushConstants(
+                cmd,
+                render_object.material->pipeline->layout,
+                VK_SHADER_STAGE_VERTEX_BIT,
+                0,
+                sizeof(push_constants),
+                &push_constants
+            );
 
             m_device_dispatch.cmdBindIndexBuffer(cmd, render_object.index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
@@ -961,64 +999,6 @@ namespace Renderer
                 cmd, render_object.index_count, 1, render_object.first_index, 0, 0
             );
         }
-
-        // TEST GEOMETRY BELOW //
-
-        m_device_dispatch.cmdBindDescriptorSets(
-            cmd,
-            VK_PIPELINE_BIND_POINT_GRAPHICS,
-            m_mesh_pipeline_layout,
-            0,
-            1,
-            &scene_data_descriptor,
-            0,
-            nullptr
-        );
-
-        // write checkerboard image into the single image descriptor
-        writer.WriteImage(
-            0,
-            m_active_image->image_view,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            m_use_linear_sampling ? m_default_sampler_linear : m_default_sampler_nearest,
-            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-        );
-        writer.UpdateSet(m_device_dispatch, m_single_image_descriptors);
-
-        // this could be bundled up with the bind call above but meh
-        m_device_dispatch.cmdBindDescriptorSets(
-            cmd,
-            VK_PIPELINE_BIND_POINT_GRAPHICS,
-            m_mesh_pipeline_layout,
-            1,
-            1,
-            &m_single_image_descriptors,
-            0,
-            nullptr
-        );
-
-        m_device_dispatch.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_mesh_pipeline);
-
-        GPUDrawPushConstants push_constants;
-        push_constants.vertex_buffer_address = m_default_mesh->buffers.vertex_buffer_address;
-        push_constants.opacity = test_mesh_opacity;
-        push_constants.world_matrix = glm::mat4(1.0f); // identity
-
-        m_device_dispatch.cmdPushConstants(
-            cmd,
-            m_mesh_pipeline_layout,
-            VK_SHADER_STAGE_VERTEX_BIT,
-            0,
-            sizeof(push_constants),
-            &push_constants
-        );
-        m_device_dispatch.cmdBindIndexBuffer(
-            cmd, m_default_mesh->buffers.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32
-        );
-
-        m_device_dispatch.cmdDrawIndexed(
-            cmd, m_default_mesh->surfaces[0].index_count, 1, m_default_mesh->surfaces[0].first_index, 0, 0
-        );
 
         m_device_dispatch.cmdEndRendering(cmd);
     }
@@ -1321,7 +1301,7 @@ namespace Renderer
             return false;
         }
 
-        return InitMeshPipeline();
+        return InitMaterialPipelines();
     }
 
     bool VulkanEngine::InitBackgroundPipelines()
@@ -1385,77 +1365,19 @@ namespace Renderer
         return true;
     }
 
-    bool VulkanEngine::InitMeshPipeline()
+    bool VulkanEngine::InitMaterialPipelines()
     {
-        VkPushConstantRange push_constant_range{};
-        push_constant_range.offset = 0;
-        push_constant_range.size = sizeof(GPUDrawPushConstants);
-        push_constant_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-        std::array<VkDescriptorSetLayout, 2> layouts{ m_scene_data_descriptor_layout,
-                                                      m_single_image_descriptor_layout };
-
-        VkPipelineLayoutCreateInfo layout_info{};
-        layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        layout_info.pNext = nullptr;
-        layout_info.flags = 0;
-        layout_info.pSetLayouts = layouts.data();
-        layout_info.setLayoutCount = layouts.size();
-        layout_info.pPushConstantRanges = &push_constant_range;
-        layout_info.pushConstantRangeCount = 1;
-
-        if (m_device_dispatch.createPipelineLayout(&layout_info, nullptr, &m_mesh_pipeline_layout) !=
-            VK_SUCCESS)
-        {
-            std::cout << "[!] Failed to create Mesh pipeline layout." << std::endl;
-            return false;
-        }
-
-        VkShaderModule vertex_shader{};
-        if (Utils::LoadShaderModule(m_device_dispatch, "../data/shader/mesh.vert.spv", &vertex_shader) ==
-            false)
-        {
-            return false;
-        }
-        VkShaderModule frag_shader{};
-        if (Utils::LoadShaderModule(m_device_dispatch, "../data/shader/textured.frag.spv", &frag_shader) ==
-            false)
-        {
-            return false;
-        }
-
-        m_mesh_pipeline = Utils::PipelineBuilder()
-                              .SetName("mesh")
-                              .SetLayout(m_mesh_pipeline_layout)
-                              .AddFragmentShader(frag_shader)
-                              .AddVertexShader(vertex_shader)
-                              .SetInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-                              .SetPolygonMode(VK_POLYGON_MODE_FILL)
-                              .SetCullMode(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_CLOCKWISE)
-                              .SetColorAttachmentFormat(VKENGINE_DRAW_IMAGE_FORMAT)
-                              .SetDepthFormat(VKENGINE_DEPTH_IMAGE_FORMAT)
-                              .SetMultisamplingNone()
-                              .EnableBlendingAlpha()
-                              .EnableDepthTest(VK_COMPARE_OP_GREATER_OR_EQUAL)
-                              .BuildPipeline(m_device_dispatch);
-        if (m_mesh_pipeline == VK_NULL_HANDLE)
-        {
-            return false;
-        }
-
-        m_device_dispatch.destroyShaderModule(vertex_shader, nullptr);
-        m_device_dispatch.destroyShaderModule(frag_shader, nullptr);
-
+        // create any materials (pipelines)
+        m_gltf_pbr_material.BuildPipelines(m_material_interface);
         m_deletion_queue.PushFunction(
-            "mesh pipeline",
+            "pbr material",
             [this]()
             {
-                m_device_dispatch.destroyPipelineLayout(m_mesh_pipeline_layout, nullptr);
-                m_device_dispatch.destroyPipeline(m_mesh_pipeline, nullptr);
+                m_gltf_pbr_material.DestroyResources(m_device_dispatch);
             }
         );
 
-        return true;
+        return m_gltf_pbr_material.loaded;
     }
 
     void VulkanEngine::InitDefaultData()
@@ -1578,6 +1500,65 @@ namespace Renderer
         else
         {
             m_default_mesh = loaded_meshes->at(0);
+        }
+
+        if (m_gltf_pbr_material.loaded)
+        {
+            std::array<Utils::DescriptorPoolSizeRatio, 2> size_ratios{
+                Utils::DescriptorPoolSizeRatio{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
+                Utils::DescriptorPoolSizeRatio{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 }
+            };
+            m_test_pbr_allocator.Init(m_device_dispatch, 10, size_ratios);
+            m_deletion_queue.PushFunction(
+                "test pbr allocator",
+                [this]()
+                {
+                    m_test_pbr_allocator.DestroyPools(m_device_dispatch);
+                }
+            );
+
+            Material_GLTF_PBR::MaterialParameters params{};
+            params.colour = glm::vec4{ 1.0f };
+            params.metal_roughness = glm::vec4{ 1.0f };
+
+            m_test_pbr_uniform = CreateBuffer(
+                &params, sizeof(params), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, "test pbr instance buffer"
+            );
+            m_deletion_queue.PushFunction(
+                "test pbr instance buffer",
+                [this]()
+                {
+                    DestroyBuffer(m_test_pbr_uniform);
+                }
+            );
+
+            Material_GLTF_PBR::Resources resources{};
+            resources.buffer_offset = 0;
+            resources.uniform_buffer = m_test_pbr_uniform.buffer;
+            resources.colour_image = *m_active_image;
+            resources.colour_sampler =
+                m_use_linear_sampling ? m_default_sampler_linear : m_default_sampler_nearest;
+            resources.metal_roughness_image = *m_active_image;
+            resources.metal_roughness_sampler = resources.colour_sampler;
+
+            m_test_pbr_instance = m_gltf_pbr_material.CreateInstance(
+                m_device_dispatch, MaterialPass::Transparent, resources, m_test_pbr_allocator
+            );
+
+            std::unique_ptr<MeshSceneItem> item = std::make_unique<MeshSceneItem>();
+            item->transform = glm::translate(glm::vec3(0.0f, 0.0f, 0.0f));
+            item->asset = m_default_mesh.get();
+            item->name = "test scene item";
+
+            main_scene->scene_items.emplace_back(std::move(item));
+
+            // do some shenanigans and update the mesh to use the test material instance
+            std::shared_ptr<GLTFMaterial> mat = std::make_shared<GLTFMaterial>();
+            mat->material = m_test_pbr_instance;
+            for (GeoSurface& surface : m_default_mesh->surfaces)
+            {
+                surface.material = mat;
+            }
         }
 
         m_deletion_queue.PushFunction(
