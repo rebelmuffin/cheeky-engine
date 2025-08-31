@@ -7,10 +7,8 @@
 #include "ThirdParty/fastgltf.h"
 #include "fastgltf/core.hpp"
 #include "fastgltf/types.hpp"
-#include <memory>
-#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
-#undef GLM_ENABLE_EXPERIMENTAL
+#include <memory>
 
 #include <iostream>
 

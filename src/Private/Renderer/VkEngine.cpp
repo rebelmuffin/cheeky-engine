@@ -4,6 +4,7 @@
 #include "Renderer/MaterialInterface.h"
 #include "Renderer/RenderObject.h"
 #include "Renderer/Renderable.h"
+#include "Renderer/Utility/DebugPanels.h"
 #include "Renderer/Utility/UploadRequest.h"
 #include "Renderer/Utility/VkDescriptors.h"
 #include "Renderer/Utility/VkImages.h"
@@ -20,14 +21,12 @@
 #include <array>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/fwd.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/transform.hpp>
 #include <imgui.h>
 #include <utility>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/matrix_decompose.hpp>
-#include <glm/gtx/transform.hpp>
-#undef GLM_ENABLE_EXPERIMENTAL
 
 #include <algorithm>
 #include <cmath>
@@ -191,9 +190,38 @@ namespace Renderer
             if (ImGui::BeginMenu("Graphics"))
             {
                 ImGui::Checkbox("Engine Settings", &m_draw_engine_settings);
+                ImGui::Checkbox("Resource Debugger", &m_draw_resource_debugger);
                 ImGui::EndMenu();
             }
             ImGui::EndMainMenuBar();
+        }
+
+        if (m_draw_resource_debugger)
+        {
+            if (ImGui::Begin("Resource Debugger", &m_draw_resource_debugger))
+            {
+                if (ImGui::CollapsingHeader("Images"))
+                {
+                    ImGui::PushID("Images");
+                    Renderer::Debug::DrawStorageTableImGui(m_image_storage);
+                    ImGui::PopID();
+                }
+
+                if (ImGui::CollapsingHeader("Buffers"))
+                {
+                    ImGui::PushID("Buffers");
+                    Renderer::Debug::DrawStorageTableImGui(m_buffer_storage);
+                    ImGui::PopID();
+                }
+
+                if (ImGui::CollapsingHeader("Meshes"))
+                {
+                    ImGui::PushID("Meshes");
+                    Renderer::Debug::DrawStorageTableImGui(m_mesh_storage);
+                    ImGui::PopID();
+                }
+            }
+            ImGui::End();
         }
 
         if (m_draw_engine_settings)
@@ -210,7 +238,8 @@ namespace Renderer
 
             if (ImGui::TreeNodeEx(
                     "scene_list",
-                    ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed,
+                    ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                        ImGuiTreeNodeFlags_Framed,
                     "Scenes: %zu",
                     render_scenes.size()
                 ))
@@ -225,14 +254,10 @@ namespace Renderer
 
                     if (ImGui::TreeNodeEx(scene.scene_name.data(), flags))
                     {
-                        ImGui::Text(
-                            "Draw Resolution: %dx%d", scene.draw_extent.width, scene.draw_extent.height
-                        );
-                        ImGui::SliderFloat("Render Scale", &scene.render_scale, 0.1f, 1.0f);
+                        Renderer::Debug::DrawSceneContentsImGui(scene);
                         ImGui::TreePop();
                     }
                 }
-                ImGui::TreePop();
             }
 
             ImGui::SliderFloat("Mesh Opacity", &test_mesh_opacity, 0.0f, 1.0f);
@@ -316,7 +341,7 @@ namespace Renderer
         ));
         SetAllocationName(buffer.allocation, debug_name);
 
-        return m_buffer_storage.AddResource(buffer);
+        return m_buffer_storage.AddResource(buffer, debug_name);
     }
 
     BufferHandle VulkanEngine::CreateBuffer(
@@ -410,7 +435,7 @@ namespace Renderer
         image_view_info.subresourceRange.levelCount = image_info.mipLevels;
         VK_CHECK(m_device_dispatch.createImageView(&image_view_info, nullptr, &image.image_view));
 
-        return m_image_storage.AddResource(image);
+        return m_image_storage.AddResource(image, debug_name);
     }
 
     ImageHandle VulkanEngine::AllocateImage(

@@ -263,6 +263,7 @@ namespace Renderer
         // interfaces
         MaterialEngineInterface m_material_interface;
 
+        bool m_draw_resource_debugger = false;
         bool m_draw_engine_settings = false;
         float m_camera_yaw_rad = 0.0f;
         float m_camera_pitch_rad = 0.0f;

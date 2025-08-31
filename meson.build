@@ -7,6 +7,7 @@ project(
 )
 
 add_global_arguments('-DGLM_FORCE_DEPTH_ZERO_TO_ONE', language: 'cpp')
+add_global_arguments('-DGLM_ENABLE_EXPERIMENTAL', language: 'cpp')
 
 add_project_arguments('-DCHEEKY_ENABLE_MEMORY_TRACKING', language: 'cpp')
 
@@ -65,6 +66,7 @@ executable(
     'src/Private/Renderer/Utility/VkDescriptors.cpp',
     'src/Private/Renderer/Utility/DeletionQueue.cpp',
     'src/Private/Renderer/Utility/UploadRequest.cpp',
+    'src/Private/Renderer/Utility/DebugPanels.cpp',
     'src/Private/ThirdParty/VkMemAllocImpl.cpp',
     shader_gen_src,
     dependencies: [
