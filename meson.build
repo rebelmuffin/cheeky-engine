@@ -36,14 +36,16 @@ subproject('imgui')
 imgui_dep = dependency('imgui')
 
 # cmake dependencies
-vkbootstrap_proj = cmake.subproject('vkbootstrap')
+cmake_opts = cmake.subproject_options()
+cmake_opts.add_cmake_defines({'CMAKE_POSITION_INDEPENDENT_CODE': true})
+vkbootstrap_proj = cmake.subproject('vkbootstrap', options: cmake_opts)
 vkbootstrap_dep = vkbootstrap_proj.dependency('vk-bootstrap')
+fastgltf_proj = cmake.subproject('fastgltf', options: cmake_opts)
+fastgltf_dep = fastgltf_proj.dependency('fastgltf')
 
 # other third party
 stb_image_dep = dependency('stb_image')
 tinyobjloader_dep = dependency('tinyobjloader')
-fastgltf_proj = cmake.subproject('fastgltf')
-fastgltf_dep = fastgltf_proj.dependency('fastgltf')
 
 # includes
 includes = include_directories('src/Public', 'subprojects') # is this okay?
