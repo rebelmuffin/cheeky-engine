@@ -2,6 +2,9 @@
 .vscode
 .cache
 
+# ignore local cvars
+.cvars
+
 # ignore renderdoc captures
 /captures/*
 
