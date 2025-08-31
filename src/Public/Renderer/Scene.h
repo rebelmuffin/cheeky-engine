@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Renderer/Renderable.h"
+#include "Renderer/ResourceStorage.h"
 #include "Renderer/VkTypes.h"
 
 #include <glm/ext/vector_uint2_sized.hpp>
@@ -8,6 +9,7 @@
 #include <vulkan/vulkan_core.h>
 
 #include <memory>
+#include <vector>
 
 namespace Renderer
 {
@@ -15,8 +17,15 @@ namespace Renderer
     /// it.
     struct Scene
     {
-        AllocatedImage depth_image;
-        AllocatedImage draw_image;
+        // copy ctors need to be deleted for scene_items.
+        Scene() = default;
+        Scene(const Scene&) = delete;
+        Scene(Scene&&) = default;
+        Scene& operator=(const Scene&) = delete;
+        Scene& operator=(Scene&&) = default;
+
+        ImageHandle depth_image;
+        ImageHandle draw_image;
         std::vector<std::unique_ptr<SceneItem>> scene_items;
 
         float camera_vertical_fov;

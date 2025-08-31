@@ -1,5 +1,14 @@
 #pragma once
 
+#include "Renderer/ResourceStorage.h"
+
+#include <glm/mat4x4.hpp>
+#include <glm/vec4.hpp>
+#include <vk_mem_alloc.h>
+#include <vulkan/vk_enum_string_helper.h>
+#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
+
 #include <array>
 #include <deque>
 #include <functional>
@@ -9,14 +18,6 @@
 #include <span>
 #include <string>
 #include <vector>
-
-#include <vk_mem_alloc.h>
-#include <vulkan/vk_enum_string_helper.h>
-#include <vulkan/vulkan.h>
-#include <vulkan/vulkan_core.h>
-
-#include <glm/mat4x4.hpp>
-#include <glm/vec4.hpp>
 
 #define VK_CHECK(x)                                                                                          \
     do                                                                                                       \
@@ -56,10 +57,33 @@ namespace Renderer
         glm::vec4 colour;
     };
 
+    // template specialisations for resource storages
+    void DestroyImage(VulkanEngine& engine, const AllocatedImage& image);
+    void DestroyBuffer(VulkanEngine& engine, const AllocatedBuffer& buffer);
+
+    template <>
+    inline void ResourceStorage<AllocatedImage>::DestroyResource(
+        VulkanEngine& engine, const AllocatedImage& image
+    )
+    {
+        DestroyImage(engine, image);
+    }
+
+    template <>
+    inline void ResourceStorage<AllocatedBuffer>::DestroyResource(
+        VulkanEngine& engine, const AllocatedBuffer& buffer
+    )
+    {
+        DestroyBuffer(engine, buffer);
+    }
+
+    using ImageHandle = ReferenceCountedHandle<AllocatedImage>;
+    using BufferHandle = ReferenceCountedHandle<AllocatedBuffer>;
+
     struct GPUMeshBuffers
     {
-        AllocatedBuffer index_buffer;
-        AllocatedBuffer vertex_buffer;
+        BufferHandle index_buffer;
+        BufferHandle vertex_buffer;
         VkDeviceAddress vertex_buffer_address;
     };
 

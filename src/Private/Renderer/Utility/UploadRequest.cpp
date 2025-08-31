@@ -1,10 +1,13 @@
 #include "Renderer/Utility/UploadRequest.h"
 
+#include "Renderer/ResourceStorage.h"
 #include "Renderer/Utility/VkImages.h"
 #include "Renderer/VkEngine.h"
+#include "Renderer/VkTypes.h"
+
+#include <vulkan/vulkan_core.h>
 
 #include <cstddef>
-#include <vulkan/vulkan_core.h>
 
 namespace Renderer::Utils
 {
@@ -12,7 +15,7 @@ namespace Renderer::Utils
         size_t vertex_buffer_size,
         size_t index_buffer_size,
         const GPUMeshBuffers& target_mesh,
-        const AllocatedBuffer& staging_buffer,
+        const BufferHandle& staging_buffer,
         UploadType upload_type,
         std::string_view debug_name
     ) :
@@ -38,21 +41,24 @@ namespace Renderer::Utils
         index_copy.size = m_index_buffer_size;
 
         engine.DeviceDispatchTable().cmdCopyBuffer(
-            cmd, m_staging_buffer.buffer, m_target_mesh.vertex_buffer.buffer, 1, &vertex_copy
+            cmd, m_staging_buffer->buffer, m_target_mesh.vertex_buffer->buffer, 1, &vertex_copy
         );
         engine.DeviceDispatchTable().cmdCopyBuffer(
-            cmd, m_staging_buffer.buffer, m_target_mesh.index_buffer.buffer, 1, &index_copy
+            cmd, m_staging_buffer->buffer, m_target_mesh.index_buffer->buffer, 1, &index_copy
         );
 
         return UploadExecutionResult::Success;
     }
 
-    void MeshUploadRequest::DestroyResources(VulkanEngine& engine) { engine.DestroyBuffer(m_staging_buffer); }
+    void MeshUploadRequest::DestroyResources(VulkanEngine&)
+    {
+        // reference counted handles should be enough.
+    }
 
     BufferUploadRequest::BufferUploadRequest(
         size_t buffer_size,
-        AllocatedBuffer staging_buffer,
-        AllocatedBuffer target_buffer,
+        BufferHandle staging_buffer,
+        BufferHandle target_buffer,
         UploadType upload_type,
         size_t src_offset,
         size_t dst_offset,
@@ -76,21 +82,21 @@ namespace Renderer::Utils
         copy.size = m_buffer_size;
 
         engine.DeviceDispatchTable().cmdCopyBuffer(
-            cmd, m_staging_buffer.buffer, m_target_buffer.buffer, 1, &copy
+            cmd, m_staging_buffer->buffer, m_target_buffer->buffer, 1, &copy
         );
 
         return UploadExecutionResult::Success;
     }
 
-    void BufferUploadRequest::DestroyResources(VulkanEngine& engine)
+    void BufferUploadRequest::DestroyResources(VulkanEngine&)
     {
-        engine.DestroyBuffer(m_staging_buffer);
+        // no need for explicity destroy. the reference counted handles should do the trick
     }
 
     ImageUploadRequest::ImageUploadRequest(
         VkExtent3D image_extent,
-        AllocatedImage staging_image,
-        AllocatedImage target_image,
+        ImageHandle staging_image,
+        ImageHandle target_image,
         UploadType upload_type,
         VkOffset3D src_offset,
         VkOffset3D dst_offset,
@@ -122,26 +128,22 @@ namespace Renderer::Utils
         Utils::TransitionImage(
             &engine.DeviceDispatchTable(),
             cmd,
-            m_staging_image.image,
+            m_staging_image->image,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
         );
         Utils::TransitionImage(
             &engine.DeviceDispatchTable(),
             cmd,
-            m_target_image.image,
+            m_target_image->image,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
         );
 
-        // VkExtent2D size{ m_image_extent.width, m_image_extent.height };
-        // Utils::CopyImageToImage(
-        //     &engine.DeviceDispatchTable(), cmd, m_staging_image.image, m_target_image.image, size, size
-        // );
         VkCopyImageInfo2 copy_image_info{};
         copy_image_info.sType = VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2;
-        copy_image_info.dstImage = m_target_image.image;
-        copy_image_info.srcImage = m_staging_image.image;
+        copy_image_info.dstImage = m_target_image->image;
+        copy_image_info.srcImage = m_staging_image->image;
         copy_image_info.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         copy_image_info.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         copy_image_info.regionCount = 1;
@@ -152,5 +154,8 @@ namespace Renderer::Utils
         return UploadExecutionResult::Success;
     }
 
-    void ImageUploadRequest::DestroyResources(VulkanEngine& engine) { engine.DestroyImage(m_staging_image); }
+    void ImageUploadRequest::DestroyResources(VulkanEngine&)
+    {
+        // no need for explicity destroy. the reference counted handles should do the trick
+    }
 } // namespace Renderer::Utils

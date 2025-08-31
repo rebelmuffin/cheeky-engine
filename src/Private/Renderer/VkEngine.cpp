@@ -21,6 +21,7 @@
 #include <glm/ext/vector_float4.hpp>
 #include <glm/fwd.hpp>
 #include <imgui.h>
+#include <utility>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 #define GLM_ENABLE_EXPERIMENTAL
@@ -167,14 +168,10 @@ namespace Renderer
         // swapchain isn't handled by the deletion queue because it gets recreated at runtime
         DestroySwapchain();
 
-        // destroy the scenes
-        for (Scene& scene : render_scenes)
-        {
-            // #FIXME: this will cause a double delete if there are scenes rendering onto the same image.
-            // Solve this by keeping track of the allocated resources separately.
-            DestroyImage(scene.draw_image);
-            DestroyImage(scene.depth_image);
-        }
+        // destroy all resource storages
+        m_image_storage.Clear(*this);
+        m_buffer_storage.Clear(*this);
+        m_mesh_storage.Clear(*this);
 
         render_scenes.clear();
         main_scene = nullptr;
@@ -239,24 +236,6 @@ namespace Renderer
             }
 
             ImGui::SliderFloat("Mesh Opacity", &test_mesh_opacity, 0.0f, 1.0f);
-            ImGui::Checkbox("Linear Sampling", &m_use_linear_sampling);
-            VmaAllocationInfo alloc_info;
-            vmaGetAllocationInfo(m_allocator, m_active_image->allocation, &alloc_info);
-            if (ImGui::BeginCombo("Texture", alloc_info.pName))
-            {
-                std::array<AllocatedImage*, 4> images{
-                    &m_white_image, &m_black_image, &m_grey_image, &m_checkerboard_image
-                };
-                for (AllocatedImage* image : images)
-                {
-                    vmaGetAllocationInfo(m_allocator, image->allocation, &alloc_info);
-                    if (ImGui::Selectable(alloc_info.pName, image == m_active_image))
-                    {
-                        m_active_image = image;
-                    }
-                }
-                ImGui::EndCombo();
-            }
 
             if (ImGui::SliderAngle("Camera yaw", &m_camera_yaw_rad))
             {
@@ -308,7 +287,7 @@ namespace Renderer
 
 #pragma region Allocation_Destruction
 
-    AllocatedBuffer VulkanEngine::CreateBuffer(
+    BufferHandle VulkanEngine::CreateBuffer(
         size_t allocation_size,
         VkBufferUsageFlags usage,
         VmaMemoryUsage memory_usage,
@@ -337,10 +316,10 @@ namespace Renderer
         ));
         SetAllocationName(buffer.allocation, debug_name);
 
-        return buffer;
+        return m_buffer_storage.AddResource(buffer);
     }
 
-    AllocatedBuffer VulkanEngine::CreateBuffer(
+    BufferHandle VulkanEngine::CreateBuffer(
         void* buffer_data, size_t buffer_size, VkBufferUsageFlags usage, const char* debug_name
     )
     {
@@ -352,16 +331,16 @@ namespace Renderer
         VmaAllocationCreateFlags allocation_flags =
             VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
             VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
-        AllocatedBuffer buffer =
+        BufferHandle buffer =
             CreateBuffer(buffer_size, created_buffer_usage, allocation_usage, allocation_flags, debug_name);
 
         VkMemoryPropertyFlags memory_properties;
-        vmaGetAllocationMemoryProperties(m_allocator, buffer.allocation, &memory_properties);
+        vmaGetAllocationMemoryProperties(m_allocator, buffer->allocation, &memory_properties);
 
         if (memory_properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
         {
             // this is mappable! We simply map it and immediately copy the data over.
-            vmaCopyMemoryToAllocation(m_allocator, buffer_data, buffer.allocation, 0, buffer_size);
+            vmaCopyMemoryToAllocation(m_allocator, buffer_data, buffer->allocation, 0, buffer_size);
         }
         else
         {
@@ -369,11 +348,11 @@ namespace Renderer
             VmaMemoryUsage staging_memory_usage = VMA_MEMORY_USAGE_AUTO;
             VmaAllocationCreateFlags allocation_flags =
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-            AllocatedBuffer staging_buffer = CreateBuffer(
+            BufferHandle staging_buffer = CreateBuffer(
                 buffer_size, staging_buffer_usage, staging_memory_usage, allocation_flags, debug_name
             );
 
-            vmaCopyMemoryToAllocation(m_allocator, buffer_data, staging_buffer.allocation, 0, buffer_size);
+            vmaCopyMemoryToAllocation(m_allocator, buffer_data, staging_buffer->allocation, 0, buffer_size);
 
             // no offsets, just an honest to god copy
             std::unique_ptr<Utils::IUploadRequest> upload_request =
@@ -391,7 +370,7 @@ namespace Renderer
         vmaDestroyBuffer(m_allocator, buffer.buffer, buffer.allocation);
     }
 
-    AllocatedImage VulkanEngine::AllocateImage(
+    ImageHandle VulkanEngine::AllocateImage(
         VkExtent3D image_extent,
         VkFormat format,
         VkImageUsageFlags usage,
@@ -431,10 +410,10 @@ namespace Renderer
         image_view_info.subresourceRange.levelCount = image_info.mipLevels;
         VK_CHECK(m_device_dispatch.createImageView(&image_view_info, nullptr, &image.image_view));
 
-        return image;
+        return m_image_storage.AddResource(image);
     }
 
-    AllocatedImage VulkanEngine::AllocateImage(
+    ImageHandle VulkanEngine::AllocateImage(
         void* image_data,
         VkExtent3D image_extent,
         VkFormat format,
@@ -464,7 +443,7 @@ namespace Renderer
         VkImageAspectFlagBits aspect_flags =
             VK_IMAGE_ASPECT_COLOR_BIT; // we assume RGBA8 so has to be colour.
 
-        AllocatedImage image = AllocateImage(
+        ImageHandle image = AllocateImage(
             image_extent,
             format,
             target_image_usage,
@@ -477,12 +456,12 @@ namespace Renderer
         );
 
         VkMemoryPropertyFlags memory_properties;
-        vmaGetAllocationMemoryProperties(m_allocator, image.allocation, &memory_properties);
+        vmaGetAllocationMemoryProperties(m_allocator, image->allocation, &memory_properties);
 
         if (memory_properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
         {
             // this is mappable! We simply map it and immediately copy the data over.
-            vmaCopyMemoryToAllocation(m_allocator, image_data, image.allocation, 0, image_data_size);
+            vmaCopyMemoryToAllocation(m_allocator, image_data, image->allocation, 0, image_data_size);
         }
         else
         {
@@ -493,7 +472,7 @@ namespace Renderer
             VmaMemoryUsage staging_memory_usage = VMA_MEMORY_USAGE_AUTO;
             VmaAllocationCreateFlags allocation_flags =
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-            AllocatedImage staging_image = AllocateImage(
+            ImageHandle staging_image = AllocateImage(
                 image_extent,
                 format,
                 staging_image_usage,
@@ -507,7 +486,7 @@ namespace Renderer
 
             // don't forget this! (I forgot it and spent legit 1.5 hours debugging why the FUCK the texture is
             // black).
-            vmaCopyMemoryToAllocation(m_allocator, image_data, staging_image.allocation, 0, image_data_size);
+            vmaCopyMemoryToAllocation(m_allocator, image_data, staging_image->allocation, 0, image_data_size);
 
             std::unique_ptr<Utils::IUploadRequest> upload_request =
                 std::make_unique<Utils::ImageUploadRequest>(
@@ -550,7 +529,7 @@ namespace Renderer
         VkBufferDeviceAddressInfo device_address{};
         device_address.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
         device_address.pNext = nullptr;
-        device_address.buffer = buffers.vertex_buffer.buffer;
+        device_address.buffer = buffers.vertex_buffer->buffer;
         buffers.vertex_buffer_address = m_device_dispatch.getBufferDeviceAddress(&device_address);
 
         VkBufferUsageFlags index_usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -561,7 +540,7 @@ namespace Renderer
         // the buffers are created. Now we need to do the same thing basically and create a staging
         // buffer.
 
-        AllocatedBuffer staging = CreateBuffer(
+        BufferHandle staging = CreateBuffer(
             vertex_buffer_size + index_buffer_size,
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             VMA_MEMORY_USAGE_CPU_ONLY,
@@ -569,9 +548,9 @@ namespace Renderer
             "buffer_mesh_staging"
         );
 
-        vmaCopyMemoryToAllocation(m_allocator, vertices.data(), staging.allocation, 0, vertex_buffer_size);
+        vmaCopyMemoryToAllocation(m_allocator, vertices.data(), staging->allocation, 0, vertex_buffer_size);
         vmaCopyMemoryToAllocation(
-            m_allocator, indices.data(), staging.allocation, vertex_buffer_size, index_buffer_size
+            m_allocator, indices.data(), staging->allocation, vertex_buffer_size, index_buffer_size
         );
 
         // we can't do normal buffer upload here because we do two uploads from a single staging buffer.
@@ -601,6 +580,13 @@ namespace Renderer
         }
 
         m_pending_uploads.push_back(std::move(upload_request));
+    }
+
+    void VulkanEngine::DestroyPendingResources()
+    {
+        m_image_storage.DestroyPendingResources(*this);
+        m_buffer_storage.DestroyPendingResources(*this);
+        m_mesh_storage.DestroyPendingResources(*this);
     }
 
     void VulkanEngine::FinishPendingUploads(VkCommandBuffer cmd)
@@ -685,7 +671,12 @@ namespace Renderer
         VK_CHECK(m_device_dispatch.resetFences(1, &GetCurrentFrame().render_fence));
 
         GetCurrentFrame().deletion_queue.Flush();
+        GetCurrentFrame().buffers_in_use.clear();
+        GetCurrentFrame().images_in_use.clear();
         GetCurrentFrame().frame_descriptors.ClearDescriptors(m_device_dispatch);
+
+        // this is where we exterminate the resources pending destruction.
+        DestroyPendingResources();
 
         uint32_t swapchain_image_index;
         VkResult result = m_device_dispatch.acquireNextImageKHR(
@@ -715,28 +706,28 @@ namespace Renderer
         Utils::TransitionImage(
             &m_device_dispatch,
             cmd,
-            m_white_image.image,
+            m_white_image->image,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
         );
         Utils::TransitionImage(
             &m_device_dispatch,
             cmd,
-            m_black_image.image,
+            m_black_image->image,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
         );
         Utils::TransitionImage(
             &m_device_dispatch,
             cmd,
-            m_grey_image.image,
+            m_grey_image->image,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
         );
         Utils::TransitionImage(
             &m_device_dispatch,
             cmd,
-            m_checkerboard_image.image,
+            m_checkerboard_image->image,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
         );
@@ -749,7 +740,7 @@ namespace Renderer
             if (viewport_extent.x == 0.0f && viewport_extent.y == 0.0f)
             {
                 viewport_extent =
-                    glm::vec2(scene.draw_image.image_extent.height, scene.draw_image.image_extent.width);
+                    glm::vec2(scene.draw_image->image_extent.height, scene.draw_image->image_extent.width);
             }
 
             scene.draw_extent.height = uint32_t(viewport_extent.x * scene.render_scale);
@@ -757,15 +748,15 @@ namespace Renderer
 
             VkImageLayout current = VK_IMAGE_LAYOUT_UNDEFINED;
             VkImageLayout target = VK_IMAGE_LAYOUT_GENERAL;
-            Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image.image, current, target);
+            Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image->image, current, target);
             DrawSceneBackground(scene, cmd);
             current = target;
             target = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image.image, current, target);
+            Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image->image, current, target);
             DrawSceneGeometry(scene, cmd);
             current = target;
             target = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-            Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image.image, current, target);
+            Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image->image, current, target);
         }
 
         // copy the main draw into swapchain
@@ -777,7 +768,7 @@ namespace Renderer
         Utils::CopyImageToImage(
             &m_device_dispatch,
             cmd,
-            main_scene->draw_image.image,
+            main_scene->draw_image->image,
             m_swapchain_images[swapchain_image_index],
             main_scene->draw_extent,
             m_swapchain_extent
@@ -865,7 +856,7 @@ namespace Renderer
         // create the scene data!
         // cpu to gpu so we can skip uploading it. Hopefully the data is small enough to fit in the
         // GPU cache so it won't need to read from system memory. if that is not the case, lol
-        AllocatedBuffer scene_data_buffer = CreateBuffer(
+        BufferHandle scene_data_buffer = CreateBuffer(
             sizeof(GPUSceneData),
             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
             VMA_MEMORY_USAGE_CPU_TO_GPU,
@@ -873,13 +864,7 @@ namespace Renderer
             "scene data buffer"
         );
         // delete it next frame
-        GetCurrentFrame().deletion_queue.PushFunction(
-            "scene data buffer",
-            [this, buffer = scene_data_buffer]()
-            {
-                DestroyBuffer(buffer);
-            }
-        );
+        GetCurrentFrame().buffers_in_use.emplace_back(scene_data_buffer);
 
         // we translate first because we want to move the world, not the camera. When we make a real
         // camera, the order should be reversed
@@ -905,11 +890,11 @@ namespace Renderer
 
         // #TODO: replace with vmaCopyMemoryToAllocation instead of manual mapping
         void* mappedData;
-        vmaMapMemory(m_allocator, scene_data_buffer.allocation, &mappedData);
+        vmaMapMemory(m_allocator, scene_data_buffer->allocation, &mappedData);
         GPUSceneData* mapped_scene_data = (GPUSceneData*)mappedData;
         *mapped_scene_data = scene_data; // write into the mapped memory. This is technically random
                                          // access so might be very slow but it's okay for now
-        vmaUnmapMemory(m_allocator, scene_data_buffer.allocation);
+        vmaUnmapMemory(m_allocator, scene_data_buffer->allocation);
 
         // now we just need to bind it
         VkDescriptorSet scene_data_descriptor =
@@ -918,7 +903,7 @@ namespace Renderer
         // update scene data descriptor
         Utils::DescriptorWriter writer{};
         writer.WriteBuffer(
-            0, scene_data_buffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+            0, scene_data_buffer->buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
         );
         writer.UpdateSet(m_device_dispatch, scene_data_descriptor);
 
@@ -939,13 +924,13 @@ namespace Renderer
         m_device_dispatch.cmdSetScissor(cmd, 0, 1, &scissor);
 
         VkRenderingAttachmentInfo color_attachment =
-            Utils::AttachmentInfo(scene.draw_image.image_view, nullptr);
+            Utils::AttachmentInfo(scene.draw_image->image_view, nullptr);
 
         VkClearValue clear_value{};
         clear_value.depthStencil.depth = 0.0f; // zero is far in reversed depth
 
         VkRenderingAttachmentInfo depth_attachment = Utils::AttachmentInfo(
-            scene.depth_image.image_view, &clear_value, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            scene.depth_image->image_view, &clear_value, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
         );
 
         VkRenderingInfo render_info =
@@ -1256,40 +1241,17 @@ namespace Renderer
 
     void VulkanEngine::InitDefaultDescriptors()
     {
-        std::vector<Utils::DescriptorPoolSizeRatio> single_image_pool_sizes{
-            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 }
+        // allocator for materials
+        std::array<Utils::DescriptorPoolSizeRatio, 2> size_ratios{
+            Utils::DescriptorPoolSizeRatio{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
+            Utils::DescriptorPoolSizeRatio{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 }
         };
-        m_single_image_descriptor_allocator.Init(
-            m_device_dispatch, 10, single_image_pool_sizes, VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT
-        );
-
-        Utils::DescriptorLayoutBuilder builder;
-        builder.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-
-        // we need to set binding flags to allow updating after binding so we can write to the
-        // descriptor set at runtime.
-        VkDescriptorBindingFlags binding_flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
-        VkDescriptorSetLayoutBindingFlagsCreateInfo set_layout_flags{};
-        set_layout_flags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-        set_layout_flags.pBindingFlags = &binding_flags;
-        set_layout_flags.bindingCount = 1;
-
-        m_single_image_descriptor_layout = builder.Build(
-            m_device_dispatch,
-            VK_SHADER_STAGE_FRAGMENT_BIT,
-            VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-            &set_layout_flags
-        );
-
-        m_single_image_descriptors =
-            m_single_image_descriptor_allocator.Allocate(m_device_dispatch, m_single_image_descriptor_layout);
-
+        m_material_descriptor_allocator.Init(m_device_dispatch, 1024, size_ratios);
         m_deletion_queue.PushFunction(
-            "default descriptors",
+            "test pbr allocator",
             [this]()
             {
-                m_single_image_descriptor_allocator.DestroyPools(m_device_dispatch);
-                m_device_dispatch.destroyDescriptorSetLayout(m_single_image_descriptor_layout, nullptr);
+                m_material_descriptor_allocator.DestroyPools(m_device_dispatch);
             }
         );
     }
@@ -1314,7 +1276,7 @@ namespace Renderer
 
         VkPushConstantRange push_constants_info{};
         push_constants_info.offset = 0;
-        push_constants_info.size = sizeof(PushConstants);
+        push_constants_info.size = sizeof(BackgroundPushConstants);
         push_constants_info.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
         layout_info.pushConstantRangeCount = 1;
@@ -1385,12 +1347,10 @@ namespace Renderer
         // create the main scene
         glm::u32vec2 backbuffer_size{ m_window_extent.width, m_window_extent.height };
         backbuffer_size *= m_backbuffer_scale;
-        AllocatedImage draw_image = CreateDrawImage(backbuffer_size.x, backbuffer_size.y);
-        AllocatedImage depth_image = CreateDepthImage(backbuffer_size.x, backbuffer_size.y);
 
-        Renderer::Scene& new_scene = render_scenes.emplace_back();
-        new_scene.draw_image = draw_image;
-        new_scene.depth_image = depth_image;
+        Renderer::Scene new_scene{};
+        new_scene.draw_image = CreateDrawImage(backbuffer_size.x, backbuffer_size.y);
+        new_scene.depth_image = CreateDepthImage(backbuffer_size.x, backbuffer_size.y);
         new_scene.scene_name = "main scene";
         new_scene.render_scale = 1.0f;
 
@@ -1398,12 +1358,16 @@ namespace Renderer
         new_scene.camera_rotation = glm::mat4{ 1.0f }; // no rotation
         new_scene.camera_vertical_fov = 70.0f;
 
-        main_scene = &new_scene;
+        main_scene = &render_scenes.emplace_back(std::move(new_scene));
 
         // background descriptor for main scene. This is a shitty place for it but easiest for now.
         Utils::DescriptorWriter writer{};
         writer.WriteImage(
-            0, main_scene->draw_image.image_view, VK_IMAGE_LAYOUT_GENERAL, 0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+            0,
+            main_scene->draw_image->image_view,
+            VK_IMAGE_LAYOUT_GENERAL,
+            0,
+            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
         );
         writer.UpdateSet(m_device_dispatch, m_background_compute_descriptors);
 
@@ -1460,17 +1424,6 @@ namespace Renderer
             "checkerboard_image"
         );
 
-        m_deletion_queue.PushFunction(
-            "default images",
-            [this]()
-            {
-                DestroyImage(m_white_image);
-                DestroyImage(m_black_image);
-                DestroyImage(m_grey_image);
-                DestroyImage(m_checkerboard_image);
-            }
-        );
-
         // Create the default samplers
         VkSamplerCreateInfo sampler_create_info{};
         sampler_create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -1504,19 +1457,6 @@ namespace Renderer
 
         if (m_gltf_pbr_material.loaded)
         {
-            std::array<Utils::DescriptorPoolSizeRatio, 2> size_ratios{
-                Utils::DescriptorPoolSizeRatio{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
-                Utils::DescriptorPoolSizeRatio{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 }
-            };
-            m_test_pbr_allocator.Init(m_device_dispatch, 10, size_ratios);
-            m_deletion_queue.PushFunction(
-                "test pbr allocator",
-                [this]()
-                {
-                    m_test_pbr_allocator.DestroyPools(m_device_dispatch);
-                }
-            );
-
             Material_GLTF_PBR::MaterialParameters params{};
             params.colour = glm::vec4{ 1.0f };
             params.metal_roughness = glm::vec4{ 1.0f };
@@ -1524,25 +1464,18 @@ namespace Renderer
             m_test_pbr_uniform = CreateBuffer(
                 &params, sizeof(params), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, "test pbr instance buffer"
             );
-            m_deletion_queue.PushFunction(
-                "test pbr instance buffer",
-                [this]()
-                {
-                    DestroyBuffer(m_test_pbr_uniform);
-                }
-            );
 
             Material_GLTF_PBR::Resources resources{};
             resources.buffer_offset = 0;
-            resources.uniform_buffer = m_test_pbr_uniform.buffer;
-            resources.colour_image = *m_active_image;
+            resources.uniform_buffer = m_test_pbr_uniform->buffer;
+            resources.colour_image = *m_checkerboard_image;
             resources.colour_sampler =
                 m_use_linear_sampling ? m_default_sampler_linear : m_default_sampler_nearest;
-            resources.metal_roughness_image = *m_active_image;
+            resources.metal_roughness_image = *m_checkerboard_image;
             resources.metal_roughness_sampler = resources.colour_sampler;
 
             m_test_pbr_instance = m_gltf_pbr_material.CreateInstance(
-                m_device_dispatch, MaterialPass::Transparent, resources, m_test_pbr_allocator
+                m_device_dispatch, MaterialPass::Transparent, resources, m_material_descriptor_allocator
             );
 
             std::unique_ptr<MeshSceneItem> item = std::make_unique<MeshSceneItem>();
@@ -1560,15 +1493,6 @@ namespace Renderer
                 surface.material = mat;
             }
         }
-
-        m_deletion_queue.PushFunction(
-            "default mesh",
-            [this]()
-            {
-                DestroyBuffer(m_default_mesh->buffers.vertex_buffer);
-                DestroyBuffer(m_default_mesh->buffers.index_buffer);
-            }
-        );
     }
 
     void VulkanEngine::InitImgui()
@@ -1669,7 +1593,7 @@ namespace Renderer
         m_swapchain_image_views = vkb_swapchain.get_image_views().value();
     }
 
-    AllocatedImage VulkanEngine::CreateDrawImage(uint32_t width, uint32_t height)
+    ImageHandle VulkanEngine::CreateDrawImage(uint32_t width, uint32_t height)
     {
         VkExtent3D image_extent{ width, height, 1 };
 
@@ -1698,7 +1622,7 @@ namespace Renderer
         );
     }
 
-    AllocatedImage VulkanEngine::CreateDepthImage(uint32_t width, uint32_t height)
+    ImageHandle VulkanEngine::CreateDepthImage(uint32_t width, uint32_t height)
     {
         VkExtent3D image_extent{ width, height, 1 };
         VkFormat image_format = VKENGINE_DEPTH_IMAGE_FORMAT;

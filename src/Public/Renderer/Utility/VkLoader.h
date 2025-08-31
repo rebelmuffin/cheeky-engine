@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Renderer/Material.h"
+#include "Renderer/ResourceStorage.h"
 #include "Renderer/VkTypes.h"
 
 #include <filesystem>
@@ -28,18 +29,28 @@ namespace Renderer
 
         GPUMeshBuffers buffers;
         std::vector<GeoSurface> surfaces;
-
-        // #TODO: RAII destroy buffers
     };
 
+    struct Scene;
     class VulkanEngine;
+
+    void DestroyMeshAsset(VulkanEngine& engine, const MeshAsset& asset);
+
+    template <>
+    inline void ResourceStorage<MeshAsset>::DestroyResource(VulkanEngine& engine, const MeshAsset& asset)
+    {
+        DestroyMeshAsset(engine, asset);
+    }
+
 } // namespace Renderer
 
 namespace Renderer::Utils
 {
     /// Loads meshes from a glTF file. Supports both binary and json gltf. Returns nullopt on failure.
     std::optional<std::vector<std::shared_ptr<MeshAsset>>> LoadGltfMeshes(
-        VulkanEngine* engine, std::filesystem::path filePath
+        VulkanEngine* engine, std::filesystem::path file_path
     );
+
+    bool LoadGltfIntoScene(Scene& scene, VulkanEngine& engine, std::filesystem::path file_path);
 
 } // namespace Renderer::Utils

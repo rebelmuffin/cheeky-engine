@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Renderer/ResourceStorage.h"
 #include "Renderer/Utility/VkLoader.h"
 #include "Renderer/VkTypes.h"
 #include <vulkan/vulkan_core.h>
@@ -51,7 +52,7 @@ namespace Renderer::Utils
             size_t vertex_buffer_size,
             size_t index_buffer_size,
             const GPUMeshBuffers& target_mesh,
-            const AllocatedBuffer& staging_buffer,
+            const BufferHandle& staging_buffer,
             UploadType upload_type,
             std::string_view debug_name = "unnamed_mesh_upload"
         );
@@ -67,7 +68,7 @@ namespace Renderer::Utils
         size_t m_vertex_buffer_size;
         size_t m_index_buffer_size;
         GPUMeshBuffers m_target_mesh;
-        AllocatedBuffer m_staging_buffer;
+        BufferHandle m_staging_buffer;
         UploadType m_upload_type;
         std::string m_debug_name;
     };
@@ -79,8 +80,8 @@ namespace Renderer::Utils
         /// complete.
         BufferUploadRequest(
             size_t buffer_size,
-            AllocatedBuffer staging_buffer,
-            AllocatedBuffer target_buffer,
+            BufferHandle staging_buffer,
+            BufferHandle target_buffer,
             UploadType upload_type,
             size_t src_offset = 0,
             size_t dst_offset = 0,
@@ -98,8 +99,8 @@ namespace Renderer::Utils
         size_t m_buffer_size;
         size_t m_src_offset;
         size_t m_dst_offset;
-        AllocatedBuffer m_staging_buffer;
-        AllocatedBuffer m_target_buffer;
+        BufferHandle m_staging_buffer;
+        BufferHandle m_target_buffer;
         UploadType m_upload_type;
         std::string m_debug_name;
     };
@@ -111,8 +112,8 @@ namespace Renderer::Utils
         /// complete.
         ImageUploadRequest(
             VkExtent3D image_extent,
-            AllocatedImage staging_image,
-            AllocatedImage target_image,
+            ImageHandle staging_image,
+            ImageHandle target_image,
             UploadType upload_type,
             VkOffset3D src_offset = {},
             VkOffset3D dst_offset = {},
@@ -130,8 +131,8 @@ namespace Renderer::Utils
         VkExtent3D m_image_extent;
         VkOffset3D m_src_offset;
         VkOffset3D m_dst_offset;
-        AllocatedImage m_staging_image;
-        AllocatedImage m_target_image;
+        ImageHandle m_staging_image;
+        ImageHandle m_target_image;
         UploadType m_upload_type;
         std::string m_debug_name;
     };

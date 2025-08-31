@@ -55,6 +55,7 @@ executable(
     'src/Private/main.cpp',
     'src/Private/EngineCore.cpp',
     'src/Private/Renderer/VkEngine.cpp',
+    'src/Private/Renderer/VkTypes.cpp',
     'src/Private/Renderer/Material.cpp',
     'src/Private/Renderer/Renderable.cpp',
     'src/Private/Renderer/Utility/VkLoader.cpp',

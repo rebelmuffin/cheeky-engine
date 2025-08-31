@@ -158,7 +158,7 @@ void EngineCore::OnImgui()
             static int current_selection = 0;
             Renderer::ComputeEffect* current_effect =
                 &m_renderer->ComputeEffects()[m_renderer->CurrentComputeEffect()];
-            Renderer::PushConstants* constants = &current_effect->push_constants;
+            Renderer::BackgroundPushConstants* constants = &current_effect->push_constants;
             static float data1[4];
             static float data2[4];
             static float data3[4];

@@ -9,7 +9,7 @@ namespace Renderer
         for (const GeoSurface& surface : asset->surfaces)
         {
             RenderObject obj{};
-            obj.index_buffer = asset->buffers.index_buffer.buffer;
+            obj.index_buffer = asset->buffers.index_buffer->buffer;
             obj.vertex_buffer_address = asset->buffers.vertex_buffer_address;
 
             obj.first_index = surface.first_index;

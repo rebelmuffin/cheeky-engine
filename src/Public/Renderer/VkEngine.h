@@ -3,6 +3,7 @@
 #include "Renderer/Material.h"
 #include "Renderer/MaterialInterface.h"
 #include "Renderer/RenderObject.h"
+#include "Renderer/ResourceStorage.h"
 #include "Renderer/Scene.h"
 #include "Renderer/Utility/DeletionQueue.h"
 #include "Renderer/Utility/UploadRequest.h"
@@ -11,6 +12,7 @@
 #include "Renderer/VkTypes.h"
 
 #include <VkBootstrapDispatch.h>
+#include <unordered_map>
 #include <vulkan/vulkan_core.h>
 
 struct SDL_Window;
@@ -21,7 +23,7 @@ constexpr VkFormat VKENGINE_DEPTH_IMAGE_FORMAT = VK_FORMAT_D32_SFLOAT;
 
 namespace Renderer
 {
-    struct PushConstants
+    struct BackgroundPushConstants
     {
         glm::vec4 data1;
         glm::vec4 data2;
@@ -35,7 +37,7 @@ namespace Renderer
         const char* path;
         VkPipeline pipeline;
         VkPipelineLayout layout;
-        PushConstants push_constants;
+        BackgroundPushConstants push_constants;
     };
 
     struct FrameData
@@ -49,6 +51,10 @@ namespace Renderer
 
         Utils::DescriptorAllocatorDynamic frame_descriptors;
         Utils::DeletionQueue deletion_queue;
+
+        // storage for reference counted handles so we can stop using them between frames.
+        std::vector<BufferHandle> buffers_in_use;
+        std::vector<ImageHandle> images_in_use;
     };
 
     constexpr int FRAME_OVERLAP = 2;
@@ -94,14 +100,14 @@ namespace Renderer
         VmaAllocator& Allocator() { return m_allocator; }
         const Material_GLTF_PBR& PBRMaterial() { return m_gltf_pbr_material; }
 
-        AllocatedBuffer CreateBuffer(
+        BufferHandle CreateBuffer(
             size_t allocation_size,
             VkBufferUsageFlags usage,
             VmaMemoryUsage memory_usage,
             VmaAllocationCreateFlags allocation_flags = 0,
             const char* debug_name = "unnamed_buffer"
         );
-        AllocatedBuffer CreateBuffer(
+        BufferHandle CreateBuffer(
             void* buffer_data,
             size_t buffer_size,
             VkBufferUsageFlags usage,
@@ -110,7 +116,7 @@ namespace Renderer
         void DestroyBuffer(const AllocatedBuffer& buffer);
 
         // allocate an empty image with given dimensions.
-        AllocatedImage AllocateImage(
+        ImageHandle AllocateImage(
             VkExtent3D image_extent,
             VkFormat format,
             VkImageUsageFlags usage,
@@ -123,7 +129,7 @@ namespace Renderer
         );
 
         // allocate an image and copy the given data inside. RGBA8 format is assumed.
-        AllocatedImage AllocateImage(
+        ImageHandle AllocateImage(
             void* image_data,
             VkExtent3D image_extent,
             VkFormat format,
@@ -138,8 +144,8 @@ namespace Renderer
         void RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request);
 
         // helpers for creating scenes
-        AllocatedImage CreateDrawImage(uint32_t width, uint32_t height);
-        AllocatedImage CreateDepthImage(uint32_t width, uint32_t height);
+        ImageHandle CreateDrawImage(uint32_t width, uint32_t height);
+        ImageHandle CreateDepthImage(uint32_t width, uint32_t height);
 
         float test_mesh_opacity{ 1.0f };
 
@@ -147,6 +153,7 @@ namespace Renderer
         std::vector<Scene> render_scenes;
 
       private:
+        void DestroyPendingResources();
         void FinishPendingUploads(VkCommandBuffer cmd);
         void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 
@@ -191,10 +198,10 @@ namespace Renderer
         PFN_vkGetInstanceProcAddr m_get_instance_proc_addr;
 
         // default images used for debugging and fallback
-        AllocatedImage m_white_image;
-        AllocatedImage m_black_image;
-        AllocatedImage m_grey_image;
-        AllocatedImage m_checkerboard_image;
+        ImageHandle m_white_image;
+        ImageHandle m_black_image;
+        ImageHandle m_grey_image;
+        ImageHandle m_checkerboard_image;
 
         // samplers we use for these
         VkSampler m_default_sampler_nearest;
@@ -209,8 +216,7 @@ namespace Renderer
         // test mesh and material instance
         std::shared_ptr<MeshAsset> m_default_mesh;
         MaterialInstance m_test_pbr_instance;
-        Utils::DescriptorAllocatorDynamic m_test_pbr_allocator;
-        AllocatedBuffer m_test_pbr_uniform;
+        BufferHandle m_test_pbr_uniform;
 
         std::vector<VkImage> m_swapchain_images;
         std::vector<VkImageView> m_swapchain_image_views;
@@ -235,10 +241,6 @@ namespace Renderer
         VkDescriptorSet m_background_compute_descriptors;
         VkDescriptorSetLayout m_background_compute_descriptor_layout;
 
-        Utils::DescriptorAllocatorDynamic m_single_image_descriptor_allocator;
-        VkDescriptorSet m_single_image_descriptors;
-        VkDescriptorSetLayout m_single_image_descriptor_layout;
-
         bool m_use_validation_layers;
         bool m_force_all_uploads_immediate;
 
@@ -255,6 +257,7 @@ namespace Renderer
         VkDescriptorSetLayout m_scene_data_descriptor_layout;
 
         // materials (pipelines)
+        Utils::DescriptorAllocatorDynamic m_material_descriptor_allocator;
         Material_GLTF_PBR m_gltf_pbr_material;
 
         // interfaces
@@ -266,6 +269,11 @@ namespace Renderer
         glm::vec3 m_camera_position{ 0.0f, 0.0f, -1.0f };
         bool m_rotating_camera = true;
         bool m_use_linear_sampling = true;
-        AllocatedImage* m_active_image = &m_checkerboard_image;
+
+        // Resource storages. We manage the lifetime of all resources in the engine.
+        ResourceStorage<AllocatedImage> m_image_storage;
+        ResourceStorage<AllocatedBuffer> m_buffer_storage;
+        ResourceStorage<MeshAsset> m_mesh_storage;
     };
+
 } // namespace Renderer
