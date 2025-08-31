@@ -134,10 +134,10 @@
 			{
 				"name": "Launch Cheeky (lldb)",
 				"program": "${workspaceRoot}/build/cheeky-vk-new",
-				"cwd": "${workspaceRoot}/build-clang",
+				"cwd": "${workspaceRoot}/build",
 				"type": "lldb",
 				"request": "launch",
-				"preLaunchTask": "Build All (clang)",
+				"preLaunchTask": "Build All (gcc)",
 				"internalConsoleOptions": "openOnSessionStart",
 			},
 			{
