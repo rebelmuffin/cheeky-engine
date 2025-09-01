@@ -2,6 +2,9 @@
 .vscode
 .cache
 
+# macOS crap
+.DS_Store
+
 # ignore local cvars
 .cvars
 
