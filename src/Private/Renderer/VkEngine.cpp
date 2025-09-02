@@ -1493,15 +1493,18 @@ namespace Renderer
 
             Material_GLTF_PBR::Resources resources{};
             resources.buffer_offset = 0;
-            resources.uniform_buffer = m_test_pbr_uniform->buffer;
-            resources.colour_image = *m_checkerboard_image;
+            resources.uniform_buffer = m_test_pbr_uniform;
+            resources.colour_image = m_checkerboard_image;
             resources.colour_sampler =
                 m_use_linear_sampling ? m_default_sampler_linear : m_default_sampler_nearest;
-            resources.metal_roughness_image = *m_checkerboard_image;
+            resources.metal_roughness_image = m_checkerboard_image;
             resources.metal_roughness_sampler = resources.colour_sampler;
 
             m_test_pbr_instance = m_gltf_pbr_material.CreateInstance(
-                m_device_dispatch, MaterialPass::Transparent, resources, m_material_descriptor_allocator
+                m_device_dispatch,
+                MaterialPass::Transparent,
+                resources,
+                m_gltf_pbr_material.descriptor_allocator
             );
 
             std::unique_ptr<MeshSceneItem> item = std::make_unique<MeshSceneItem>();
