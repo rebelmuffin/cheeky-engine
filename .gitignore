@@ -30,3 +30,4 @@
 !/subprojects/imgui
 /subprojects/imgui/backends/vulkan/*.u32
 !/subprojects/fastgltf
+!/subprojects/imguizmo

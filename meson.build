@@ -33,8 +33,11 @@ sdl2_dep = dependency('sdl2')
 vma_dep = dependency('vulkan-memory-allocator')
 glm_dep = dependency('glm')
 
+# imgui stuffs
 subproject('imgui')
 imgui_dep = dependency('imgui')
+subproject('imguizmo')
+imguizmo_dep = dependency('imguizmo')
 
 # cmake dependencies
 cmake_opts = cmake.subproject_options()
@@ -76,6 +79,7 @@ executable(
         vma_dep,
         glm_dep,
         imgui_dep,
+        imguizmo_dep,
         vkbootstrap_dep,
         stb_image_dep,
         tinyobjloader_dep,

@@ -4,3 +4,6 @@
 [submodule "subprojects/vkbootstrap"]
 	path = subprojects/vkbootstrap
 	url = https://github.com/charles-lunarg/vk-bootstrap
+[submodule "subprojects/imguizmo"]
+	path = subprojects/imguizmo
+	url = https://github.com/rebelmuffin/ImGuizmo
