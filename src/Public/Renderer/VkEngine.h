@@ -140,6 +140,7 @@ namespace Renderer
             VkExtent3D image_extent,
             VkFormat format,
             VkImageUsageFlags usage,
+            VkImageLayout layout,
             bool mipmapped = false,
             const char* debug_name = "unnamed_image"
         );
@@ -250,6 +251,7 @@ namespace Renderer
 
         bool m_use_validation_layers;
         bool m_force_all_uploads_immediate;
+        bool m_enable_image_debugging = true;
 
         // uploads that are pending to be done on next frame.
         std::vector<std::unique_ptr<Utils::IUploadRequest>> m_pending_uploads;

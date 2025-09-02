@@ -220,6 +220,7 @@ namespace
                                                    extents,
                                                    VK_FORMAT_R8G8B8A8_UNORM,
                                                    VK_IMAGE_USAGE_SAMPLED_BIT,
+                                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                    true,
                                                    image.name.data()
                                                );
@@ -264,7 +265,13 @@ namespace Renderer::Utils
 
         VkExtent3D image_extents{ (uint32_t)width, (uint32_t)height, 1 };
         ImageHandle loaded_image = engine.AllocateImage(
-            image_data, image_extents, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true, debug_name
+            image_data,
+            image_extents,
+            VK_FORMAT_R8G8B8A8_UNORM,
+            VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            true,
+            debug_name
         );
 
         stbi_image_free(image_data);

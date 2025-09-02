@@ -115,6 +115,7 @@ namespace Renderer::Utils
             ImageHandle staging_image,
             ImageHandle target_image,
             UploadType upload_type,
+            VkImageLayout target_layout,
             VkOffset3D src_offset = {},
             VkOffset3D dst_offset = {},
             std::string_view debug_name = "unnamed_image_upload"
@@ -134,6 +135,7 @@ namespace Renderer::Utils
         ImageHandle m_staging_image;
         ImageHandle m_target_image;
         UploadType m_upload_type;
+        VkImageLayout m_target_layout;
         std::string m_debug_name;
     };
 } // namespace Renderer::Utils

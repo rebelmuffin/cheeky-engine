@@ -1,6 +1,7 @@
 #include "Renderer/Utility/VkImages.h"
 
 #include <VkBootstrapDispatch.h>
+#include <vulkan/vulkan_core.h>
 
 namespace Renderer::Utils
 {
@@ -24,9 +25,12 @@ namespace Renderer::Utils
         imageBarrier.oldLayout = current_layout;
         imageBarrier.newLayout = target_layout;
 
-        VkImageAspectFlags aspectMask = target_layout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
-                                            ? VK_IMAGE_ASPECT_DEPTH_BIT
-                                            : VK_IMAGE_ASPECT_COLOR_BIT;
+        VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        if (imageBarrier.oldLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL ||
+            imageBarrier.newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL)
+        {
+            aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        }
         imageBarrier.subresourceRange = SubresourceRange(aspectMask);
         imageBarrier.image = image;
 

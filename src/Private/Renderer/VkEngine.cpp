@@ -388,6 +388,11 @@ namespace Renderer
         image.image_extent = image_extent;
         image.image_format = format;
 
+        // if image debugging is enabled, any image might be sampled by imgui.
+        if (m_enable_image_debugging)
+        {
+            usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+        }
         VkImageCreateInfo image_info = Utils::ImageCreateInfo(format, usage, image_extent);
         if (mipmapped)
         {
@@ -426,6 +431,7 @@ namespace Renderer
         VkExtent3D image_extent,
         VkFormat format,
         VkImageUsageFlags image_usage,
+        VkImageLayout layout,
         bool mipmapped,
         const char* debug_name
     )
@@ -466,48 +472,38 @@ namespace Renderer
         VkMemoryPropertyFlags memory_properties;
         vmaGetAllocationMemoryProperties(m_allocator, image->allocation, &memory_properties);
 
-        if (memory_properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
-        {
-            // this is mappable! We simply map it and immediately copy the data over.
-            vmaCopyMemoryToAllocation(m_allocator, image_data, image->allocation, 0, image_data_size);
-        }
-        else
-        {
-            // since the wise allocator decided that the most optimal place for the image to be read from is
-            // not host visible, we need to create a staging image that is visible on host and copy that over
-            // with a command buffer.
-            VkImageUsageFlags staging_image_usage = image_usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-            VmaMemoryUsage staging_memory_usage = VMA_MEMORY_USAGE_AUTO;
-            VmaAllocationCreateFlags allocation_flags =
-                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-            ImageHandle staging_image = AllocateImage(
-                image_extent,
-                format,
-                staging_image_usage,
-                staging_memory_usage,
-                aspect_flags,
-                0,
-                allocation_flags,
-                false,
-                debug_name
-            );
+        // since the wise allocator decided that the most optimal place for the image to be read from is
+        // not host visible, we need to create a staging image that is visible on host and copy that over
+        // with a command buffer.
+        VkImageUsageFlags staging_image_usage = image_usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        VmaMemoryUsage staging_memory_usage = VMA_MEMORY_USAGE_AUTO;
+        ImageHandle staging_image = AllocateImage(
+            image_extent,
+            format,
+            staging_image_usage,
+            staging_memory_usage,
+            aspect_flags,
+            0,
+            allocation_flags,
+            false,
+            debug_name
+        );
 
-            // don't forget this! (I forgot it and spent legit 1.5 hours debugging why the FUCK the texture is
-            // black).
-            vmaCopyMemoryToAllocation(m_allocator, image_data, staging_image->allocation, 0, image_data_size);
+        // don't forget this! (I forgot it and spent legit 1.5 hours debugging why the FUCK the texture is
+        // black).
+        vmaCopyMemoryToAllocation(m_allocator, image_data, staging_image->allocation, 0, image_data_size);
 
-            std::unique_ptr<Utils::IUploadRequest> upload_request =
-                std::make_unique<Utils::ImageUploadRequest>(
-                    image_extent,
-                    staging_image,
-                    image,
-                    Utils::UploadType::Deferred,
-                    VkOffset3D{},
-                    VkOffset3D{},
-                    debug_name
-                );
-            RequestUpload(std::move(upload_request));
-        }
+        std::unique_ptr<Utils::IUploadRequest> upload_request = std::make_unique<Utils::ImageUploadRequest>(
+            image_extent,
+            staging_image,
+            image,
+            Utils::UploadType::Deferred,
+            layout,
+            VkOffset3D{},
+            VkOffset3D{},
+            debug_name
+        );
+        RequestUpload(std::move(upload_request));
 
         return image;
     }
@@ -722,36 +718,6 @@ namespace Renderer
 
         FinishPendingUploads(cmd);
 
-        // all our testing images need to be in read state. This sucks, idk how to fix it.
-        Utils::TransitionImage(
-            &m_device_dispatch,
-            cmd,
-            m_white_image->image,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-        );
-        Utils::TransitionImage(
-            &m_device_dispatch,
-            cmd,
-            m_black_image->image,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-        );
-        Utils::TransitionImage(
-            &m_device_dispatch,
-            cmd,
-            m_grey_image->image,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-        );
-        Utils::TransitionImage(
-            &m_device_dispatch,
-            cmd,
-            m_checkerboard_image->image,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-        );
-
         // draw onto draw image.
         for (Scene& scene : render_scenes)
         {
@@ -804,6 +770,21 @@ namespace Renderer
         Utils::TransitionImage(
             &m_device_dispatch, cmd, m_swapchain_images[swapchain_image_index], current, target
         );
+
+        // if texture debugging, transition all draw images for scenes to shader read only.
+        if (m_enable_image_debugging)
+        {
+            for (Scene& scene : render_scenes)
+            {
+                Utils::TransitionImage(
+                    &m_device_dispatch,
+                    cmd,
+                    scene.draw_image->image,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                );
+            }
+        }
 
         // COMMAND END
         VK_CHECK(m_device_dispatch.endCommandBuffer(cmd));
@@ -906,13 +887,9 @@ namespace Renderer
         scene_data.light_colour = scene.light_colour;
         scene_data.light_direction = scene.light_direction;
 
-        // #TODO: replace with vmaCopyMemoryToAllocation instead of manual mapping
-        void* mappedData;
-        vmaMapMemory(m_allocator, scene_data_buffer->allocation, &mappedData);
-        GPUSceneData* mapped_scene_data = (GPUSceneData*)mappedData;
-        *mapped_scene_data = scene_data; // write into the mapped memory. This is technically random
-                                         // access so might be very slow but it's okay for now
-        vmaUnmapMemory(m_allocator, scene_data_buffer->allocation);
+        vmaCopyMemoryToAllocation(
+            m_allocator, &scene_data, scene_data_buffer->allocation, 0, sizeof(scene_data)
+        );
 
         // now we just need to bind it
         VkDescriptorSet scene_data_descriptor =
@@ -948,7 +925,7 @@ namespace Renderer
         clear_value.depthStencil.depth = 0.0f; // zero is far in reversed depth
 
         VkRenderingAttachmentInfo depth_attachment = Utils::AttachmentInfo(
-            scene.depth_image->image_view, &clear_value, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            scene.depth_image->image_view, &clear_value, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
         );
 
         VkRenderingInfo render_info =
@@ -958,30 +935,6 @@ namespace Renderer
         for (const std::unique_ptr<SceneItem>& item : scene.scene_items)
         {
             item->Draw(ctx);
-        }
-
-        // This is probably a horrible idea. Find a better way to do this.
-        for (const RenderObject& render_object : ctx.render_objects)
-        {
-            std::unordered_set<size_t> transitioned_images{};
-
-            // make sure all images are ready to be read from by the shader
-            for (const ImageHandle& image : render_object.material->referenced_images)
-            {
-                if (transitioned_images.contains(image.id))
-                {
-                    continue;
-                }
-
-                Utils::TransitionImage(
-                    &m_device_dispatch,
-                    cmd,
-                    image->image,
-                    VK_IMAGE_LAYOUT_UNDEFINED,
-                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-                );
-                transitioned_images.emplace(image.id);
-            }
         }
 
         m_device_dispatch.cmdBeginRendering(cmd, &render_info);
@@ -1382,6 +1335,25 @@ namespace Renderer
 
     void VulkanEngine::InitDefaultData()
     {
+        // Create the default samplers
+        VkSamplerCreateInfo sampler_create_info{};
+        sampler_create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        sampler_create_info.magFilter = VK_FILTER_NEAREST;
+        sampler_create_info.minFilter = VK_FILTER_NEAREST;
+        m_device_dispatch.createSampler(&sampler_create_info, nullptr, &m_default_sampler_nearest);
+        sampler_create_info.magFilter = VK_FILTER_LINEAR;
+        sampler_create_info.minFilter = VK_FILTER_LINEAR;
+        m_device_dispatch.createSampler(&sampler_create_info, nullptr, &m_default_sampler_linear);
+
+        m_deletion_queue.PushFunction(
+            "default samplers",
+            [this]()
+            {
+                m_device_dispatch.destroySampler(m_default_sampler_nearest, nullptr);
+                m_device_dispatch.destroySampler(m_default_sampler_linear, nullptr);
+            }
+        );
+
         // create the main scene
         glm::vec2 backbuffer_size{ m_window_extent.width, m_window_extent.height };
         backbuffer_size *= m_backbuffer_scale;
@@ -1417,6 +1389,7 @@ namespace Renderer
             VkExtent3D{ 1, 1, 1 },
             VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             false,
             "white_image"
         );
@@ -1427,6 +1400,7 @@ namespace Renderer
             VkExtent3D{ 1, 1, 1 },
             VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             false,
             "black_image"
         );
@@ -1437,6 +1411,7 @@ namespace Renderer
             VkExtent3D{ 1, 1, 1 },
             VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             false,
             "grey_image"
         );
@@ -1458,27 +1433,9 @@ namespace Renderer
             VkExtent3D{ 16, 16, 1 },
             VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             false,
             "checkerboard_image"
-        );
-
-        // Create the default samplers
-        VkSamplerCreateInfo sampler_create_info{};
-        sampler_create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        sampler_create_info.magFilter = VK_FILTER_NEAREST;
-        sampler_create_info.minFilter = VK_FILTER_NEAREST;
-        m_device_dispatch.createSampler(&sampler_create_info, nullptr, &m_default_sampler_nearest);
-        sampler_create_info.magFilter = VK_FILTER_LINEAR;
-        sampler_create_info.minFilter = VK_FILTER_LINEAR;
-        m_device_dispatch.createSampler(&sampler_create_info, nullptr, &m_default_sampler_linear);
-
-        m_deletion_queue.PushFunction(
-            "default samplers",
-            [this]()
-            {
-                m_device_dispatch.destroySampler(m_default_sampler_nearest, nullptr);
-                m_device_dispatch.destroySampler(m_default_sampler_linear, nullptr);
-            }
         );
 
         // load testing mesh

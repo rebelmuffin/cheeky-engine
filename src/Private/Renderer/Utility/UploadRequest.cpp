@@ -98,6 +98,7 @@ namespace Renderer::Utils
         ImageHandle staging_image,
         ImageHandle target_image,
         UploadType upload_type,
+        VkImageLayout target_layout,
         VkOffset3D src_offset,
         VkOffset3D dst_offset,
         std::string_view debug_name
@@ -108,6 +109,7 @@ namespace Renderer::Utils
         m_staging_image(staging_image),
         m_target_image(target_image),
         m_upload_type(upload_type),
+        m_target_layout(target_layout),
         m_debug_name(debug_name)
     {
     }
@@ -150,6 +152,22 @@ namespace Renderer::Utils
         copy_image_info.pRegions = &copy;
 
         engine.DeviceDispatchTable().cmdCopyImage2(cmd, &copy_image_info);
+
+        // transition into the final layout. E.g. SHADER_READ_ONLY_OPTIMAL for shader binding textures
+        Utils::TransitionImage(
+            &engine.DeviceDispatchTable(),
+            cmd,
+            m_staging_image->image,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            m_target_layout
+        );
+        Utils::TransitionImage(
+            &engine.DeviceDispatchTable(),
+            cmd,
+            m_target_image->image,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            m_target_layout
+        );
 
         return UploadExecutionResult::Success;
     }
