@@ -44,6 +44,6 @@ namespace Renderer
 
         void Draw(DrawContext& ctx) override;
 
-        MeshAsset* asset;
+        MeshHandle asset;
     };
 } // namespace Renderer

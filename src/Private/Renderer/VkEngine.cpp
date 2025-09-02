@@ -24,6 +24,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/transform.hpp>
 #include <imgui.h>
+#include <unordered_set>
 #include <utility>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
@@ -591,7 +592,7 @@ namespace Renderer
 
     MeshHandle VulkanEngine::RegisterMeshAsset(MeshAsset&& asset, std::string_view debug_name)
     {
-        m_mesh_storage.AddResource(std::move(asset), debug_name);
+        return m_mesh_storage.AddResource(std::move(asset), debug_name);
     }
 
     void VulkanEngine::RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request)
@@ -966,13 +967,37 @@ namespace Renderer
         VkRenderingInfo render_info =
             Utils::RenderingInfo(&color_attachment, &depth_attachment, scene.draw_extent);
 
-        m_device_dispatch.cmdBeginRendering(cmd, &render_info);
-
         DrawContext ctx{};
         for (const std::unique_ptr<SceneItem>& item : scene.scene_items)
         {
             item->Draw(ctx);
         }
+
+        // This is probably a horrible idea. Find a better way to do this.
+        for (const RenderObject& render_object : ctx.render_objects)
+        {
+            std::unordered_set<size_t> transitioned_images{};
+
+            // make sure all images are ready to be read from by the shader
+            for (const ImageHandle& image : render_object.material->referenced_images)
+            {
+                if (transitioned_images.contains(image.id))
+                {
+                    continue;
+                }
+
+                Utils::TransitionImage(
+                    &m_device_dispatch,
+                    cmd,
+                    image->image,
+                    VK_IMAGE_LAYOUT_UNDEFINED,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                );
+                transitioned_images.emplace(image.id);
+            }
+        }
+
+        m_device_dispatch.cmdBeginRendering(cmd, &render_info);
 
         for (const RenderObject& render_object : ctx.render_objects)
         {
@@ -1470,57 +1495,9 @@ namespace Renderer
         );
 
         // load testing mesh
-        auto loaded_meshes =
-            Utils::LoadGltfMeshes(this, std::filesystem::path{ "../data/resources/BarramundiFish.glb" });
-        if (loaded_meshes.has_value() == false || loaded_meshes->empty())
-        {
-            std::cout << "[!] Failed to load default mesh. Will probably crash." << std::endl;
-        }
-        else
-        {
-            m_default_mesh = loaded_meshes->at(0);
-        }
-
         if (m_gltf_pbr_material.loaded)
         {
-            Material_GLTF_PBR::MaterialParameters params{};
-            params.colour = glm::vec4{ 1.0f };
-            params.metal_roughness = glm::vec4{ 1.0f };
-
-            m_test_pbr_uniform = CreateBuffer(
-                &params, sizeof(params), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, "test pbr instance buffer"
-            );
-
-            Material_GLTF_PBR::Resources resources{};
-            resources.buffer_offset = 0;
-            resources.uniform_buffer = m_test_pbr_uniform;
-            resources.colour_image = m_checkerboard_image;
-            resources.colour_sampler =
-                m_use_linear_sampling ? m_default_sampler_linear : m_default_sampler_nearest;
-            resources.metal_roughness_image = m_checkerboard_image;
-            resources.metal_roughness_sampler = resources.colour_sampler;
-
-            m_test_pbr_instance = m_gltf_pbr_material.CreateInstance(
-                m_device_dispatch,
-                MaterialPass::Transparent,
-                resources,
-                m_gltf_pbr_material.descriptor_allocator
-            );
-
-            std::unique_ptr<MeshSceneItem> item = std::make_unique<MeshSceneItem>();
-            item->transform = glm::translate(glm::vec3(0.0f, 0.0f, 0.0f));
-            item->asset = m_default_mesh.get();
-            item->name = "test scene item";
-
-            main_scene->scene_items.emplace_back(std::move(item));
-
-            // do some shenanigans and update the mesh to use the test material instance
-            std::shared_ptr<GLTFMaterial> mat = std::make_shared<GLTFMaterial>();
-            mat->material = m_test_pbr_instance;
-            for (GeoSurface& surface : m_default_mesh->surfaces)
-            {
-                surface.material = mat;
-            }
+            Utils::LoadGltfIntoScene(*main_scene, *this, "../data/resources/BarramundiFish.glb");
         }
     }
 

@@ -89,6 +89,17 @@ namespace Renderer
             return ReferenceCountedHandle<T>(resource_map[id], id, *this);
         }
 
+        /// Same as other AddResource but move version.
+        ReferenceCountedHandle<T> AddResource(T&& resource, std::string_view name = "unnamed_resource")
+        {
+            StorageId_t id = next_storage_id++;
+            resource_map[id] = std::move(resource);
+            resource_name_map[id] = name;
+            resource_reference_map[id] = 0;
+
+            return ReferenceCountedHandle<T>(resource_map[id], id, *this);
+        }
+
         /// Mark the given resource for destruction. NEVER call this directly, ReferenceCountedHandle<T> does
         /// it automatically already.
         void MarkForDestruction(T* resource, StorageId_t resource_id)

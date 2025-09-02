@@ -16,6 +16,7 @@ namespace Renderer
         MaterialInstance material;
     };
 
+    // #TODO: rename to IndexedGeometry
     struct GeoSurface
     {
         uint32_t first_index;
@@ -42,12 +43,18 @@ namespace Renderer
         DestroyMeshAsset(engine, asset);
     }
 
+    using MeshHandle = ReferenceCountedHandle<MeshAsset>;
+
 } // namespace Renderer
 
 namespace Renderer::Utils
 {
+    std::optional<ImageHandle> LoadImageFromPath(
+        VulkanEngine& engine, const char* path, const char* debug_name
+    );
+
     /// Loads meshes from a glTF file. Supports both binary and json gltf. Returns nullopt on failure.
-    std::optional<std::vector<std::shared_ptr<MeshAsset>>> LoadGltfMeshes(
+    std::optional<std::vector<MeshHandle>> LoadGltfMeshes(
         VulkanEngine* engine, std::filesystem::path file_path
     );
 
