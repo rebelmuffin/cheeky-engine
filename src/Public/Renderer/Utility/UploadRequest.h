@@ -112,12 +112,10 @@ namespace Renderer::Utils
         /// complete.
         ImageUploadRequest(
             VkExtent3D image_extent,
-            ImageHandle staging_image,
+            BufferHandle staging_buffer,
             ImageHandle target_image,
             UploadType upload_type,
             VkImageLayout target_layout,
-            VkOffset3D src_offset = {},
-            VkOffset3D dst_offset = {},
             std::string_view debug_name = "unnamed_image_upload"
         );
         virtual ~ImageUploadRequest() = default;
@@ -130,9 +128,7 @@ namespace Renderer::Utils
 
       private:
         VkExtent3D m_image_extent;
-        VkOffset3D m_src_offset;
-        VkOffset3D m_dst_offset;
-        ImageHandle m_staging_image;
+        BufferHandle m_staging_buffer;
         ImageHandle m_target_image;
         UploadType m_upload_type;
         VkImageLayout m_target_layout;

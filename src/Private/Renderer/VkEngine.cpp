@@ -475,33 +475,11 @@ namespace Renderer
         // since the wise allocator decided that the most optimal place for the image to be read from is
         // not host visible, we need to create a staging image that is visible on host and copy that over
         // with a command buffer.
-        VkImageUsageFlags staging_image_usage = image_usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-        VmaMemoryUsage staging_memory_usage = VMA_MEMORY_USAGE_AUTO;
-        ImageHandle staging_image = AllocateImage(
-            image_extent,
-            format,
-            staging_image_usage,
-            staging_memory_usage,
-            aspect_flags,
-            0,
-            allocation_flags,
-            false,
-            debug_name
-        );
-
-        // don't forget this! (I forgot it and spent legit 1.5 hours debugging why the FUCK the texture is
-        // black).
-        vmaCopyMemoryToAllocation(m_allocator, image_data, staging_image->allocation, 0, image_data_size);
+        BufferHandle staging_buffer =
+            CreateBuffer(image_data, image_data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, debug_name);
 
         std::unique_ptr<Utils::IUploadRequest> upload_request = std::make_unique<Utils::ImageUploadRequest>(
-            image_extent,
-            staging_image,
-            image,
-            Utils::UploadType::Deferred,
-            layout,
-            VkOffset3D{},
-            VkOffset3D{},
-            debug_name
+            image_extent, staging_buffer, image, Utils::UploadType::Deferred, layout, debug_name
         );
         RequestUpload(std::move(upload_request));
 

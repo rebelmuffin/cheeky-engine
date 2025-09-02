@@ -95,18 +95,14 @@ namespace Renderer::Utils
 
     ImageUploadRequest::ImageUploadRequest(
         VkExtent3D image_extent,
-        ImageHandle staging_image,
+        BufferHandle staging_buffer,
         ImageHandle target_image,
         UploadType upload_type,
         VkImageLayout target_layout,
-        VkOffset3D src_offset,
-        VkOffset3D dst_offset,
         std::string_view debug_name
     ) :
         m_image_extent(image_extent),
-        m_src_offset(src_offset),
-        m_dst_offset(dst_offset),
-        m_staging_image(staging_image),
+        m_staging_buffer(staging_buffer),
         m_target_image(target_image),
         m_upload_type(upload_type),
         m_target_layout(target_layout),
@@ -116,24 +112,17 @@ namespace Renderer::Utils
 
     UploadExecutionResult ImageUploadRequest::ExecuteUpload(VulkanEngine& engine, VkCommandBuffer cmd)
     {
-        VkImageCopy2 copy{};
-        copy.sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2;
-        copy.dstOffset = m_dst_offset;
-        copy.srcOffset = m_src_offset;
-        copy.extent = m_image_extent;
-        copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        copy.srcSubresource.layerCount = 1;
-        copy.dstSubresource.layerCount = 1;
+        VkBufferImageCopy2 copy{};
+        copy.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
+        copy.bufferOffset = 0;
+        copy.bufferRowLength = 0;
+        copy.bufferImageHeight = 0;
+        copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copy.imageSubresource.mipLevel = 0;
+        copy.imageSubresource.baseArrayLayer = 0;
+        copy.imageSubresource.layerCount = 1;
+        copy.imageExtent = m_image_extent;
 
-        // we need to first transition the images
-        Utils::TransitionImage(
-            &engine.DeviceDispatchTable(),
-            cmd,
-            m_staging_image->image,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-        );
         Utils::TransitionImage(
             &engine.DeviceDispatchTable(),
             cmd,
@@ -141,26 +130,17 @@ namespace Renderer::Utils
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
         );
-
-        VkCopyImageInfo2 copy_image_info{};
-        copy_image_info.sType = VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2;
+        VkCopyBufferToImageInfo2 copy_image_info{};
+        copy_image_info.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2;
         copy_image_info.dstImage = m_target_image->image;
-        copy_image_info.srcImage = m_staging_image->image;
+        copy_image_info.srcBuffer = m_staging_buffer->buffer;
         copy_image_info.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        copy_image_info.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         copy_image_info.regionCount = 1;
         copy_image_info.pRegions = &copy;
 
-        engine.DeviceDispatchTable().cmdCopyImage2(cmd, &copy_image_info);
+        engine.DeviceDispatchTable().cmdCopyBufferToImage2(cmd, &copy_image_info);
 
         // transition into the final layout. E.g. SHADER_READ_ONLY_OPTIMAL for shader binding textures
-        Utils::TransitionImage(
-            &engine.DeviceDispatchTable(),
-            cmd,
-            m_staging_image->image,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            m_target_layout
-        );
         Utils::TransitionImage(
             &engine.DeviceDispatchTable(),
             cmd,
