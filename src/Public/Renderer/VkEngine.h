@@ -271,11 +271,6 @@ namespace Renderer
         bool m_draw_resource_debugger = false;
         bool m_draw_engine_settings = false;
         bool m_draw_scene_editor = false;
-        float m_camera_yaw_rad = 0.0f;
-        float m_camera_pitch_rad = 0.0f;
-        glm::vec3 m_camera_position{ 0.0f, 0.0f, -1.0f };
-        bool m_rotating_camera = true;
-        bool m_use_linear_sampling = true;
 
         // Resource storages. We manage the lifetime of all resources in the engine.
         ResourceStorage<AllocatedImage> m_image_storage;

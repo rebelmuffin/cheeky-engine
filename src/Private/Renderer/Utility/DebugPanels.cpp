@@ -8,15 +8,83 @@
 #include "ThirdParty/ImGUI.h"
 #include "glm/gtx/matrix_decompose.hpp"
 #include "imgui.h"
+#include <filesystem>
 #include <glm/ext/matrix_transform.hpp>
 #include <memory>
 
 namespace Renderer::Debug
 {
-    void DrawSceneContentsImGui(Scene& scene)
+    void DrawSceneContentsImGui(VulkanEngine& engine, Scene& scene)
     {
         ImGui::Text("Draw Resolution: %dx%d", scene.draw_extent.width, scene.draw_extent.height);
         ImGui::SliderFloat("Render Scale", &scene.render_scale, 0.1f, 1.0f);
+
+        static float camera_yaw_rad = 0.0f;
+        static float camera_pitch_rad = 0.0f;
+        static glm::vec3 camera_pos = glm::vec3(0.0f, 0.0f, -1.0f);
+        if (ImGui::CollapsingHeader("Camera Settings"))
+        {
+            ImGui::SliderAngle("Camera yaw", &camera_yaw_rad);
+            ImGui::SliderAngle("Camera pitch", &camera_pitch_rad, -89.0f, 89.0f);
+            ImGui::DragFloat3("Camera position", &camera_pos.x);
+
+            // pitch first, then yaw. order of multiplication matters
+            glm::mat4 rotation = glm::rotate(camera_pitch_rad, glm::vec3(1, 0, 0)) *
+                                 glm::rotate(camera_yaw_rad, glm::vec3(0, 1, 0));
+
+            scene.camera_position = camera_pos;
+            scene.camera_rotation = rotation;
+        }
+
+        ImGui::Separator();
+        static long int selected_asset = -1;
+        static char filter[255];
+        std::optional<std::filesystem::path> gltf_asset = std::nullopt;
+        if (ImGui::InputText("Filter", filter, 255))
+        {
+            selected_asset = -1;
+        }
+        if (ImGui::BeginListBox("GLTF Assets"))
+        {
+            // enumerate all .gltf and .glb assets under resources
+            const char* resources_path = "../data/resources";
+            std::filesystem::recursive_directory_iterator dir_iter(
+                resources_path, std::filesystem::directory_options::skip_permission_denied
+            );
+
+            std::vector<std::filesystem::path> paths{};
+            for (std::filesystem::path file : dir_iter)
+            {
+                if (file.has_extension() &&
+                    (file.extension().compare(".gltf") == 0 || file.extension().compare(".glb") == 0) &&
+                    std::strstr(file.c_str(), filter) != nullptr)
+                {
+                    paths.emplace_back(file);
+                }
+            }
+
+            for (size_t i = 0; i < paths.size(); ++i)
+            {
+                if (ImGui::Selectable(paths[i].c_str(), (size_t)selected_asset == i))
+                {
+                    selected_asset = (long int)i;
+                }
+            }
+
+            if (selected_asset != -1)
+            {
+                gltf_asset = paths[(size_t)selected_asset];
+            }
+
+            ImGui::EndListBox();
+        }
+        ImGui::BeginDisabled(gltf_asset == std::nullopt);
+        if (ImGui::Button("Load GLTF"))
+        {
+            Utils::LoadGltfIntoScene(scene, engine, gltf_asset.value());
+        }
+        ImGui::EndDisabled();
+        ImGui::Separator();
 
         int item_to_delete = -1;
         int item_to_clone = -1;

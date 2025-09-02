@@ -240,14 +240,6 @@ namespace Renderer
 
             ImGui::SliderFloat("Mesh Opacity", &test_mesh_opacity, 0.0f, 1.0f);
 
-            if (ImGui::SliderAngle("Camera yaw", &m_camera_yaw_rad))
-            {
-                m_rotating_camera = false;
-            }
-            ImGui::SliderAngle("Camera pitch", &m_camera_pitch_rad, -89.0f, 89.0f);
-            ImGui::DragFloat3("Camera position", &m_camera_position.x);
-            ImGui::Checkbox("Rotating Camera", &m_rotating_camera);
-
             if (ImGui::CollapsingHeader("Scene Lighting"))
             {
                 ImGui::ColorEdit3("Ambient Colour", &main_scene->ambient_colour.r);
@@ -268,7 +260,7 @@ namespace Renderer
                     {
                         if (ImGui::BeginTabItem(scene.scene_name.data()))
                         {
-                            Renderer::Debug::DrawSceneContentsImGui(scene);
+                            Renderer::Debug::DrawSceneContentsImGui(*this, scene);
                             ImGui::EndTabItem();
                         }
                     }
@@ -293,19 +285,6 @@ namespace Renderer
             ResizeSwapchain();
             return; // no render while resizing (or minimised!)
         }
-
-        if (m_rotating_camera)
-        {
-            m_camera_yaw_rad += glm::radians(10.0f) * float(delta_ms) / 100.0f;
-            m_camera_yaw_rad = std::fmod(m_camera_yaw_rad, glm::two_pi<float>());
-        }
-
-        // pitch first, then yaw. order of multiplication matters
-        glm::mat4 rotation = glm::rotate(m_camera_pitch_rad, glm::vec3(1, 0, 0)) *
-                             glm::rotate(m_camera_yaw_rad, glm::vec3(0, 1, 0));
-
-        main_scene->camera_position = m_camera_position;
-        main_scene->camera_rotation = rotation;
 
         Draw(delta_ms);
     }
@@ -417,7 +396,7 @@ namespace Renderer
             // log2(max_dimension) - 3 gives a reasonable mip count
             double mipLevels = std::log2(std::max(image_extent.height, image_extent.width)) - 3.0f;
             // more than 10 is useless though
-            image_info.mipLevels = std::max(static_cast<uint32_t>(mipLevels), 10u);
+            image_info.mipLevels = std::min(static_cast<uint32_t>(mipLevels), 10u);
         }
 
         VmaAllocationCreateInfo allocation_info{};
@@ -896,9 +875,7 @@ namespace Renderer
         // delete it next frame
         GetCurrentFrame().buffers_in_use.emplace_back(scene_data_buffer);
 
-        // we translate first because we want to move the world, not the camera. When we make a real
-        // camera, the order should be reversed
-        glm::mat4 view = glm::translate(scene.camera_position) * scene.camera_rotation;
+        glm::mat4 view = scene.camera_rotation * glm::translate(scene.camera_position);
         glm::mat4 projection = glm::perspective(
             glm::radians(scene.camera_vertical_fov),
             (float)scene.draw_extent.width / (float)scene.draw_extent.height,
