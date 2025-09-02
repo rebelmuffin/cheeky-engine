@@ -13,7 +13,7 @@ namespace Renderer
         item->name.append("clone");
         item->asset = asset;
 
-        return std::move(item);
+        return item;
     }
 
     void MeshSceneItem::Draw(DrawContext& ctx)
