@@ -15,6 +15,9 @@
 /data/shader/**/*.spv
 /data/shader/*.spv
 
+# ignore local dev content
+/data/resources/dev
+
 # ignore generated subprojects
 /subprojects/*
 !/subprojects/*.wrap
