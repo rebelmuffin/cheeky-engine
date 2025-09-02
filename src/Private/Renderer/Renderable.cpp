@@ -1,9 +1,21 @@
 #include "Renderer/Renderable.h"
 #include "Renderer/RenderObject.h"
 #include "Renderer/Utility/VkLoader.h"
+#include <memory>
 
 namespace Renderer
 {
+    std::unique_ptr<SceneItem> MeshSceneItem::Clone() const
+    {
+        std::unique_ptr<MeshSceneItem> item = std::make_unique<MeshSceneItem>();
+        item->transform = transform;
+        item->name = name;
+        item->name.append("clone");
+        item->asset = asset;
+
+        return std::move(item);
+    }
+
     void MeshSceneItem::Draw(DrawContext& ctx)
     {
         for (const GeoSurface& surface : asset->surfaces)

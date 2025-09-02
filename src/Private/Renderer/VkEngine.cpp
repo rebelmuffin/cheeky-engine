@@ -191,6 +191,7 @@ namespace Renderer
             if (ImGui::BeginMenu("Graphics"))
             {
                 ImGui::Checkbox("Engine Settings", &m_draw_engine_settings);
+                ImGui::Checkbox("Scene Editor", &m_draw_scene_editor);
                 ImGui::Checkbox("Resource Debugger", &m_draw_resource_debugger);
                 ImGui::EndMenu();
             }
@@ -237,30 +238,6 @@ namespace Renderer
                 ImGui::Text("Window Resolution: %dx%d", m_window_extent.width, m_window_extent.height);
             }
 
-            if (ImGui::TreeNodeEx(
-                    "scene_list",
-                    ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_NoTreePushOnOpen |
-                        ImGuiTreeNodeFlags_Framed,
-                    "Scenes: %zu",
-                    render_scenes.size()
-                ))
-            {
-                for (Scene& scene : render_scenes)
-                {
-                    ImGuiTreeNodeFlags flags{};
-                    if (&scene == main_scene)
-                    {
-                        flags = ImGuiTreeNodeFlags_DefaultOpen;
-                    }
-
-                    if (ImGui::TreeNodeEx(scene.scene_name.data(), flags))
-                    {
-                        Renderer::Debug::DrawSceneContentsImGui(scene);
-                        ImGui::TreePop();
-                    }
-                }
-            }
-
             ImGui::SliderFloat("Mesh Opacity", &test_mesh_opacity, 0.0f, 1.0f);
 
             if (ImGui::SliderAngle("Camera yaw", &m_camera_yaw_rad))
@@ -276,6 +253,28 @@ namespace Renderer
                 ImGui::ColorEdit3("Ambient Colour", &main_scene->ambient_colour.r);
                 ImGui::ColorEdit3("Light Colour", &main_scene->light_colour.r);
                 ImGui::SliderFloat3("Light Direction", &main_scene->light_direction.x, -1.0f, 1.0f);
+            }
+
+            ImGui::End();
+        }
+
+        if (m_draw_scene_editor)
+        {
+            if (ImGui::Begin("Scenes"))
+            {
+                if (ImGui::BeginTabBar("scene_tabs"))
+                {
+                    for (Scene& scene : render_scenes)
+                    {
+                        if (ImGui::BeginTabItem(scene.scene_name.data()))
+                        {
+                            Renderer::Debug::DrawSceneContentsImGui(scene);
+                            ImGui::EndTabItem();
+                        }
+                    }
+
+                    ImGui::EndTabBar();
+                }
             }
 
             ImGui::End();

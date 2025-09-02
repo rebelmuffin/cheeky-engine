@@ -18,13 +18,24 @@ namespace Renderer::Debug
         ImGui::Text("Draw Resolution: %dx%d", scene.draw_extent.width, scene.draw_extent.height);
         ImGui::SliderFloat("Render Scale", &scene.render_scale, 0.1f, 1.0f);
 
+        int item_to_delete = -1;
+        int item_to_clone = -1;
         ImGui::PushID(scene.scene_name.data());
         if (ImGui::TreeNode("scene_contents", "Items: %zu", scene.scene_items.size()))
         {
+            int item_idx = 0;
             for (std::unique_ptr<SceneItem>& item : scene.scene_items)
             {
                 if (ImGui::TreeNode(item->name.data()))
                 {
+                    if (ImGui::Button("Delete"))
+                    {
+                        item_to_delete = item_idx;
+                    }
+                    if (ImGui::Button("Clone"))
+                    {
+                        item_to_clone = item_idx;
+                    }
                     ImGui::Text("Name: %s", item->name.data());
                     glm::vec3 scale;
                     glm::quat rot;
@@ -33,17 +44,27 @@ namespace Renderer::Debug
                     glm::vec4 perspective;
                     glm::decompose(item->transform, scale, rot, translation, skew, perspective);
                     ImGui::DragFloat3("Translation", &translation.x);
-                    ImGui::DragFloat3("Scale", &scale.x);
+                    ImGui::DragFloat3("Scale", &scale.x, 1.0f, 0.01f);
 
                     glm::mat4 rotation = glm::mat4(rot);
                     item->transform = rotation * glm::translate(translation) * glm::scale(scale);
 
                     ImGui::TreePop();
                 }
+                item_idx++;
             }
             ImGui::TreePop();
         }
         ImGui::PopID();
+
+        if (item_to_delete != -1)
+        {
+            scene.scene_items.erase(scene.scene_items.begin() + item_to_delete);
+        }
+        if (item_to_clone != -1)
+        {
+            scene.scene_items.emplace_back(scene.scene_items[(size_t)item_to_clone]->Clone());
+        }
     }
 
     template <typename T>

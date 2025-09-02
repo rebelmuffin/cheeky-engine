@@ -3,6 +3,7 @@
 #include "Renderer/RenderObject.h"
 #include "Renderer/Utility/VkLoader.h"
 #include "Renderer/VkTypes.h"
+#include <memory>
 
 namespace Renderer
 {
@@ -34,6 +35,8 @@ namespace Renderer
     {
         virtual ~SceneItem() = default;
 
+        virtual std::unique_ptr<SceneItem> Clone() const = 0;
+
         glm::mat4 transform;
         std::string name;
     };
@@ -42,6 +45,7 @@ namespace Renderer
     {
         virtual ~MeshSceneItem() = default;
 
+        std::unique_ptr<SceneItem> Clone() const override;
         void Draw(DrawContext& ctx) override;
 
         MeshHandle asset;
