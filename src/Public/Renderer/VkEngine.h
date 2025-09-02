@@ -11,6 +11,7 @@
 #include "Renderer/Utility/VkLoader.h"
 #include "Renderer/VkTypes.h"
 
+#include "ThirdParty/ImGUI.h"
 #include <VkBootstrapDispatch.h>
 #include <unordered_map>
 #include <vulkan/vulkan_core.h>
@@ -153,7 +154,7 @@ namespace Renderer
         ImageHandle CreateDrawImage(uint32_t width, uint32_t height);
         ImageHandle CreateDepthImage(uint32_t width, uint32_t height);
 
-        float test_mesh_opacity{ 1.0f };
+        ImTextureID ImageDebugTextureId(const ImageHandle& image);
 
         Scene* main_scene; // this is the scene that is rendered on the main window swapchain.
         std::vector<Scene> render_scenes;
@@ -271,6 +272,10 @@ namespace Renderer
         bool m_draw_resource_debugger = false;
         bool m_draw_engine_settings = false;
         bool m_draw_scene_editor = false;
+
+        // we allocate a VkDescriptorSet for every image through imgui so that the image can be drawn in
+        // imgui.
+        std::unordered_map<VkImage, VkDescriptorSet> m_debug_image_map;
 
         // Resource storages. We manage the lifetime of all resources in the engine.
         ResourceStorage<AllocatedImage> m_image_storage;

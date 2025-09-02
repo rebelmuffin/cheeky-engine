@@ -3,9 +3,11 @@
 #include "Renderer/ResourceStorage.h"
 #include "Renderer/Scene.h"
 #include "Renderer/Utility/VkLoader.h"
+#include "Renderer/VkEngine.h"
 #include "Renderer/VkTypes.h"
 
 #include "ThirdParty/ImGUI.h"
+#include "imgui_internal.h"
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <imgui.h>
@@ -141,7 +143,7 @@ namespace Renderer::Debug
     void DrawStorageTableImGui(
         ResourceStorage<T>& storage,
         std::function<void()> setup_custom_columns,
-        std::function<void(const T&, int)> draw_resource_info,
+        std::function<void(StorageId_t id, const T& resource, int last_column)> draw_resource_info,
         int custom_column_count
     )
     {
@@ -164,34 +166,51 @@ namespace Renderer::Debug
                 ImGui::Text("%zu", id);
                 ImGui::TableSetColumnIndex(1);
                 ImGui::Text("%s", storage.resource_name_map[id].data());
-                draw_resource_info(resource, 1);
+                draw_resource_info(id, resource, 1);
             }
             ImGui::EndTable();
         }
     }
 
-    void DrawStorageTableImGui(ResourceStorage<AllocatedImage>& image_storage)
+    void DrawStorageTableImGui(VulkanEngine& engine, ResourceStorage<AllocatedImage>& image_storage)
     {
-        constexpr int custom_column_count = 2;
+        constexpr int custom_column_count = 3;
         DrawStorageTableImGui<AllocatedImage>(
             image_storage,
             []
             {
                 ImGui::TableSetupColumn("Extents");
                 ImGui::TableSetupColumn("Format");
+                ImGui::TableSetupColumn("Image Contents");
             },
-            [](const AllocatedImage& img, int last_column)
+            [&](StorageId_t id, const AllocatedImage& img, int last_column)
             {
                 ImGui::TableSetColumnIndex(last_column + 1);
                 ImGui::Text("%dx%d", img.image_extent.width, img.image_extent.height);
                 ImGui::TableSetColumnIndex(last_column + 2);
                 ImGui::Text("%s", string_VkFormat(img.image_format));
+                ImGui::TableSetColumnIndex(last_column + 3);
+
+                ImageHandle img_handle = image_storage.HandleFromID(id);
+                ImTextureID texture_id = engine.ImageDebugTextureId(img_handle);
+                ImGui::Image(texture_id, ImVec2{ 48, 48 });
+                if (ImGui::IsItemHovered())
+                {
+                    if (ImGui::BeginTooltip())
+                    {
+                        // keep the aspect ratio while showing a smaller image
+                        float width_to_height =
+                            (float)img_handle->image_extent.width / (float)img_handle->image_extent.height;
+                        ImGui::Image(texture_id, ImVec2{ 256 * width_to_height, 256 });
+                        ImGui::EndTooltip();
+                    }
+                }
             },
             custom_column_count
         );
     }
 
-    void DrawStorageTableImGui(ResourceStorage<AllocatedBuffer>& buffer_storage)
+    void DrawStorageTableImGui(VulkanEngine&, ResourceStorage<AllocatedBuffer>& buffer_storage)
     {
         constexpr int custom_column_count = 2;
         DrawStorageTableImGui<AllocatedBuffer>(
@@ -201,7 +220,7 @@ namespace Renderer::Debug
                 ImGui::TableSetupColumn("Size");
                 ImGui::TableSetupColumn("Address");
             },
-            [](const AllocatedBuffer& buf, int last_column)
+            [](StorageId_t, const AllocatedBuffer& buf, int last_column)
             {
                 ImGui::TableSetColumnIndex(last_column + 1);
                 ImGui::Text("%zu bytes", (size_t)buf.allocation_info.size);
@@ -212,7 +231,7 @@ namespace Renderer::Debug
         );
     }
 
-    void DrawStorageTableImGui(ResourceStorage<MeshAsset>& mesh_storage)
+    void DrawStorageTableImGui(VulkanEngine&, ResourceStorage<MeshAsset>& mesh_storage)
     {
         constexpr int custom_column_count = 1;
         DrawStorageTableImGui<MeshAsset>(
@@ -221,7 +240,7 @@ namespace Renderer::Debug
             {
                 ImGui::TableSetupColumn("Surface Count");
             },
-            [](const MeshAsset& mesh, int last_column)
+            [](StorageId_t, const MeshAsset& mesh, int last_column)
             {
                 ImGui::TableSetColumnIndex(last_column + 1);
                 ImGui::Text("%zu", mesh.surfaces.size());

@@ -8,7 +8,7 @@ namespace Renderer::Debug
 {
     void DrawSceneContentsImGui(VulkanEngine& engine, Scene& scene);
 
-    void DrawStorageTableImGui(ResourceStorage<AllocatedImage>& image_storage);
-    void DrawStorageTableImGui(ResourceStorage<AllocatedBuffer>& buffer_storage);
-    void DrawStorageTableImGui(ResourceStorage<MeshAsset>& mesh_storage);
+    void DrawStorageTableImGui(VulkanEngine& engine, ResourceStorage<AllocatedImage>& image_storage);
+    void DrawStorageTableImGui(VulkanEngine& engine, ResourceStorage<AllocatedBuffer>& buffer_storage);
+    void DrawStorageTableImGui(VulkanEngine& engine, ResourceStorage<MeshAsset>& mesh_storage);
 } // namespace Renderer::Debug

@@ -12,8 +12,8 @@
 #include "Renderer/Utility/VkLoader.h"
 #include "Renderer/Utility/VkPipelines.h"
 #include "Renderer/VkTypes.h"
-#include "ThirdParty/ImGUI.h"
 
+#include "ThirdParty/ImGUI.h"
 #include <SDL.h>
 #include <SDL_video.h>
 #include <SDL_vulkan.h>
@@ -205,21 +205,21 @@ namespace Renderer
                 if (ImGui::CollapsingHeader("Images"))
                 {
                     ImGui::PushID("Images");
-                    Renderer::Debug::DrawStorageTableImGui(m_image_storage);
+                    Renderer::Debug::DrawStorageTableImGui(*this, m_image_storage);
                     ImGui::PopID();
                 }
 
                 if (ImGui::CollapsingHeader("Buffers"))
                 {
                     ImGui::PushID("Buffers");
-                    Renderer::Debug::DrawStorageTableImGui(m_buffer_storage);
+                    Renderer::Debug::DrawStorageTableImGui(*this, m_buffer_storage);
                     ImGui::PopID();
                 }
 
                 if (ImGui::CollapsingHeader("Meshes"))
                 {
                     ImGui::PushID("Meshes");
-                    Renderer::Debug::DrawStorageTableImGui(m_mesh_storage);
+                    Renderer::Debug::DrawStorageTableImGui(*this, m_mesh_storage);
                     ImGui::PopID();
                 }
             }
@@ -238,8 +238,6 @@ namespace Renderer
                 ImGui::Text("Window Resolution: %dx%d", m_window_extent.width, m_window_extent.height);
             }
 
-            ImGui::SliderFloat("Mesh Opacity", &test_mesh_opacity, 0.0f, 1.0f);
-
             if (ImGui::CollapsingHeader("Scene Lighting"))
             {
                 ImGui::ColorEdit3("Ambient Colour", &main_scene->ambient_colour.r);
@@ -252,7 +250,7 @@ namespace Renderer
 
         if (m_draw_scene_editor)
         {
-            if (ImGui::Begin("Scenes"))
+            if (ImGui::Begin("Scenes", &m_draw_scene_editor))
             {
                 if (ImGui::BeginTabBar("scene_tabs"))
                 {
@@ -414,7 +412,13 @@ namespace Renderer
         image_view_info.subresourceRange.levelCount = image_info.mipLevels;
         VK_CHECK(m_device_dispatch.createImageView(&image_view_info, nullptr, &image.image_view));
 
-        return m_image_storage.AddResource(image, debug_name);
+        ImageHandle handle = m_image_storage.AddResource(image, debug_name);
+
+        m_debug_image_map[handle->image] = ImGui_ImplVulkan_AddTexture(
+            m_default_sampler_nearest, handle->image_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        );
+
+        return handle;
     }
 
     ImageHandle VulkanEngine::AllocateImage(
@@ -510,6 +514,13 @@ namespace Renderer
 
     void VulkanEngine::DestroyImage(const AllocatedImage& image)
     {
+        // nuke the debug image
+        if (m_debug_image_map.contains(image.image))
+        {
+            ImGui_ImplVulkan_RemoveTexture(m_debug_image_map[image.image]);
+            m_debug_image_map.erase(image.image);
+        }
+
         m_device_dispatch.destroyImageView(image.image_view, nullptr);
         vmaDestroyImage(m_allocator, image.image, image.allocation);
     }
@@ -1626,6 +1637,11 @@ namespace Renderer
             mipmapped,
             "image_depth"
         );
+    }
+
+    ImTextureID VulkanEngine::ImageDebugTextureId(const ImageHandle& image)
+    {
+        return reinterpret_cast<ImTextureID>(m_debug_image_map[image->image]);
     }
 
     void VulkanEngine::DestroySwapchain()

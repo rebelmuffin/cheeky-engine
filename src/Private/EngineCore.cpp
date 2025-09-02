@@ -198,8 +198,6 @@ void EngineCore::OnImgui()
             {
                 copy_array_to_vec(data4, constants->data4);
             }
-
-            ImGui::DragFloat("opacity", &m_renderer->test_mesh_opacity, 0.01f, 0.0f, 1.0f);
         }
         ImGui::End();
     }

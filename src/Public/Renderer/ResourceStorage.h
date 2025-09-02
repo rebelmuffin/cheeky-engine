@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
@@ -123,6 +124,16 @@ namespace Renderer
                 DestroyResource(engine, resource);
             }
             destroy_pending_resources.clear();
+        }
+
+        ReferenceCountedHandle<T> HandleFromID(StorageId_t id)
+        {
+            if (resource_map.contains(id) == false)
+            {
+                return ReferenceCountedHandle<T>{}; // invalid
+            }
+
+            return ReferenceCountedHandle<T>(resource_map[id], id, *this);
         }
 
         /// Instantly destroy all resources in the storage
