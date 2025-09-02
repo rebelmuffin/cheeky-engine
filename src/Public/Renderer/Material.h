@@ -5,6 +5,7 @@
 #include "Renderer/VkTypes.h"
 #include "VkBootstrapDispatch.h"
 #include <glm/ext/vector_float4.hpp>
+#include <vector>
 #include <vulkan/vulkan_core.h>
 
 #include <cstdint>
@@ -31,6 +32,10 @@ namespace Renderer
         const MaterialPipeline* pipeline;
         VkDescriptorSet material_set;
         MaterialPass pass;
+
+        // keep a list of handles around to make sure the referenced resources don't get deleted mid-use
+        std::vector<ImageHandle> referenced_images;
+        std::vector<BufferHandle> referenced_buffers;
     };
 
     // Material type that supports (a subset of)glTF PBR specification.
@@ -40,6 +45,13 @@ namespace Renderer
         MaterialPipeline transparent_pipeline;
 
         VkDescriptorSetLayout descriptor_layout;
+
+        // NOTE: the descriptor allocator is here beacause it's easier to manage this way.
+        // this does however mean that the allocator will keep growing as we add more material instances
+        // and will never shrink until the material is destroyed (likely during app destruction).
+        // this is a leak. If it causes memory issues, make the allocator a resource and keep it reference
+        // counted and stored in the engine instead.
+        Utils::DescriptorAllocatorDynamic descriptor_allocator;
         bool loaded = false;
 
         // This is what gets written into the uniform buffer
@@ -55,11 +67,11 @@ namespace Renderer
         // These are the resources required to draw a single instance of this material
         struct Resources
         {
-            AllocatedImage colour_image;
+            ImageHandle colour_image;
             VkSampler colour_sampler;
-            AllocatedImage metal_roughness_image;
+            ImageHandle metal_roughness_image;
             VkSampler metal_roughness_sampler;
-            VkBuffer uniform_buffer;
+            BufferHandle uniform_buffer;
             uint32_t buffer_offset;
         };
 

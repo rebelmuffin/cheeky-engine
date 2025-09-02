@@ -107,6 +107,9 @@ namespace Renderer
 
     void Material_GLTF_PBR::DestroyResources(vkb::DispatchTable& device_dispatch)
     {
+        // nuke any living descriptors
+        descriptor_allocator.DestroyPools(device_dispatch);
+
         if (opaque_pipeline.pipeline != VK_NULL_HANDLE)
         {
             device_dispatch.destroyPipeline(opaque_pipeline.pipeline, nullptr);
@@ -146,7 +149,7 @@ namespace Renderer
         // 0 is uniform buffer which is MaterialParameters
         descriptor_writer.WriteBuffer(
             0,
-            resources.uniform_buffer,
+            resources.uniform_buffer->buffer,
             sizeof(MaterialParameters),
             resources.buffer_offset,
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
@@ -155,14 +158,14 @@ namespace Renderer
         // 1 is colour image and 2 is metal_roughness image
         descriptor_writer.WriteImage(
             1,
-            resources.colour_image.image_view,
+            resources.colour_image->image_view,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             resources.colour_sampler,
             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
         );
         descriptor_writer.WriteImage(
             1,
-            resources.metal_roughness_image.image_view,
+            resources.metal_roughness_image->image_view,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             resources.metal_roughness_sampler,
             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
@@ -183,6 +186,10 @@ namespace Renderer
             break;
         }
 
-        return MaterialInstance{ pipeline, descriptor_set, pass };
+        return MaterialInstance{ pipeline,
+                                 descriptor_set,
+                                 pass,
+                                 { resources.colour_image, resources.metal_roughness_image },
+                                 { resources.uniform_buffer } };
     }
 } // namespace Renderer

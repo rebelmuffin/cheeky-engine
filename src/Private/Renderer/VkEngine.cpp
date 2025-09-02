@@ -589,6 +589,11 @@ namespace Renderer
         return buffers;
     }
 
+    MeshHandle VulkanEngine::RegisterMeshAsset(MeshAsset&& asset, std::string_view debug_name)
+    {
+        m_mesh_storage.AddResource(std::move(asset), debug_name);
+    }
+
     void VulkanEngine::RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request)
     {
         if (m_force_all_uploads_immediate || upload_request->GetUploadType() == Utils::UploadType::Immediate)
@@ -1264,22 +1269,7 @@ namespace Renderer
         );
     }
 
-    void VulkanEngine::InitDefaultDescriptors()
-    {
-        // allocator for materials
-        std::array<Utils::DescriptorPoolSizeRatio, 2> size_ratios{
-            Utils::DescriptorPoolSizeRatio{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
-            Utils::DescriptorPoolSizeRatio{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 }
-        };
-        m_material_descriptor_allocator.Init(m_device_dispatch, 1024, size_ratios);
-        m_deletion_queue.PushFunction(
-            "test pbr allocator",
-            [this]()
-            {
-                m_material_descriptor_allocator.DestroyPools(m_device_dispatch);
-            }
-        );
-    }
+    void VulkanEngine::InitDefaultDescriptors() {}
 
     bool VulkanEngine::InitPipelines()
     {
@@ -1356,6 +1346,17 @@ namespace Renderer
     {
         // create any materials (pipelines)
         m_gltf_pbr_material.BuildPipelines(m_material_interface);
+
+        // allocator for materials
+        if (m_gltf_pbr_material.loaded)
+        {
+            std::array<Utils::DescriptorPoolSizeRatio, 2> size_ratios{
+                Utils::DescriptorPoolSizeRatio{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
+                Utils::DescriptorPoolSizeRatio{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 }
+            };
+            m_gltf_pbr_material.descriptor_allocator.Init(m_device_dispatch, 1024, size_ratios);
+        }
+
         m_deletion_queue.PushFunction(
             "pbr material",
             [this]()

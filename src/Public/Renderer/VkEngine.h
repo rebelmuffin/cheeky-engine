@@ -98,7 +98,12 @@ namespace Renderer
         vkb::DispatchTable& DeviceDispatchTable() { return m_device_dispatch; }
         vkb::InstanceDispatchTable& InstanceDispatchTable() { return m_instance_dispatch; }
         VmaAllocator& Allocator() { return m_allocator; }
-        const Material_GLTF_PBR& PBRMaterial() { return m_gltf_pbr_material; }
+        Material_GLTF_PBR& PBRMaterial() { return m_gltf_pbr_material; }
+        VkSampler Sampler() { return m_default_sampler_nearest; }
+        ImageHandle PlaceholderImage() { return m_checkerboard_image; }
+        ImageHandle WhiteImage() { return m_white_image; }
+        ImageHandle BlackImage() { return m_black_image; }
+        ImageHandle GreyImage() { return m_grey_image; }
 
         BufferHandle CreateBuffer(
             size_t allocation_size,
@@ -140,6 +145,7 @@ namespace Renderer
         void DestroyImage(const AllocatedImage& image);
 
         GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
+        MeshHandle RegisterMeshAsset(MeshAsset&& asset, std::string_view debug_name = "unnamed mesh");
 
         void RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request);
 
@@ -257,7 +263,6 @@ namespace Renderer
         VkDescriptorSetLayout m_scene_data_descriptor_layout;
 
         // materials (pipelines)
-        Utils::DescriptorAllocatorDynamic m_material_descriptor_allocator;
         Material_GLTF_PBR m_gltf_pbr_material;
 
         // interfaces
