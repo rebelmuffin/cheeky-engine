@@ -68,6 +68,7 @@ executable(
     'src/Private/Renderer/Utility/UploadRequest.cpp',
     'src/Private/Renderer/Utility/DebugPanels.cpp',
     'src/Private/ThirdParty/VkMemAllocImpl.cpp',
+    'src/Private/ThirdParty/StbImageImpl.cpp',
     shader_gen_src,
     dependencies: [
         vulkan_dep,
