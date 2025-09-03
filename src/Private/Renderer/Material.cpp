@@ -164,7 +164,7 @@ namespace Renderer
             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
         );
         descriptor_writer.WriteImage(
-            1,
+            2,
             resources.metal_roughness_image->image_view,
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             resources.metal_roughness_sampler,
