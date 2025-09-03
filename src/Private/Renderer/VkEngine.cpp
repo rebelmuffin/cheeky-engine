@@ -184,7 +184,7 @@ namespace Renderer
         is_initialised = false;
     }
 
-    void VulkanEngine::Update(double delta_ms)
+    void VulkanEngine::Update()
     {
         if (ImGui::BeginMainMenuBar())
         {
@@ -284,7 +284,7 @@ namespace Renderer
             return; // no render while resizing (or minimised!)
         }
 
-        Draw(delta_ms);
+        Draw();
     }
 
 #pragma region Allocation_Destruction
@@ -658,7 +658,7 @@ namespace Renderer
 
 #pragma region Draw
 
-    void VulkanEngine::Draw([[maybe_unused]] double delta_ms)
+    void VulkanEngine::Draw()
     {
         constexpr uint64_t one_second_ns = 1'000'000'000;
         VK_CHECK(m_device_dispatch.waitForFences(1, &GetCurrentFrame().render_fence, true, one_second_ns));

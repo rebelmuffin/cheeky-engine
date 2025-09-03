@@ -92,7 +92,7 @@ void EngineCore::RunMainLoop()
 
         OnImgui();
 
-        m_renderer->Update(m_last_delta_ms);
+        m_renderer->Update();
         Update();
     }
 }

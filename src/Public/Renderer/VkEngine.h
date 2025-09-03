@@ -84,7 +84,7 @@ namespace Renderer
         void Cleanup();
 
         // run main loop
-        void Update(double delta_ms);
+        void Update();
 
         std::vector<ComputeEffect>& ComputeEffects() { return m_compute_effects; }
         std::size_t CurrentComputeEffect() { return m_current_effect; }
@@ -166,7 +166,7 @@ namespace Renderer
         void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 
         // draw loop
-        void Draw(double delta_ms);
+        void Draw();
         void DrawSceneBackground(const Scene& scene, VkCommandBuffer cmd);
         void DrawSceneGeometry(const Scene& scene, VkCommandBuffer cmd);
         void DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view);
