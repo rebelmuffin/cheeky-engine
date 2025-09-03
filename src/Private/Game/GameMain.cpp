@@ -17,7 +17,7 @@ namespace Game
         scene.draw_image = draw_image;
         scene.depth_image = depth_image;
 
-        engine.main_scene = &scene;
+        engine.main_scene = 1;
 
         MainSceneSetup();
     }

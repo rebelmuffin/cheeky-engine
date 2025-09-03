@@ -174,7 +174,7 @@ namespace Renderer
         m_mesh_storage.Clear(*this);
 
         render_scenes.clear();
-        main_scene = nullptr;
+        main_scene = 0;
 
         m_deletion_queue.Flush();
 
@@ -240,9 +240,11 @@ namespace Renderer
 
             if (ImGui::CollapsingHeader("Scene Lighting"))
             {
-                ImGui::ColorEdit3("Ambient Colour", &main_scene->ambient_colour.r);
-                ImGui::ColorEdit3("Light Colour", &main_scene->light_colour.r);
-                ImGui::SliderFloat3("Light Direction", &main_scene->light_direction.x, -1.0f, 1.0f);
+                ImGui::ColorEdit3("Ambient Colour", &render_scenes[main_scene].ambient_colour.r);
+                ImGui::ColorEdit3("Light Colour", &render_scenes[main_scene].light_colour.r);
+                ImGui::SliderFloat3(
+                    "Light Direction", &render_scenes[main_scene].light_direction.x, -1.0f, 1.0f
+                );
             }
 
             ImGui::End();
@@ -258,7 +260,9 @@ namespace Renderer
                     {
                         if (ImGui::BeginTabItem(scene.scene_name.data()))
                         {
+                            ImGui::PushID(&scene);
                             Renderer::Debug::DrawSceneContentsImGui(*this, scene);
+                            ImGui::PopID();
                             ImGui::EndTabItem();
                         }
                     }
@@ -697,8 +701,10 @@ namespace Renderer
         FinishPendingUploads(cmd);
 
         // draw onto draw image.
-        for (Scene& scene : render_scenes)
+        for (size_t i = 0; i < render_scenes.size(); ++i)
         {
+            Scene& scene = render_scenes[i];
+
             // might be drawing on a subsection of the image.
             glm::vec2 viewport_extent = scene.viewport_extent;
             if (viewport_extent.x == 0.0f && viewport_extent.y == 0.0f)
@@ -713,7 +719,12 @@ namespace Renderer
             VkImageLayout current = VK_IMAGE_LAYOUT_UNDEFINED;
             VkImageLayout target = VK_IMAGE_LAYOUT_GENERAL;
             Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image->image, current, target);
-            DrawSceneBackground(scene, cmd);
+            if (i == 0)
+            {
+                // #HACK: without the check, this will write over scene 0 no matter what meaning any geometry
+                // rendered on it will be overwritten.
+                DrawSceneBackground(scene, cmd);
+            }
             current = target;
             target = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image->image, current, target);
@@ -732,9 +743,9 @@ namespace Renderer
         Utils::CopyImageToImage(
             &m_device_dispatch,
             cmd,
-            main_scene->draw_image->image,
+            render_scenes[main_scene].draw_image->image,
             m_swapchain_images[swapchain_image_index],
-            main_scene->draw_extent,
+            render_scenes[main_scene].draw_extent,
             m_swapchain_extent
         );
         current = target;
@@ -1336,7 +1347,7 @@ namespace Renderer
         glm::vec2 backbuffer_size{ m_window_extent.width, m_window_extent.height };
         backbuffer_size *= m_backbuffer_scale;
 
-        Renderer::Scene new_scene{};
+        Renderer::Scene& new_scene = render_scenes.emplace_back();
         new_scene.draw_image = CreateDrawImage((uint32_t)backbuffer_size.x, (uint32_t)backbuffer_size.y);
         new_scene.depth_image = CreateDepthImage((uint32_t)backbuffer_size.x, (uint32_t)backbuffer_size.y);
         new_scene.scene_name = "main scene";
@@ -1346,13 +1357,13 @@ namespace Renderer
         new_scene.camera_rotation = glm::mat4{ 1.0f }; // no rotation
         new_scene.camera_vertical_fov = 70.0f;
 
-        main_scene = &render_scenes.emplace_back(std::move(new_scene));
+        main_scene = 0;
 
         // background descriptor for main scene. This is a shitty place for it but easiest for now.
         Utils::DescriptorWriter writer{};
         writer.WriteImage(
             0,
-            main_scene->draw_image->image_view,
+            render_scenes[main_scene].draw_image->image_view,
             VK_IMAGE_LAYOUT_GENERAL,
             0,
             VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
@@ -1419,7 +1430,9 @@ namespace Renderer
         // load testing mesh
         if (m_gltf_pbr_material.loaded)
         {
-            Utils::LoadGltfIntoScene(*main_scene, *this, "../data/resources/BarramundiFish.glb");
+            Utils::LoadGltfIntoScene(
+                render_scenes[main_scene], *this, "../data/resources/BarramundiFish.glb"
+            );
         }
     }
 

@@ -157,7 +157,7 @@ namespace Renderer
 
         ImTextureID ImageDebugTextureId(const ImageHandle& image);
 
-        Scene* main_scene; // this is the scene that is rendered on the main window swapchain.
+        size_t main_scene; // this is the scene that is rendered on the main window swapchain.
         std::vector<Scene> render_scenes;
 
       private:
