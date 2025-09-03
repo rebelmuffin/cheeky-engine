@@ -20,6 +20,24 @@ namespace Renderer::Debug
 {
     void DrawSceneContentsImGui(VulkanEngine& engine, Scene& scene)
     {
+        if (&engine.render_scenes[engine.main_scene] == &scene)
+        {
+            ImGui::Text("This is the active scene.");
+        }
+        else
+        {
+            if (ImGui::Button("Activate this scene"))
+            {
+                for (size_t i = 0; i < engine.render_scenes.size(); ++i)
+                {
+                    if (&engine.render_scenes[i] == &scene)
+                    {
+                        engine.main_scene = i;
+                    }
+                }
+            }
+        }
+
         ImGui::Text("Draw Resolution: %dx%d", scene.draw_extent.width, scene.draw_extent.height);
         ImGui::SliderFloat("Render Scale", &scene.render_scale, 0.1f, 1.0f);
 
@@ -92,7 +110,10 @@ namespace Renderer::Debug
 
         int item_to_delete = -1;
         int item_to_clone = -1;
-        ImGui::PushID(scene.scene_name.data());
+        if (ImGui::Button("Clear Scene"))
+        {
+            scene.scene_items.clear();
+        }
         if (ImGui::TreeNode("scene_contents", "Items: %zu", scene.scene_items.size()))
         {
             int item_idx = 0;
@@ -127,7 +148,6 @@ namespace Renderer::Debug
             }
             ImGui::TreePop();
         }
-        ImGui::PopID();
 
         if (item_to_delete != -1)
         {
