@@ -1,7 +1,9 @@
 #pragma once
 
 #include "CVars.h"
+#include "Game/GameMain.h"
 #include "Renderer/VkEngine.h"
+#include <memory>
 
 struct SDL_Window;
 
@@ -23,6 +25,7 @@ class EngineCore
 
     SDL_Window* m_window;
     std::unique_ptr<Renderer::VulkanEngine> m_renderer;
+    std::unique_ptr<Game::GameMain> m_game;
 
     double m_last_delta_ms = 0;
     int64_t m_last_update_us = 0;

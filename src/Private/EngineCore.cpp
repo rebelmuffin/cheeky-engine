@@ -1,11 +1,13 @@
 #include "EngineCore.h"
 #include "CVars.h"
 
+#include "Game/GameMain.h"
 #include "ThirdParty/ImGUI.h"
 #include <SDL.h>
 #include <imgui.h>
 
 #include <chrono>
+#include <memory>
 
 EngineCore::EngineCore(CVars cvars)
 {
@@ -39,6 +41,8 @@ EngineCore::EngineCore(CVars cvars)
     // load imgui fonts
     constexpr const char* font_path = "../data/fonts/roboto.ttf";
     ImGui::GetIO().Fonts->AddFontFromFileTTF(font_path, 14);
+
+    m_game = std::make_unique<Game::GameMain>(*m_renderer, cvars);
 }
 
 EngineCore::~EngineCore()
@@ -47,7 +51,7 @@ EngineCore::~EngineCore()
     SDL_DestroyWindow(m_window);
 }
 
-void EngineCore::Update() {}
+void EngineCore::Update() { m_game->Draw(m_last_delta_ms / 1000.0); }
 
 void EngineCore::RunMainLoop()
 {
