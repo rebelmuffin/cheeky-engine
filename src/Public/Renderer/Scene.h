@@ -29,6 +29,9 @@ namespace Renderer
         ImageHandle draw_image;
         std::vector<std::unique_ptr<SceneItem>> scene_items;
 
+        // if true, a clear command will be issued to clear the draw image every frame.
+        bool clear_before_draw = true;
+
         float camera_vertical_fov = 70.0f;
         glm::mat4 camera_rotation = glm::mat4(1.0f);
         glm::vec3 camera_position = glm::vec3(0.0f);

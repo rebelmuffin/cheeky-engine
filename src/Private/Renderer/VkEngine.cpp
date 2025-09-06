@@ -46,60 +46,6 @@
 #define VK_INSTANCE_CALL(instance, function, ...)                                                            \
     reinterpret_cast<PFN_##function>(m_get_instance_proc_addr(instance, #function))(instance, __VA_ARGS__);
 
-namespace
-{
-    bool CreateComputeEffect(
-        const char* name,
-        const char* shader_path,
-        vkb::DispatchTable& device_dispatch,
-        VkPipelineLayout layout,
-        Renderer::Utils::DeletionQueue& deletion_queue,
-        Renderer::ComputeEffect* out_effect
-    )
-    {
-        VkShaderModule shader_module{};
-        if (Renderer::Utils::LoadShaderModule(device_dispatch, shader_path, &shader_module) == false)
-        {
-            return false;
-        }
-
-        Renderer::ComputeEffect effect{};
-        effect.name = name;
-        effect.path = shader_path;
-        effect.layout = layout;
-
-        VkPipelineShaderStageCreateInfo stage_info{};
-        stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        stage_info.pNext = nullptr;
-        stage_info.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-        stage_info.module = shader_module;
-        stage_info.pName = "main";
-
-        VkComputePipelineCreateInfo compute_pipeline_info{};
-        compute_pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-        compute_pipeline_info.pNext = nullptr;
-        compute_pipeline_info.layout = layout;
-        compute_pipeline_info.stage = stage_info;
-
-        VK_CHECK(device_dispatch.createComputePipelines(
-            VK_NULL_HANDLE, 1, &compute_pipeline_info, nullptr, &effect.pipeline
-        ));
-
-        // Clean up
-        device_dispatch.destroyShaderModule(shader_module, nullptr);
-        deletion_queue.PushFunction(
-            "pipelines",
-            [device_dispatch, pipeline = effect.pipeline]()
-            {
-                device_dispatch.destroyPipeline(pipeline, nullptr);
-            }
-        );
-
-        *out_effect = effect;
-        return true;
-    }
-} // namespace
-
 namespace Renderer
 {
     VulkanEngine::VulkanEngine(
@@ -130,7 +76,6 @@ namespace Renderer
         InitCommands();
         InitSyncStructures();
         InitFrameDescriptors();
-        InitBackgroundDescriptors();
         InitDefaultDescriptors();
 
         // InitPipelines is where we initialise materials for the first time so the material interface needs
@@ -719,11 +664,17 @@ namespace Renderer
             VkImageLayout current = VK_IMAGE_LAYOUT_UNDEFINED;
             VkImageLayout target = VK_IMAGE_LAYOUT_GENERAL;
             Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image->image, current, target);
-            if (i == 0)
+            if (scene.clear_before_draw)
             {
-                // #HACK: without the check, this will write over scene 0 no matter what meaning any geometry
-                // rendered on it will be overwritten.
-                DrawSceneBackground(scene, cmd);
+                VkClearColorValue clear_colour;
+                clear_colour.float32[0] = 0;
+                clear_colour.float32[1] = 0;
+                clear_colour.float32[2] = 0;
+                clear_colour.float32[3] = 0;
+                VkImageSubresourceRange range = Utils::SubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT);
+                m_device_dispatch.cmdClearColorImage(
+                    cmd, scene.draw_image->image, target, &clear_colour, 1, &range
+                );
             }
             current = target;
             target = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -807,38 +758,6 @@ namespace Renderer
         }
 
         ++frame_number;
-    }
-
-    void VulkanEngine::DrawSceneBackground(const Scene& scene, VkCommandBuffer cmd)
-    {
-        ComputeEffect& effect = m_compute_effects[m_current_effect];
-        m_device_dispatch.cmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
-        m_device_dispatch.cmdBindDescriptorSets(
-            cmd,
-            VK_PIPELINE_BIND_POINT_COMPUTE,
-            effect.layout,
-            0,
-            1,
-            &m_background_compute_descriptors,
-            0,
-            nullptr
-        );
-
-        m_device_dispatch.cmdPushConstants(
-            cmd,
-            effect.layout,
-            VK_SHADER_STAGE_COMPUTE_BIT,
-            0,
-            sizeof(effect.push_constants),
-            &effect.push_constants
-        );
-
-        m_device_dispatch.cmdDispatch(
-            cmd,
-            uint32_t(std::ceil(float(scene.draw_extent.width) / 16.0f)),
-            uint32_t(std::ceil(float(scene.draw_extent.height) / 16.0f)),
-            1
-        );
     }
 
     void VulkanEngine::DrawSceneGeometry(const Scene& scene, VkCommandBuffer cmd)
@@ -1195,106 +1114,9 @@ namespace Renderer
         );
     }
 
-    void VulkanEngine::InitBackgroundDescriptors()
-    {
-        // 10 sets with 1 image each
-        std::vector<Utils::DescriptorPoolSizeRatio> sizes{ { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 } };
-        m_background_descriptor_allocator.InitPool(m_device_dispatch, 10, sizes);
-
-        // descriptor set layout for the compute draw
-        {
-            Utils::DescriptorLayoutBuilder builder;
-            builder.AddBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-            m_background_compute_descriptor_layout =
-                builder.Build(m_device_dispatch, VK_SHADER_STAGE_COMPUTE_BIT);
-        }
-
-        m_background_compute_descriptors = m_background_descriptor_allocator.Allocate(
-            m_device_dispatch, m_background_compute_descriptor_layout
-        );
-
-        m_deletion_queue.PushFunction(
-            "background descriptors",
-            [this]()
-            {
-                m_background_descriptor_allocator.DestroyPool(m_device_dispatch);
-                m_device_dispatch.destroyDescriptorSetLayout(m_background_compute_descriptor_layout, nullptr);
-            }
-        );
-    }
-
     void VulkanEngine::InitDefaultDescriptors() {}
 
-    bool VulkanEngine::InitPipelines()
-    {
-        if (InitBackgroundPipelines() == false)
-        {
-            return false;
-        }
-
-        return InitMaterialPipelines();
-    }
-
-    bool VulkanEngine::InitBackgroundPipelines()
-    {
-        VkPipelineLayoutCreateInfo layout_info{};
-        layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        layout_info.pNext = nullptr;
-        layout_info.pSetLayouts = &m_background_compute_descriptor_layout;
-        layout_info.setLayoutCount = 1;
-
-        VkPushConstantRange push_constants_info{};
-        push_constants_info.offset = 0;
-        push_constants_info.size = sizeof(BackgroundPushConstants);
-        push_constants_info.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        layout_info.pushConstantRangeCount = 1;
-        layout_info.pPushConstantRanges = &push_constants_info;
-
-        VK_CHECK(m_device_dispatch.createPipelineLayout(&layout_info, nullptr, &m_gradient_pipeline_layout));
-
-        m_deletion_queue.PushFunction(
-            "pipeline layout",
-            [this]()
-            {
-                m_device_dispatch.destroyPipelineLayout(m_gradient_pipeline_layout, nullptr);
-            }
-        );
-
-        // create background effects
-        ComputeEffect sky_effect;
-        if (CreateComputeEffect(
-                "sky",
-                "../data/shader/sky.comp.spv",
-                m_device_dispatch,
-                m_gradient_pipeline_layout,
-                m_deletion_queue,
-                &sky_effect
-            ) == false)
-        {
-            return false;
-        }
-        sky_effect.push_constants.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
-        m_compute_effects.emplace_back(sky_effect);
-
-        ComputeEffect gradient;
-        if (CreateComputeEffect(
-                "gradient_color",
-                "../data/shader/gradient_color.comp.spv",
-                m_device_dispatch,
-                m_gradient_pipeline_layout,
-                m_deletion_queue,
-                &gradient
-            ) == false)
-        {
-            return false;
-        }
-        gradient.push_constants.data1 = glm::vec4(1, 0, 0, 1);
-        gradient.push_constants.data2 = glm::vec4(0, 0, 1, 1);
-        m_compute_effects.emplace_back(gradient);
-
-        return true;
-    }
+    bool VulkanEngine::InitPipelines() { return InitMaterialPipelines(); }
 
     bool VulkanEngine::InitMaterialPipelines()
     {
@@ -1358,17 +1180,6 @@ namespace Renderer
         new_scene.camera_vertical_fov = 70.0f;
 
         main_scene = 0;
-
-        // background descriptor for main scene. This is a shitty place for it but easiest for now.
-        Utils::DescriptorWriter writer{};
-        writer.WriteImage(
-            0,
-            render_scenes[main_scene].draw_image->image_view,
-            VK_IMAGE_LAYOUT_GENERAL,
-            0,
-            VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
-        );
-        writer.UpdateSet(m_device_dispatch, m_background_compute_descriptors);
 
         // load default textures
         // 3 default textures, white, black, grey. 1 pixel each

@@ -176,10 +176,8 @@ namespace Renderer
         void InitCommands();
         void InitSyncStructures();
         void InitFrameDescriptors();
-        void InitBackgroundDescriptors();
         void InitDefaultDescriptors();
         bool InitPipelines();
-        bool InitBackgroundPipelines();
         bool InitMaterialPipelines();
         void InitDefaultData();
         void InitImgui();
@@ -244,10 +242,6 @@ namespace Renderer
         SDL_Window* m_window;
 
         VmaAllocator m_allocator;
-
-        Utils::DescriptorAllocator m_background_descriptor_allocator;
-        VkDescriptorSet m_background_compute_descriptors;
-        VkDescriptorSetLayout m_background_compute_descriptor_layout;
 
         bool m_use_validation_layers;
         bool m_force_all_uploads_immediate;
