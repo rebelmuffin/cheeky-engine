@@ -9,7 +9,7 @@ namespace Game
     class MeshNode : public Node
     {
       public:
-        MeshNode(const Renderer::MeshHandle& handle);
+        MeshNode(std::string_view name, const Renderer::MeshHandle& handle);
 
         void OnAdded() override;
         void OnRemoved() override;

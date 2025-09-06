@@ -39,7 +39,7 @@ namespace Game
         return FromMatrix(result);
     }
 
-    Node::Node(bool tick_update) : m_tick_updating(tick_update) {}
+    Node::Node(std::string_view name, bool tick_update) : m_name(name), m_tick_updating(tick_update) {}
 
     RootNode& Node::SceneRoot() { return const_cast<RootNode&>(std::as_const(*this).SceneRoot()); }
 
@@ -141,6 +141,7 @@ namespace Game
     Node* Node::AddChild(std::unique_ptr<Node>&& node)
     {
         std::unique_ptr<Node>& new_child = m_children.emplace_back(std::move(node));
+        new_child->m_parent = this;
         new_child->RefreshTransform();
         return new_child.get();
     }
@@ -162,7 +163,7 @@ namespace Game
         }
     }
 
-    RootNode::RootNode() : Node(false) {}
+    RootNode::RootNode() : Node("root node", false) {}
 
-    CameraNode::CameraNode() : Node(false) {}
+    CameraNode::CameraNode(std::string_view name) : Node(name, false) {}
 } // namespace Game

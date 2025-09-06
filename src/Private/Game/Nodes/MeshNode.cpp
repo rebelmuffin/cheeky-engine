@@ -9,8 +9,8 @@
 
 namespace Game
 {
-    MeshNode::MeshNode(const Renderer::MeshHandle& mesh) :
-        Node(true),
+    MeshNode::MeshNode(std::string_view name, const Renderer::MeshHandle& mesh) :
+        Node(name, true),
         m_mesh_asset(mesh),
         m_scene_item(nullptr)
     {

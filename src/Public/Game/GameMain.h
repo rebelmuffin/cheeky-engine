@@ -17,7 +17,7 @@ namespace Game
         void Draw(double delta_time_seconds);
 
       private:
-        GameScene m_main_scene;
+        std::unique_ptr<GameScene> m_main_scene;
         GameTime m_game_time{};
     };
 } // namespace Game

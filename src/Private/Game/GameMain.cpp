@@ -1,11 +1,23 @@
 #include "Game/GameMain.h"
 #include "Game/GameScene.h"
 #include "Game/GameTime.h"
+#include "Game/Nodes/MeshNode.h"
+#include "Game/Utility/SceneCreationUtils.h"
+#include "Renderer/Material.h"
+#include "Renderer/Utility/VkLoader.h"
 #include "Renderer/VkTypes.h"
+
+#include <glm/ext/vector_float3.hpp>
+#include <glm/fwd.hpp>
+#include <glm/trigonometric.hpp>
+
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace Game
 {
-    GameMain::GameMain(Renderer::VulkanEngine& engine, CVars cvars) : m_main_scene(engine, nullptr)
+    GameMain::GameMain(Renderer::VulkanEngine& engine, CVars cvars)
     {
         Renderer::ImageHandle draw_image =
             engine.CreateDrawImage((uint32_t)cvars.width, (uint32_t)cvars.height);
@@ -19,16 +31,21 @@ namespace Game
 
         engine.main_scene = 1;
 
+        m_main_scene = std::make_unique<GameScene>(engine, &scene);
+
         MainSceneSetup();
     }
 
-    void GameMain::MainSceneSetup() {}
+    void GameMain::MainSceneSetup()
+    {
+        Utils::LoadGltfIntoGameScene(m_main_scene->Root(), "../data/resources/BarramundiFish.glb");
+    }
 
     void GameMain::Draw(double delta_time_seconds)
     {
         m_game_time.delta_time_seconds = (float)delta_time_seconds;
         m_game_time.game_time_seconds += m_game_time.delta_time_seconds;
 
-        m_main_scene.Draw(m_game_time);
+        m_main_scene->Draw(m_game_time);
     }
 } // namespace Game

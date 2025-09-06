@@ -14,8 +14,8 @@ namespace Game
     struct Transform
     {
         glm::vec3 position{};
-        glm::vec3 scale{};
-        glm::quat rotation{};
+        glm::vec3 scale = glm::vec3(1.0f, 1.0f, 1.0f);
+        glm::quat rotation = glm::identity<glm::quat>();
 
         static Transform FromMatrix(glm::mat4 mat);
         glm::mat4 ToMatrix() const;
@@ -35,6 +35,7 @@ namespace Game
     class Node
     {
       public:
+        Node(std::string_view name, bool tick_update = false);
         virtual ~Node() = default;
 
         // getters
@@ -74,8 +75,6 @@ namespace Game
         void SetLocalScale(const glm::vec3& scale);
 
       protected:
-        Node(bool tick_update);
-
         // runtime functions
 
         /// Called when the node is added to the scene.
@@ -117,7 +116,7 @@ namespace Game
     class CameraNode : public Node
     {
       public:
-        CameraNode();
+        CameraNode(std::string_view name);
 
         float vertical_fov = 70.0f;
     };
@@ -130,10 +129,10 @@ namespace Game
             "Trying to create a child node that does not inherit from Game::Node. This is unsupported."
         );
 
-        std::unique_ptr<T> node_unique = std::make_unique<T>(std::forward<Args...>(args...));
+        std::unique_ptr<T> node_unique = std::make_unique<T>(std::forward<Args>(args)...);
         T& node_ref = *node_unique.get();
-        PostCreateChild(node_ref);
         AddChild(std::move(node_unique));
+        PostCreateChild(node_ref);
         return node_ref;
     }
 } // namespace Game

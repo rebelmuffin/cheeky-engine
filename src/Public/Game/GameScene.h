@@ -41,7 +41,7 @@ namespace Game
         CameraNode* m_active_camera;
 
         std::vector<Node*> m_updating_nodes;
-        bool m_paused;
+        bool m_paused = false;
 
         NodeId_t m_next_node_id = 1; // starting from 1 to avoid invalid node id
     };
