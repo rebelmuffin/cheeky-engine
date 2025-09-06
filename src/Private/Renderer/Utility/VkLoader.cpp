@@ -193,13 +193,53 @@ namespace
         return true;
     }
 
+    std::optional<Renderer::ImageHandle> LoadImageFromFastGltfArray(
+        Renderer::VulkanEngine& engine, const fastgltf::sources::Array& arr, size_t offset, const char* name
+    )
+    {
+        int width, height, channels;
+        constexpr int desired_channels = 4;
+        unsigned char* image_data = stbi_load_from_memory(
+            reinterpret_cast<const unsigned char*>(arr.bytes.data() + offset),
+            (int)arr.bytes.size(),
+            &width,
+            &height,
+            &channels,
+            desired_channels
+        );
+        if (image_data == nullptr)
+        {
+            return std::nullopt;
+        }
+
+        VkExtent3D extents{ (uint32_t)width, (uint32_t)height, 1 };
+        Renderer::ImageHandle loaded_image = engine.AllocateImage(
+            image_data,
+            extents,
+            VK_FORMAT_R8G8B8A8_UNORM,
+            VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            true,
+            name
+        );
+
+        stbi_image_free(image_data);
+
+        return loaded_image;
+    }
+
     std::optional<Renderer::ImageHandle> LoadGltfImage(
         Renderer::VulkanEngine& engine, const fastgltf::Asset& asset, const fastgltf::Image& image
     )
     {
         std::optional<Renderer::ImageHandle> out_handle = std::nullopt;
+
         std::visit(
             fastgltf::visitor{
+                [&](const fastgltf::sources::Array& arr)
+                {
+                    out_handle = LoadImageFromFastGltfArray(engine, arr, 0, image.name.data());
+                },
                 [&](const fastgltf::sources::URI& uri)
                 {
                     if (uri.uri.isLocalPath())
@@ -218,37 +258,11 @@ namespace
                         fastgltf::visitor{ [](const auto&)
                                            {
                                            },
-                                           [&](const fastgltf::sources::Array& vec)
+                                           [&](const fastgltf::sources::Array& arr)
                                            {
-                                               int width, height, channels;
-                                               constexpr int desired_channels = 4;
-                                               unsigned char* image_data = stbi_load_from_memory(
-                                                   reinterpret_cast<const unsigned char*>(
-                                                       vec.bytes.data() + buffer_view.byteOffset
-                                                   ),
-                                                   (int)vec.bytes.size(),
-                                                   &width,
-                                                   &height,
-                                                   &channels,
-                                                   desired_channels
+                                               out_handle = LoadImageFromFastGltfArray(
+                                                   engine, arr, buffer_view.byteOffset, image.name.data()
                                                );
-                                               if (image_data == nullptr)
-                                               {
-                                                   return;
-                                               }
-
-                                               VkExtent3D extents{ (uint32_t)width, (uint32_t)height, 1 };
-                                               out_handle = engine.AllocateImage(
-                                                   image_data,
-                                                   extents,
-                                                   VK_FORMAT_R8G8B8A8_UNORM,
-                                                   VK_IMAGE_USAGE_SAMPLED_BIT,
-                                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                                   true,
-                                                   image.name.data()
-                                               );
-
-                                               stbi_image_free(image_data);
                                            } },
                         buffer.data
                     );
