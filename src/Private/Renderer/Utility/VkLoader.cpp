@@ -6,6 +6,7 @@
 #include "Renderer/VkTypes.h"
 
 #include "ThirdParty/fastgltf.h"
+#include "fastgltf/types.hpp"
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/gtx/compatibility.hpp>
@@ -66,12 +67,12 @@ namespace
         }
 
         const fastgltf::Options loading_options = extra_options | fastgltf::Options::LoadExternalBuffers;
+        const fastgltf::Category categories = fastgltf::Category::All;
 
         fastgltf::Parser parser;
 
-        fastgltf::Expected<fastgltf::Asset> parse_result = parser.loadGltf(
-            load_result.get(), file_path.parent_path(), loading_options, fastgltf::Category::Meshes
-        );
+        fastgltf::Expected<fastgltf::Asset> parse_result =
+            parser.loadGltf(load_result.get(), file_path.parent_path(), loading_options, categories);
         if (parse_result.error() != fastgltf::Error::None)
         {
             PrintFastGltfError("[!] Failed to parse glTF file: ", parse_result.error());
@@ -517,10 +518,12 @@ namespace Renderer::Utils
         std::unordered_set<size_t> nodes_with_parents{};
 
         // create all nodes.
-        for (const fastgltf::Node& node : scene.scene_nodes)
+        for (size_t idx = 0; idx < scene.scene_nodes.size(); ++idx)
         {
+            fastgltf::Node& node = scene.scene_nodes[idx];
             IntermediateGLTFNode& created =
                 *created_nodes.emplace_back(std::make_shared<IntermediateGLTFNode>());
+            created.scene_node_idx = idx;
 
             // load the transform
             std::visit(
@@ -532,7 +535,7 @@ namespace Renderer::Utils
                             glm::vec3(trs.translation.x(), trs.translation.y(), trs.translation.z())
                         );
                         transform *= glm::mat4(
-                            glm::quat(trs.rotation.x(), trs.rotation.y(), trs.rotation.z(), trs.rotation.w())
+                            glm::quat(trs.rotation.w(), trs.rotation.x(), trs.rotation.y(), trs.rotation.z())
                         );
                         transform =
                             glm::scale(transform, glm::vec3(trs.scale.x(), trs.scale.y(), trs.scale.z()));
