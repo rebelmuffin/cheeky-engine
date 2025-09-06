@@ -3,19 +3,19 @@
 #include "Renderer/Renderable.h"
 #include "Renderer/Utility/VkInitialisers.h"
 #include "Renderer/VkEngine.h"
-
 #include "Renderer/VkTypes.h"
+
 #include "ThirdParty/fastgltf.h"
-#include "fastgltf/core.hpp"
-#include "fastgltf/types.hpp"
-#include "fastgltf/util.hpp"
-#include "glm/ext/matrix_transform.hpp"
-#include "glm/ext/vector_float4.hpp"
-#include "vulkan/vulkan_core.h"
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/ext/vector_float4.hpp>
 #include <glm/gtx/compatibility.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <limits>
 #include <stb_image.h>
+#include <unordered_set>
+#include <vulkan/vulkan_core.h>
 
+#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <utility>
@@ -23,6 +23,28 @@
 
 namespace
 {
+    /// Intermediate structure that uses shared ptrs to easily move the nodes around that we convert back to
+    /// GLTFNode before returning.
+    struct IntermediateGLTFNode
+    {
+        std::vector<std::shared_ptr<IntermediateGLTFNode>> children{};
+        std::size_t scene_node_idx{};
+        glm::mat4 transform{};
+
+        Renderer::GLTFNode ToGLTFNode()
+        {
+            Renderer::GLTFNode node{};
+            node.scene_node_idx = scene_node_idx;
+            node.transform = transform;
+            for (const std::shared_ptr<IntermediateGLTFNode>& child : children)
+            {
+                node.children.emplace_back(child->ToGLTFNode());
+            }
+
+            return node;
+        }
+    };
+
     void PrintFastGltfError(const char* message, fastgltf::Error error)
     {
         std::cout << message << '\t' << fastgltf::getErrorName(error) << ": "
@@ -326,7 +348,7 @@ namespace Renderer::Utils
         return mesh_assets;
     }
 
-    bool LoadGltfIntoScene(Scene& scene, VulkanEngine& engine, std::filesystem::path file_path)
+    std::optional<GLTFScene> LoadGltfScene(VulkanEngine& engine, std::filesystem::path file_path)
     {
         // we want to load the textures in as well, so we can create the materials with correct textures
         const std::optional<const fastgltf::Asset>& opt_asset = FastGltfLoadAsset(
@@ -336,13 +358,14 @@ namespace Renderer::Utils
         );
         if (opt_asset == std::nullopt)
         {
-            return false;
+            return std::nullopt;
         }
         const fastgltf::Asset& asset = *opt_asset;
 
-        std::vector<ImageHandle> out_images{};
-        std::vector<std::shared_ptr<GLTFMaterial>> out_materials{};
-        std::vector<MeshHandle> out_meshes{};
+        GLTFScene scene{};
+        std::vector<ImageHandle>& out_images = scene.loaded_textures;
+        std::vector<std::shared_ptr<GLTFMaterial>>& out_materials = scene.loaded_materials;
+        std::vector<MeshHandle>& out_meshes = scene.loaded_meshes;
 
         for (const fastgltf::Texture& gltf_texture : asset.textures)
         {
@@ -456,6 +479,7 @@ namespace Renderer::Utils
                 if (result == false)
                 {
                     std::cout << error_message << "\nSkipping mesh: " << mesh_asset.name << std::endl;
+                    // #TODO: this needs a placeholder mesh.
                     continue;
                 }
 
@@ -476,8 +500,90 @@ namespace Renderer::Utils
             out_meshes.emplace_back(created_mesh);
         }
 
+        scene.scene_nodes = asset.nodes;
+        if (scene.scene_nodes.empty())
+        {
+            return scene;
+        }
+
+        // If there is a hierarchy, create an easier to use set of GLTFNode structures.
+        // disclaimer: I'm writing this really late at night and definitely not proud of what I have done so
+        // far.
+        scene.root_node = GLTFNode{ {}, std::numeric_limits<size_t>::max(), glm::mat4(1.0f) };
+
+        std::vector<std::shared_ptr<IntermediateGLTFNode>> created_nodes{};
+        std::vector<std::shared_ptr<IntermediateGLTFNode>>
+            top_nodes{}; // these will be the direct children of root.
+        std::unordered_set<size_t> nodes_with_parents{};
+
+        // create all nodes.
+        for (const fastgltf::Node& node : scene.scene_nodes)
+        {
+            IntermediateGLTFNode& created =
+                *created_nodes.emplace_back(std::make_shared<IntermediateGLTFNode>());
+
+            // load the transform
+            std::visit(
+                fastgltf::visitor{
+                    [&created](const fastgltf::TRS& trs)
+                    {
+                        glm::mat4 transform = glm::translate(
+                            glm::mat4(1.0f),
+                            glm::vec3(trs.translation.x(), trs.translation.y(), trs.translation.z())
+                        );
+                        transform *= glm::mat4(
+                            glm::quat(trs.rotation.x(), trs.rotation.y(), trs.rotation.z(), trs.rotation.w())
+                        );
+                        transform =
+                            glm::scale(transform, glm::vec3(trs.scale.x(), trs.scale.y(), trs.scale.z()));
+
+                        created.transform = transform;
+                    },
+                    [&created](const fastgltf::math::fmat4x4&)
+                    {
+                        // raw matrices not supported.
+                        created.transform = glm::mat4(1.0f);
+                    } },
+                node.transform
+            );
+
+            nodes_with_parents.insert(node.children.begin(), node.children.end());
+        }
+
+        // copy the children into parents
+        for (const std::shared_ptr<IntermediateGLTFNode>& node : created_nodes)
+        {
+            for (size_t child_idx : scene.scene_nodes[node->scene_node_idx].children)
+            {
+                node->children.emplace_back(created_nodes[child_idx]);
+            }
+
+            if (nodes_with_parents.contains(node->scene_node_idx) == false)
+            {
+                top_nodes.emplace_back(node);
+            }
+        }
+
+        // now we can clear the created list and commit the top ones into the root.
+        created_nodes.clear();
+        for (const std::shared_ptr<IntermediateGLTFNode>& node : top_nodes)
+        {
+            scene.root_node->children.emplace_back(node->ToGLTFNode());
+        }
+
+        return scene;
+    }
+
+    bool LoadGltfIntoScene(Scene& scene, VulkanEngine& engine, std::filesystem::path file_path)
+    {
+        const std::optional<GLTFScene>& loaded_scene = LoadGltfScene(engine, file_path);
+        if (loaded_scene.has_value() == false)
+        {
+            return false;
+        }
+
         // now just create scene items from these
-        for (const fastgltf::Node& node : asset.nodes)
+        for (const fastgltf::Node& node : loaded_scene->scene_nodes)
         {
             if (node.meshIndex.has_value() == false)
             {
@@ -487,7 +593,7 @@ namespace Renderer::Utils
             // ignore the hierarchy for now and see what happens
             MeshSceneItem item{};
             item.name = node.name;
-            item.asset = out_meshes[*node.meshIndex];
+            item.asset = loaded_scene->loaded_meshes[*node.meshIndex];
             // our matrices should be compatible with gltf
             fastgltf::TRS trs = std::get<fastgltf::TRS>(node.transform);
             glm::mat4 transform = glm::translate(
@@ -501,10 +607,10 @@ namespace Renderer::Utils
             scene.scene_items.emplace_back(std::make_unique<MeshSceneItem>(std::move(item)));
         }
 
-        if (asset.nodes.empty())
+        if (loaded_scene->scene_nodes.empty())
         {
             // if empty, just spit out all the meshes as individual nodes.
-            for (const MeshHandle& mesh : out_meshes)
+            for (const MeshHandle& mesh : loaded_scene->loaded_meshes)
             {
                 MeshSceneItem item{};
                 item.name = mesh->name;

@@ -4,7 +4,10 @@
 #include "Renderer/ResourceStorage.h"
 #include "Renderer/VkTypes.h"
 
+#include "ThirdParty/fastgltf.h"
+
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -45,6 +48,24 @@ namespace Renderer
 
     using MeshHandle = ReferenceCountedHandle<MeshAsset>;
 
+    struct GLTFNode
+    {
+        std::vector<GLTFNode> children{};
+        std::size_t scene_node_idx{};
+        glm::mat4 transform{};
+    };
+
+    struct GLTFScene
+    {
+        std::vector<ImageHandle> loaded_textures{};
+        std::vector<std::shared_ptr<GLTFMaterial>> loaded_materials{};
+        std::vector<MeshHandle> loaded_meshes{};
+        std::vector<fastgltf::Node> scene_nodes{};
+
+        // hierarchical representation of the scene nodes. The root node itself is not a real node, iterate
+        // through its children instead.
+        std::optional<GLTFNode> root_node{};
+    };
 } // namespace Renderer
 
 namespace Renderer::Utils
@@ -57,6 +78,8 @@ namespace Renderer::Utils
     std::optional<std::vector<MeshHandle>> LoadGltfMeshes(
         VulkanEngine* engine, std::filesystem::path file_path
     );
+
+    std::optional<GLTFScene> LoadGltfScene(VulkanEngine& engine, std::filesystem::path file_path);
 
     bool LoadGltfIntoScene(Scene& scene, VulkanEngine& engine, std::filesystem::path file_path);
 
