@@ -1,6 +1,8 @@
 #include "Game/GameScene.h"
+#include "Game/Node.h"
 #include <algorithm>
 #include <iterator>
+#include <memory>
 
 namespace Game
 {
@@ -8,6 +10,8 @@ namespace Game
         m_render_engine(&renderer),
         m_render_scene(scene)
     {
+        m_root = std::make_unique<RootNode>();
+        RegisterNode(*m_root.get());
     }
 
     void GameScene::RegisterNode(Node& node)
@@ -16,6 +20,10 @@ namespace Game
         node.m_owning_scene = this;
         node.OnAdded();
         node.RefreshTransform();
+        if (node.m_tick_updating)
+        {
+            SetNodeTickUpdate(node, true);
+        }
     }
 
     void GameScene::ReleaseNode(Node& node)

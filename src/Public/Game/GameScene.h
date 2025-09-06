@@ -25,6 +25,7 @@ namespace Game
         void SetActiveCamera(CameraNode* camera);
         void SetNodeTickUpdate(Node& node, bool update);
         void SetPaused(bool paused);
+        RootNode& Root() { return *m_root.get(); }
         Renderer::Scene* RenderScene() { return m_render_scene; }
         Renderer::VulkanEngine& RenderEngine() { return *m_render_engine; }
 

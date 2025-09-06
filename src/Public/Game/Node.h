@@ -5,6 +5,8 @@
 #include <glm/gtx/quaternion.hpp>
 
 #include <memory>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace Game
@@ -50,6 +52,10 @@ namespace Game
 
         // operations
 
+        /// Create a child of this node. This is the intended way of creating any nodes within a game scene.
+        template <typename T, typename... Args>
+        T& CreateChild(Args... args);
+
         /// Set whether this node should be updated every tick through OnTickUpdate.
         void SetTickUpdate(bool tick_update_enabled);
 
@@ -63,9 +69,12 @@ namespace Game
         void AttachToParent(Node& new_parent);
 
         void SetLocalTransform(const Transform& transform);
+        void SetLocalPosition(const glm::vec3& position);
+        void SetLocalRotation(const glm::quat& rotation);
+        void SetLocalScale(const glm::vec3& scale);
 
       protected:
-        Node(GameScene& scene, bool tick_update);
+        Node(bool tick_update);
 
         // runtime functions
 
@@ -82,6 +91,7 @@ namespace Game
         virtual void OnImGui();
 
       private:
+        void PostCreateChild(Node& node);
         Node* AddChild(std::unique_ptr<Node>&& node);
         void RefreshTransform();
 
@@ -90,6 +100,7 @@ namespace Game
         GameScene* m_owning_scene = nullptr;
         std::vector<std::unique_ptr<Node>> m_children{};
         Node* m_parent = nullptr;
+        bool m_tick_updating = false;
 
         Transform m_local_transform{};
         Transform m_world_transform{};
@@ -99,11 +110,30 @@ namespace Game
 
     class RootNode : public Node
     {
+      public:
+        RootNode();
     };
 
     class CameraNode : public Node
     {
       public:
+        CameraNode();
+
         float vertical_fov = 70.0f;
     };
+
+    template <typename T, typename... Args>
+    T& Node::CreateChild(Args... args)
+    {
+        static_assert(
+            std::is_base_of_v<Node, T>,
+            "Trying to create a child node that does not inherit from Game::Node. This is unsupported."
+        );
+
+        std::unique_ptr<T> node_unique = std::make_unique<T>(std::forward<Args...>(args...));
+        T& node_ref = *node_unique.get();
+        PostCreateChild(node_ref);
+        AddChild(std::move(node_unique));
+        return node_ref;
+    }
 } // namespace Game

@@ -39,6 +39,8 @@ namespace Game
         return FromMatrix(result);
     }
 
+    Node::Node(bool tick_update) : m_tick_updating(tick_update) {}
+
     RootNode& Node::SceneRoot() { return const_cast<RootNode&>(std::as_const(*this).SceneRoot()); }
 
     const RootNode& Node::SceneRoot() const
@@ -116,23 +118,51 @@ namespace Game
         m_local_transform = transform;
         RefreshTransform();
     }
+    void Node::SetLocalPosition(const glm::vec3& position)
+    {
+        m_local_transform.position = position;
+        RefreshTransform();
+    }
+    void Node::SetLocalRotation(const glm::quat& rotation)
+    {
+        m_local_transform.rotation = rotation;
+        RefreshTransform();
+    }
+    void Node::SetLocalScale(const glm::vec3& scale)
+    {
+        m_local_transform.scale = scale;
+        RefreshTransform();
+    }
 
     void Node::OnImGui() { ImGui::Text("%s", DebugDisplayName().data()); }
+
+    void Node::PostCreateChild(Node& node) { m_owning_scene->RegisterNode(node); }
 
     Node* Node::AddChild(std::unique_ptr<Node>&& node)
     {
         std::unique_ptr<Node>& new_child = m_children.emplace_back(std::move(node));
+        new_child->RefreshTransform();
         return new_child.get();
     }
 
     void Node::RefreshTransform()
     {
-        m_world_transform = m_local_transform;
-        m_world_transform = m_local_transform.Transformed(m_parent->WorldTransform());
+        if (m_parent != nullptr)
+        {
+            m_world_transform = m_local_transform.Transformed(m_parent->WorldTransform());
+        }
+        else
+        {
+            m_world_transform = m_local_transform;
+        }
 
         for (std::unique_ptr<Node>& node : m_children)
         {
             node->RefreshTransform();
         }
     }
+
+    RootNode::RootNode() : Node(false) {}
+
+    CameraNode::CameraNode() : Node(false) {}
 } // namespace Game
