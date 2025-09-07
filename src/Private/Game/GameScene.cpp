@@ -18,6 +18,7 @@ namespace Game
     {
         node.m_id = ++m_next_node_id;
         node.m_owning_scene = this;
+        m_active_nodes[node.m_id] = &node;
         node.OnAdded();
         node.RefreshTransform();
         if (node.m_tick_updating)
@@ -28,6 +29,7 @@ namespace Game
 
     void GameScene::ReleaseNode(Node& node)
     {
+        m_active_nodes.erase(node.m_id);
         SetNodeTickUpdate(node, false);
         node.OnRemoved();
     }
@@ -52,7 +54,8 @@ namespace Game
                 return;
             }
 
-            m_updating_nodes.erase(it.base());
+            // reverse iterator is offset by one turns out. Learned the hard way. Thanks C++
+            m_updating_nodes.erase(--it.base());
         }
         else
         {
@@ -61,6 +64,16 @@ namespace Game
     }
 
     void GameScene::SetPaused(bool paused) { m_paused = paused; }
+
+    Node* GameScene::NodeFromId(NodeId_t node_id)
+    {
+        if (m_active_nodes.contains(node_id))
+        {
+            return m_active_nodes[node_id];
+        }
+
+        return nullptr;
+    }
 
     void GameScene::Draw(const GameTime& time)
     {

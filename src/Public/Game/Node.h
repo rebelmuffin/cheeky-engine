@@ -46,6 +46,8 @@ namespace Game
         const Transform& LocalTransform() const { return m_local_transform; }
         bool IsRootNode() const { return m_parent == nullptr; }
 
+        Node* Parent() { return m_parent; }
+        const Node* Parent() const { return m_parent; }
         GameScene& Scene() { return *m_owning_scene; }
         const GameScene& Scene() const { return *m_owning_scene; }
         RootNode& SceneRoot();
@@ -60,7 +62,11 @@ namespace Game
         /// Set whether this node should be updated every tick through OnTickUpdate.
         void SetTickUpdate(bool tick_update_enabled);
 
-        /// Destroy the given child node.
+        /// Destroy this node.
+        void Destroy();
+
+        /// Destroy the given child node. All destruction has to go through this for proper release of
+        /// resources.
         void DestroyChild(NodeId_t child_node_id);
 
         /// Move the given child from this node and attach them to another node instead.
@@ -73,6 +79,8 @@ namespace Game
         void SetLocalPosition(const glm::vec3& position);
         void SetLocalRotation(const glm::quat& rotation);
         void SetLocalScale(const glm::vec3& scale);
+
+        virtual void OnImGui();
 
       protected:
         // runtime functions
@@ -87,7 +95,6 @@ namespace Game
         virtual void OnTickUpdate(const GameTime&) {};
 
         virtual std::string DebugDisplayName() { return m_name; }
-        virtual void OnImGui();
 
       private:
         void PostCreateChild(Node& node);

@@ -60,16 +60,59 @@ namespace Game
         Scene().SetNodeTickUpdate(*this, tick_update_enabled);
     }
 
-    /// Destroy the given child node.
+    void Node::Destroy()
+    {
+        if (m_parent == nullptr)
+        {
+            LogError(
+                "Trying to destroy a node with no parent. This node is either the root node or "
+                "uninitialised. Node: %s(Id %u)",
+                DebugDisplayName().data(),
+                Id()
+            );
+            return;
+        }
+
+        m_parent->DestroyChild(m_id);
+    }
+
+    /// Destroy the given child node. All destruction has to go through this for proper release of resources.
     void Node::DestroyChild(NodeId_t child_node_id)
     {
-        std::erase_if(
-            m_children,
+        auto found = std::find_if(
+            m_children.begin(),
+            m_children.end(),
             [child_node_id](const std::unique_ptr<Node>& node)
             {
                 return node->Id() == child_node_id;
             }
         );
+
+        if (found == m_children.end())
+        {
+            LogError(
+                "Trying to destroy a child(Id %u) that does not belong to this node(%s)",
+                child_node_id,
+                DebugDisplayName().data()
+            );
+            return;
+        }
+
+        // destroy the children of the child recursively
+        std::vector<NodeId_t> children_nodes{};
+        children_nodes.reserve(found->get()->m_children.size());
+        for (const std::unique_ptr<Node>& child : found->get()->m_children)
+        {
+            children_nodes.emplace_back(child->m_id);
+        }
+
+        for (const NodeId_t child_id : children_nodes)
+        {
+            found->get()->DestroyChild(child_id);
+        }
+
+        m_owning_scene->ReleaseNode(*found->get());
+        m_children.erase(found);
     }
 
     /// Move the given child from this node and attach them to another node instead.
@@ -87,8 +130,8 @@ namespace Game
         if (child_it == m_children.end())
         {
             LogWarning(
-                "Trying to move a child(Id %d) that does not belong to this node(%s).",
-                Id(),
+                "Trying to move a child(Id %u) that does not belong to this node(%s).",
+                child_node_id,
                 DebugDisplayName().data()
             );
             return;

@@ -25,6 +25,7 @@ namespace Game
         void SetActiveCamera(CameraNode* camera);
         void SetNodeTickUpdate(Node& node, bool update);
         void SetPaused(bool paused);
+        Node* NodeFromId(NodeId_t node_id);
         RootNode& Root() { return *m_root.get(); }
         Renderer::Scene* RenderScene() { return m_render_scene; }
         Renderer::VulkanEngine& RenderEngine() { return *m_render_engine; }
@@ -37,10 +38,12 @@ namespace Game
         Renderer::VulkanEngine* m_render_engine;
         Renderer::Scene* m_render_scene;
 
+        std::unordered_map<NodeId_t, Node*> m_active_nodes{};
+        std::vector<Node*> m_updating_nodes;
+
         std::unique_ptr<RootNode> m_root;
         CameraNode* m_active_camera;
 
-        std::vector<Node*> m_updating_nodes;
         bool m_paused = false;
 
         NodeId_t m_next_node_id = 1; // starting from 1 to avoid invalid node id
