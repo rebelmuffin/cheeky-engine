@@ -1,8 +1,10 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -14,7 +16,7 @@ namespace Renderer
     class VulkanEngine;
 
     using StorageId_t = size_t;
-    using ReferenceCount_t = uint32_t;
+    using ReferenceCount_t = std::atomic_uint32_t;
 
     constexpr StorageId_t INVALID_RESOURCE_ID = 0ul;
 
@@ -60,6 +62,10 @@ namespace Renderer
     template <typename T>
     struct ResourceStorage
     {
+        // Lock used when accessing the resource map. Accesses to the storage should only happen when deleting
+        // and creating resources so it should be okay to lock.
+        std::mutex resource_lock{};
+
         // Map where we store the resource objects.
         std::map<StorageId_t, T> resource_map{};
 
@@ -82,6 +88,7 @@ namespace Renderer
         /// POD structures.
         ReferenceCountedHandle<T> AddResource(const T& resource, std::string_view name = "unnamed_resource")
         {
+            std::lock_guard lock{ resource_lock };
             StorageId_t id = next_storage_id++;
             resource_map[id] = resource;
             resource_name_map[id] = name;
@@ -93,6 +100,7 @@ namespace Renderer
         /// Same as other AddResource but move version.
         ReferenceCountedHandle<T> AddResource(T&& resource, std::string_view name = "unnamed_resource")
         {
+            std::lock_guard lock{ resource_lock };
             StorageId_t id = next_storage_id++;
             resource_map[id] = std::move(resource);
             resource_name_map[id] = name;
@@ -105,6 +113,7 @@ namespace Renderer
         /// it automatically already.
         void MarkForDestruction(T* resource, StorageId_t resource_id)
         {
+            std::lock_guard lock{ resource_lock };
             // simply copy the resource into destroys without a lookup.
             destroy_pending_resources.emplace_back(*resource);
 
@@ -119,6 +128,7 @@ namespace Renderer
 
         void DestroyPendingResources(VulkanEngine& engine)
         {
+            std::lock_guard lock{ resource_lock };
             for (T& resource : destroy_pending_resources)
             {
                 DestroyResource(engine, resource);
@@ -147,6 +157,8 @@ namespace Renderer
 
             DestroyPendingResources(engine);
 
+            // lock here instead of beginning of the function because DestroyPendingResources also locks
+            std::lock_guard lock{ resource_lock };
             resource_map.clear();
             resource_reference_map.clear();
             resource_name_map.clear();

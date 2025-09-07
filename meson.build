@@ -32,6 +32,7 @@ sdl2_dep = dependency('sdl2')
 
 vma_dep = dependency('vulkan-memory-allocator')
 glm_dep = dependency('glm')
+tbb_dep = dependency('tbb')
 
 # imgui stuffs
 subproject('imgui')
@@ -84,6 +85,7 @@ executable(
         sdl2_dep,
         vma_dep,
         glm_dep,
+        tbb_dep,
         imgui_dep,
         imguizmo_dep,
         vkbootstrap_dep,

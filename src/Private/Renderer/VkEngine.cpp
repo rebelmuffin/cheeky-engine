@@ -24,6 +24,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/transform.hpp>
 #include <imgui.h>
+#include <mutex>
 #include <unordered_set>
 #include <utility>
 #include <vk_mem_alloc.h>
@@ -522,6 +523,7 @@ namespace Renderer
             return;
         }
 
+        std::lock_guard lock(m_pending_upload_mutex);
         m_pending_uploads.push_back(std::move(upload_request));
     }
 
@@ -537,6 +539,8 @@ namespace Renderer
         // some uploads might need to wait until next frame to execute
         std::vector<std::unique_ptr<Utils::IUploadRequest>> next_frame_uploads;
 
+        // consider using a double buffer instead. This might be a big wait.
+        std::lock_guard lock(m_pending_upload_mutex);
         for (std::unique_ptr<Utils::IUploadRequest>& request : m_pending_uploads)
         {
             Utils::UploadExecutionResult result = request->ExecuteUpload(*this, cmd);

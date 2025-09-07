@@ -14,10 +14,14 @@
 #include <stb_image.h>
 #include <vulkan/vulkan_core.h>
 
+#include <algorithm>
+#include <chrono>
+#include <execution>
 #include <filesystem>
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <ranges>
 #include <unordered_set>
 #include <utility>
 #include <variant>
@@ -382,14 +386,29 @@ namespace Renderer::Utils
         std::vector<std::shared_ptr<GLTFMaterial>>& out_materials = scene.loaded_materials;
         std::vector<MeshHandle>& out_meshes = scene.loaded_meshes;
 
-        for (const fastgltf::Texture& gltf_texture : asset.textures)
-        {
-            const fastgltf::Image& image = asset.images[gltf_texture.imageIndex.value()];
-            std::optional<ImageHandle> out_image = LoadGltfImage(engine, asset, image);
+        std::chrono::high_resolution_clock clock{};
+        auto before = clock.now();
+        out_images.resize(asset.textures.size());
+        // C++20 comes to the rescue
+        std::ranges::iota_view texture_indices(size_t(0), out_images.size());
+        std::for_each(
+            std::execution::par,
+            texture_indices.begin(),
+            texture_indices.end(),
+            [&out_images, &engine, &asset](size_t gltf_texture_idx)
+            {
+                const fastgltf::Texture& texture = asset.textures[gltf_texture_idx];
+                const fastgltf::Image& image = asset.images[texture.imageIndex.value()];
+                std::optional<ImageHandle> out_image = LoadGltfImage(engine, asset, image);
 
-            // default to placeholder image
-            out_images.emplace_back(out_image.value_or(engine.PlaceholderImage()));
-        }
+                // default to placeholder image
+                out_images[gltf_texture_idx] = out_image.value_or(engine.PlaceholderImage());
+            }
+        );
+        auto after = clock.now();
+        std::cout << "Spent: "
+                  << std::chrono::duration_cast<std::chrono::milliseconds>(after - before).count()
+                  << "ms loading images." << std::endl;
 
         // create a default material for surfaces that don't have one.
         Material_GLTF_PBR::MaterialParameters default_mat_params;

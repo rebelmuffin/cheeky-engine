@@ -248,6 +248,7 @@ namespace Renderer
         bool m_enable_image_debugging = true;
 
         // uploads that are pending to be done on next frame.
+        std::mutex m_pending_upload_mutex{};
         std::vector<std::unique_ptr<Utils::IUploadRequest>> m_pending_uploads;
 
         // uploads that have been completed this frame, but need to have their resources freed.
