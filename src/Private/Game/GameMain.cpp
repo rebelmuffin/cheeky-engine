@@ -1,4 +1,5 @@
 #include "Game/GameMain.h"
+#include "Game/Editor/SceneEditor.h"
 #include "Game/GameScene.h"
 #include "Game/GameTime.h"
 #include "Game/Nodes/MeshNode.h"
@@ -7,6 +8,7 @@
 #include "Renderer/Utility/VkLoader.h"
 #include "Renderer/VkTypes.h"
 
+#include "ThirdParty/ImGUI.h"
 #include <glm/ext/vector_float3.hpp>
 #include <glm/fwd.hpp>
 #include <glm/trigonometric.hpp>
@@ -32,6 +34,7 @@ namespace Game
         engine.main_scene = 1;
 
         m_main_scene = std::make_unique<GameScene>(engine, &scene);
+        m_main_editor = std::make_unique<Editor::SceneEditor>(*m_main_scene);
 
         MainSceneSetup();
     }
@@ -47,5 +50,23 @@ namespace Game
         m_game_time.game_time_seconds += m_game_time.delta_time_seconds;
 
         m_main_scene->Draw(m_game_time);
+    }
+
+    void GameMain::OnImGui()
+    {
+        if (ImGui::BeginMainMenuBar())
+        {
+            if (ImGui::BeginMenu("Scene Editor"))
+            {
+                ImGui::Checkbox("Enable", &m_editor_enabled);
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+
+        if (m_editor_enabled)
+        {
+            m_main_editor->DrawImGui();
+        }
     }
 } // namespace Game

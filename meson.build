@@ -77,6 +77,7 @@ executable(
     'src/Private/Game/Node.cpp',
     'src/Private/Game/Nodes/MeshNode.cpp',
     'src/Private/Game/Utility/SceneCreationUtils.cpp',
+    'src/Private/Game/Editor/SceneEditor.cpp',
     'src/Private/ThirdParty/VkMemAllocImpl.cpp',
     'src/Private/ThirdParty/StbImageImpl.cpp',
     shader_gen_src,

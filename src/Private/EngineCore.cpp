@@ -1,10 +1,10 @@
 #include "EngineCore.h"
 #include "CVars.h"
-
 #include "Game/GameMain.h"
+
+#include "ImGuizmo.h"
 #include "ThirdParty/ImGUI.h"
 #include <SDL.h>
-#include <imgui.h>
 
 #include <chrono>
 #include <memory>
@@ -93,6 +93,7 @@ void EngineCore::RunMainLoop()
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
+        // ImGuizmo::BeginFrame();
 
         OnImgui();
 
@@ -110,12 +111,6 @@ void EngineCore::OnImgui()
         {
             ImGui::Checkbox("Show Demo", &m_show_imgui_demo);
             ImGui::Checkbox("Frame Stats", &m_show_fps);
-            ImGui::EndMenu();
-        }
-
-        if (ImGui::BeginMenu("Graphics"))
-        {
-            ImGui::Checkbox("Background Compute Effects", &m_show_compute_effects);
             ImGui::EndMenu();
         }
 
@@ -145,66 +140,7 @@ void EngineCore::OnImgui()
         );
     }
 
-    if (m_show_compute_effects)
-    {
-        if (ImGui::Begin("Compute Effects", &m_show_compute_effects))
-        {
-            auto copy_vec_to_array = +[](const glm::vec4& vec, float* data)
-            {
-                data[0] = vec.x;
-                data[1] = vec.y;
-                data[2] = vec.z;
-                data[3] = vec.w;
-            };
-            auto copy_array_to_vec = +[](const float* data, glm::vec4& vec)
-            {
-                vec.x = data[0];
-                vec.y = data[1];
-                vec.z = data[2];
-                vec.w = data[3];
-            };
-
-            static int current_selection = 0;
-            Renderer::ComputeEffect* current_effect =
-                &m_renderer->ComputeEffects()[m_renderer->CurrentComputeEffect()];
-            Renderer::BackgroundPushConstants* constants = &current_effect->push_constants;
-            static float data1[4];
-            static float data2[4];
-            static float data3[4];
-            static float data4[4];
-            copy_vec_to_array(constants->data1, data1);
-            copy_vec_to_array(constants->data2, data2);
-            copy_vec_to_array(constants->data3, data3);
-            copy_vec_to_array(constants->data4, data4);
-
-            if (ImGui::Combo("Current Effect", &current_selection, "sky\0gradient_color\0"))
-            {
-                m_renderer->SetCurrentComputeEffect(uint(current_selection));
-
-                current_effect = &m_renderer->ComputeEffects()[uint(current_selection)];
-                constants = &current_effect->push_constants;
-            }
-
-            ImGui::Text("Shader Path: %s", current_effect->path);
-            if (ImGui::ColorEdit4("data1", data1))
-            {
-                copy_array_to_vec(data1, constants->data1);
-            }
-            if (ImGui::ColorEdit4("data2", data2))
-            {
-                copy_array_to_vec(data2, constants->data2);
-            }
-            if (ImGui::ColorEdit4("data3", data3))
-            {
-                copy_array_to_vec(data3, constants->data3);
-            }
-            if (ImGui::ColorEdit4("data4", data4))
-            {
-                copy_array_to_vec(data4, constants->data4);
-            }
-        }
-        ImGui::End();
-    }
+    m_game->OnImGui();
 }
 
 bool EngineCore::InitialisationFailed() { return m_initialisation_failure; }
