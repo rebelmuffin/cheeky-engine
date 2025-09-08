@@ -19,7 +19,7 @@ namespace Game
 
     void MeshNode::OnRemoved() {}
 
-    void MeshNode::Draw(Renderer::DrawContext& ctx)
+    void MeshNode::Draw(Renderer::FrameDrawContext& ctx)
     {
         for (const Renderer::GeoSurface& surface : m_mesh_asset->surfaces)
         {

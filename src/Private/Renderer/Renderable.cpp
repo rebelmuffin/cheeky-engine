@@ -16,7 +16,7 @@ namespace Renderer
         return item;
     }
 
-    void MeshSceneItem::Draw(DrawContext& ctx)
+    void MeshSceneItem::Draw(FrameDrawContext& ctx)
     {
         for (const GeoSurface& surface : asset->surfaces)
         {

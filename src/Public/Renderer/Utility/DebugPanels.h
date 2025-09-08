@@ -6,7 +6,7 @@
 
 namespace Renderer::Debug
 {
-    void DrawSceneContentsImGui(VulkanEngine& engine, Scene& scene);
+    void DrawViewportContentsImGui(VulkanEngine& engine, Viewport& viewport);
 
     void DrawStorageTableImGui(VulkanEngine& engine, ResourceStorage<AllocatedImage>& image_storage);
     void DrawStorageTableImGui(VulkanEngine& engine, ResourceStorage<AllocatedBuffer>& buffer_storage);

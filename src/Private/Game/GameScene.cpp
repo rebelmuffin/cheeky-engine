@@ -110,7 +110,7 @@ namespace Game
         return nullptr;
     }
 
-    void GameScene::Draw(Renderer::DrawContext& ctx, const CameraNode* camera_node)
+    void GameScene::Draw(Renderer::FrameDrawContext& ctx, const CameraNode* camera_node)
     {
         const CameraNode* used_camera = camera_node;
         if (used_camera == nullptr)

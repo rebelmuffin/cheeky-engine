@@ -93,7 +93,7 @@ namespace Game
         virtual void OnRemoved() {};
 
         /// Called every time we need to draw the scene. Usually once a frame.
-        virtual void Draw(Renderer::DrawContext&) {};
+        virtual void Draw(Renderer::FrameDrawContext&) {};
 
         /// Called every tick if enabled by default or through SetTickUpdate.
         virtual void OnTickUpdate(const GameTime&) {};

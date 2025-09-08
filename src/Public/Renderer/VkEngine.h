@@ -4,11 +4,11 @@
 #include "Renderer/MaterialInterface.h"
 #include "Renderer/RenderObject.h"
 #include "Renderer/ResourceStorage.h"
-#include "Renderer/Scene.h"
 #include "Renderer/Utility/DeletionQueue.h"
 #include "Renderer/Utility/UploadRequest.h"
 #include "Renderer/Utility/VkDescriptors.h"
 #include "Renderer/Utility/VkLoader.h"
+#include "Renderer/Viewport.h"
 #include "Renderer/VkTypes.h"
 
 #include "ThirdParty/ImGUI.h"
@@ -18,7 +18,7 @@
 
 struct SDL_Window;
 
-// we don't support having separate formats for scenes, these are unified across the engine.
+// we don't support having separate formats for viewports, these are unified across the engine.
 constexpr VkFormat VKENGINE_DRAW_IMAGE_FORMAT = VK_FORMAT_R16G16B16A16_SFLOAT;
 constexpr VkFormat VKENGINE_DEPTH_IMAGE_FORMAT = VK_FORMAT_D32_SFLOAT;
 
@@ -151,14 +151,14 @@ namespace Renderer
 
         void RequestUpload(std::unique_ptr<Utils::IUploadRequest>&& upload_request);
 
-        // helpers for creating scenes
+        // helpers for creating viewports
         ImageHandle CreateDrawImage(uint32_t width, uint32_t height);
         ImageHandle CreateDepthImage(uint32_t width, uint32_t height);
 
         ImTextureID ImageDebugTextureId(const ImageHandle& image);
 
-        size_t main_scene;                // this is the scene that is rendered on the main window swapchain.
-        std::vector<Scene> render_scenes; // #TODO: make into unique ptrs for ptr stability
+        size_t main_viewport; // this is the viewport that is rendered on the main window swapchain.
+        std::vector<Viewport> active_viewports; // #TODO: make into unique ptrs for ptr stability
 
       private:
         void DestroyPendingResources();
@@ -167,8 +167,8 @@ namespace Renderer
 
         // draw loop
         void Draw();
-        void DrawSceneBackground(const Scene& scene, VkCommandBuffer cmd);
-        void DrawSceneGeometry(const Scene& scene, VkCommandBuffer cmd);
+        void DrawViewportBackground(const Viewport& viewport, VkCommandBuffer cmd);
+        void DrawViewportGeometry(const Viewport& viewport, VkCommandBuffer cmd);
         void DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view);
 
         bool InitVulkan();
@@ -268,7 +268,7 @@ namespace Renderer
 
         bool m_draw_resource_debugger = false;
         bool m_draw_engine_settings = false;
-        bool m_draw_scene_editor = false;
+        bool m_viewport_debugger = false;
 
         // we allocate a VkDescriptorSet for every image through imgui so that the image can be drawn in
         // imgui.

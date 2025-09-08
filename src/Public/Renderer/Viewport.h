@@ -16,18 +16,18 @@ namespace Renderer
 {
     /// Structure that contains all the necessary information to render a single viewport and everything in
     /// it.
-    struct Scene
+    struct Viewport
     {
         // copy ctors need to be deleted for scene_items.
-        Scene() = default;
-        Scene(const Scene&) = delete;
-        Scene(Scene&&) = default;
-        Scene& operator=(const Scene&) = delete;
-        Scene& operator=(Scene&&) = default;
+        Viewport() = default;
+        Viewport(const Viewport&) = delete;
+        Viewport(Viewport&&) = default;
+        Viewport& operator=(const Viewport&) = delete;
+        Viewport& operator=(Viewport&&) = default;
 
         ImageHandle depth_image;
         ImageHandle draw_image;
-        DrawContext frame_context; // gets reset every frame for a new draw.
+        FrameDrawContext frame_context; // gets reset every frame for a new draw.
         std::vector<std::unique_ptr<SceneItem>> scene_items;
 
         // if true, a clear command will be issued to clear the draw image every frame.
@@ -40,6 +40,6 @@ namespace Renderer
         float render_scale = 1.0f;
 
         VkExtent2D draw_extent; // calculated every frame from image size and render scale.
-        std::string scene_name;
+        std::string name;
     };
 } // namespace Renderer

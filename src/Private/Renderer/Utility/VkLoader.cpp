@@ -607,7 +607,7 @@ namespace Renderer::Utils
         return scene;
     }
 
-    bool LoadGltfIntoScene(Scene& scene, VulkanEngine& engine, std::filesystem::path file_path)
+    bool LoadGltfIntoScene(Viewport& scene, VulkanEngine& engine, std::filesystem::path file_path)
     {
         const std::optional<GLTFScene>& loaded_scene = LoadGltfScene(engine, file_path);
         if (loaded_scene.has_value() == false)

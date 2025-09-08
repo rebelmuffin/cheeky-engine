@@ -119,8 +119,8 @@ namespace Renderer
         m_buffer_storage.Clear(*this);
         m_mesh_storage.Clear(*this);
 
-        render_scenes.clear();
-        main_scene = 0;
+        active_viewports.clear();
+        main_viewport = 0;
 
         m_deletion_queue.Flush();
 
@@ -137,7 +137,7 @@ namespace Renderer
             if (ImGui::BeginMenu("Graphics"))
             {
                 ImGui::Checkbox("Engine Settings", &m_draw_engine_settings);
-                ImGui::Checkbox("Scene Editor", &m_draw_scene_editor);
+                ImGui::Checkbox("Viewport Debugger", &m_viewport_debugger);
                 ImGui::Checkbox("Resource Debugger", &m_draw_resource_debugger);
                 ImGui::EndMenu();
             }
@@ -187,29 +187,34 @@ namespace Renderer
             if (ImGui::CollapsingHeader("Scene Lighting"))
             {
                 ImGui::ColorEdit3(
-                    "Ambient Colour", &render_scenes[main_scene].frame_context.ambient_colour.r
+                    "Ambient Colour", &active_viewports[main_viewport].frame_context.ambient_colour.r
                 );
-                ImGui::ColorEdit3("Light Colour", &render_scenes[main_scene].frame_context.light_colour.r);
+                ImGui::ColorEdit3(
+                    "Light Colour", &active_viewports[main_viewport].frame_context.light_colour.r
+                );
                 ImGui::SliderFloat3(
-                    "Light Direction", &render_scenes[main_scene].frame_context.light_direction.x, -1.0f, 1.0f
+                    "Light Direction",
+                    &active_viewports[main_viewport].frame_context.light_direction.x,
+                    -1.0f,
+                    1.0f
                 );
             }
 
             ImGui::End();
         }
 
-        if (m_draw_scene_editor)
+        if (m_viewport_debugger)
         {
-            if (ImGui::Begin("Scenes", &m_draw_scene_editor))
+            if (ImGui::Begin("Viewports", &m_viewport_debugger))
             {
-                if (ImGui::BeginTabBar("scene_tabs"))
+                if (ImGui::BeginTabBar("viewport_tabs"))
                 {
-                    for (Scene& scene : render_scenes)
+                    for (Viewport& viewport : active_viewports)
                     {
-                        if (ImGui::BeginTabItem(scene.scene_name.data()))
+                        if (ImGui::BeginTabItem(viewport.name.data()))
                         {
-                            ImGui::PushID(&scene);
-                            Renderer::Debug::DrawSceneContentsImGui(*this, scene);
+                            ImGui::PushID(&viewport);
+                            Renderer::Debug::DrawViewportContentsImGui(*this, viewport);
                             ImGui::PopID();
                             ImGui::EndTabItem();
                         }
@@ -652,25 +657,26 @@ namespace Renderer
         FinishPendingUploads(cmd);
 
         // draw onto draw image.
-        for (size_t i = 0; i < render_scenes.size(); ++i)
+        for (size_t i = 0; i < active_viewports.size(); ++i)
         {
-            Scene& scene = render_scenes[i];
+            Viewport& viewport = active_viewports[i];
 
             // might be drawing on a subsection of the image.
-            glm::vec2 viewport_extent = scene.viewport_extent;
+            glm::vec2 viewport_extent = viewport.viewport_extent;
             if (viewport_extent.x == 0.0f && viewport_extent.y == 0.0f)
             {
-                viewport_extent =
-                    glm::vec2(scene.draw_image->image_extent.height, scene.draw_image->image_extent.width);
+                viewport_extent = glm::vec2(
+                    viewport.draw_image->image_extent.height, viewport.draw_image->image_extent.width
+                );
             }
 
-            scene.draw_extent.height = uint32_t(viewport_extent.x * scene.render_scale);
-            scene.draw_extent.width = uint32_t(viewport_extent.y * scene.render_scale);
+            viewport.draw_extent.height = uint32_t(viewport_extent.x * viewport.render_scale);
+            viewport.draw_extent.width = uint32_t(viewport_extent.y * viewport.render_scale);
 
             VkImageLayout current = VK_IMAGE_LAYOUT_UNDEFINED;
             VkImageLayout target = VK_IMAGE_LAYOUT_GENERAL;
-            Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image->image, current, target);
-            if (scene.clear_before_draw)
+            Utils::TransitionImage(&m_device_dispatch, cmd, viewport.draw_image->image, current, target);
+            if (viewport.clear_before_draw)
             {
                 VkClearColorValue clear_colour;
                 clear_colour.float32[0] = 0;
@@ -679,19 +685,19 @@ namespace Renderer
                 clear_colour.float32[3] = 0;
                 VkImageSubresourceRange range = Utils::SubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT);
                 m_device_dispatch.cmdClearColorImage(
-                    cmd, scene.draw_image->image, target, &clear_colour, 1, &range
+                    cmd, viewport.draw_image->image, target, &clear_colour, 1, &range
                 );
             }
             current = target;
             target = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image->image, current, target);
-            DrawSceneGeometry(scene, cmd);
+            Utils::TransitionImage(&m_device_dispatch, cmd, viewport.draw_image->image, current, target);
+            DrawViewportGeometry(viewport, cmd);
             current = target;
             target = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-            Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image->image, current, target);
+            Utils::TransitionImage(&m_device_dispatch, cmd, viewport.draw_image->image, current, target);
 
             // clear the frame context so it's empty for the next frame
-            scene.frame_context = {};
+            viewport.frame_context = {};
         }
 
         // copy the main draw into swapchain
@@ -703,9 +709,9 @@ namespace Renderer
         Utils::CopyImageToImage(
             &m_device_dispatch,
             cmd,
-            render_scenes[main_scene].draw_image->image,
+            active_viewports[main_viewport].draw_image->image,
             m_swapchain_images[swapchain_image_index],
-            render_scenes[main_scene].draw_extent,
+            active_viewports[main_viewport].draw_extent,
             m_swapchain_extent
         );
         current = target;
@@ -720,15 +726,15 @@ namespace Renderer
             &m_device_dispatch, cmd, m_swapchain_images[swapchain_image_index], current, target
         );
 
-        // if texture debugging, transition all draw images for scenes to shader read only.
+        // if texture debugging, transition all draw images for viewports to shader read only.
         if (m_enable_image_debugging)
         {
-            for (Scene& scene : render_scenes)
+            for (Viewport& viewport : active_viewports)
             {
                 Utils::TransitionImage(
                     &m_device_dispatch,
                     cmd,
-                    scene.draw_image->image,
+                    viewport.draw_image->image,
                     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                 );
@@ -769,7 +775,7 @@ namespace Renderer
         ++frame_number;
     }
 
-    void VulkanEngine::DrawSceneGeometry(const Scene& scene, VkCommandBuffer cmd)
+    void VulkanEngine::DrawViewportGeometry(const Viewport& viewport, VkCommandBuffer cmd)
     {
         // create the scene data!
         // cpu to gpu so we can skip uploading it. Hopefully the data is small enough to fit in the
@@ -785,10 +791,10 @@ namespace Renderer
         GetCurrentFrame().buffers_in_use.emplace_back(scene_data_buffer);
 
         glm::mat4 view =
-            scene.frame_context.camera_rotation * glm::translate(scene.frame_context.camera_position);
+            viewport.frame_context.camera_rotation * glm::translate(viewport.frame_context.camera_position);
         glm::mat4 projection = glm::perspective(
-            glm::radians(scene.frame_context.camera_vertical_fov),
-            (float)scene.draw_extent.width / (float)scene.draw_extent.height,
+            glm::radians(viewport.frame_context.camera_vertical_fov),
+            (float)viewport.draw_extent.width / (float)viewport.draw_extent.height,
             10000.f,
             0.1f
         );
@@ -801,9 +807,9 @@ namespace Renderer
         scene_data.view = view;
         scene_data.projection = projection;
         scene_data.view_projection = projection * view;
-        scene_data.ambient_colour = scene.frame_context.ambient_colour;
-        scene_data.light_colour = scene.frame_context.light_colour;
-        scene_data.light_direction = scene.frame_context.light_direction;
+        scene_data.ambient_colour = viewport.frame_context.ambient_colour;
+        scene_data.light_colour = viewport.frame_context.light_colour;
+        scene_data.light_direction = viewport.frame_context.light_direction;
 
         vmaCopyMemoryToAllocation(
             m_allocator, &scene_data, scene_data_buffer->allocation, 0, sizeof(scene_data)
@@ -820,38 +826,38 @@ namespace Renderer
         );
         writer.UpdateSet(m_device_dispatch, scene_data_descriptor);
 
-        VkViewport viewport{};
-        viewport.x = scene.viewport_position.x;
-        viewport.y = scene.viewport_position.y;
-        viewport.width = float(scene.draw_extent.width);
-        viewport.height = float(scene.draw_extent.height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
+        VkViewport vk_viewport{};
+        vk_viewport.x = viewport.viewport_position.x;
+        vk_viewport.y = viewport.viewport_position.y;
+        vk_viewport.width = float(viewport.draw_extent.width);
+        vk_viewport.height = float(viewport.draw_extent.height);
+        vk_viewport.minDepth = 0.0f;
+        vk_viewport.maxDepth = 1.0f;
 
-        m_device_dispatch.cmdSetViewport(cmd, 0, 1, &viewport);
+        m_device_dispatch.cmdSetViewport(cmd, 0, 1, &vk_viewport);
 
         VkRect2D scissor{};
         scissor.offset = VkOffset2D{ 0, 0 };
-        scissor.extent = scene.draw_extent;
+        scissor.extent = viewport.draw_extent;
 
         m_device_dispatch.cmdSetScissor(cmd, 0, 1, &scissor);
 
         VkRenderingAttachmentInfo color_attachment =
-            Utils::AttachmentInfo(scene.draw_image->image_view, nullptr);
+            Utils::AttachmentInfo(viewport.draw_image->image_view, nullptr);
 
         VkClearValue clear_value{};
         clear_value.depthStencil.depth = 0.0f; // zero is far in reversed depth
 
         VkRenderingAttachmentInfo depth_attachment = Utils::AttachmentInfo(
-            scene.depth_image->image_view, &clear_value, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+            viewport.depth_image->image_view, &clear_value, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
         );
 
         VkRenderingInfo render_info =
-            Utils::RenderingInfo(&color_attachment, &depth_attachment, scene.draw_extent);
+            Utils::RenderingInfo(&color_attachment, &depth_attachment, viewport.draw_extent);
 
         m_device_dispatch.cmdBeginRendering(cmd, &render_info);
 
-        for (const RenderObject& render_object : scene.frame_context.render_objects)
+        for (const RenderObject& render_object : viewport.frame_context.render_objects)
         {
             std::array<VkDescriptorSet, 2> sets{ scene_data_descriptor,
                                                  render_object.material->material_set };
@@ -1169,21 +1175,21 @@ namespace Renderer
             }
         );
 
-        // create the main scene
+        // create the default viewport
         glm::vec2 backbuffer_size{ m_window_extent.width, m_window_extent.height };
         backbuffer_size *= m_backbuffer_scale;
 
-        Renderer::Scene& new_scene = render_scenes.emplace_back();
-        new_scene.draw_image = CreateDrawImage((uint32_t)backbuffer_size.x, (uint32_t)backbuffer_size.y);
-        new_scene.depth_image = CreateDepthImage((uint32_t)backbuffer_size.x, (uint32_t)backbuffer_size.y);
-        new_scene.scene_name = "main scene";
-        new_scene.render_scale = 1.0f;
+        Renderer::Viewport& new_viewport = active_viewports.emplace_back();
+        new_viewport.draw_image = CreateDrawImage((uint32_t)backbuffer_size.x, (uint32_t)backbuffer_size.y);
+        new_viewport.depth_image = CreateDepthImage((uint32_t)backbuffer_size.x, (uint32_t)backbuffer_size.y);
+        new_viewport.name = "main viewport";
+        new_viewport.render_scale = 1.0f;
 
-        new_scene.frame_context.camera_position = glm::vec3(0.0f, 0.0f, -1.0f);
-        new_scene.frame_context.camera_rotation = glm::mat4{ 1.0f }; // no rotation
-        new_scene.frame_context.camera_vertical_fov = 70.0f;
+        new_viewport.frame_context.camera_position = glm::vec3(0.0f, 0.0f, -1.0f);
+        new_viewport.frame_context.camera_rotation = glm::mat4{ 1.0f }; // no rotation
+        new_viewport.frame_context.camera_vertical_fov = 70.0f;
 
-        main_scene = 0;
+        main_viewport = 0;
 
         // load default textures
         // 3 default textures, white, black, grey. 1 pixel each
@@ -1246,7 +1252,7 @@ namespace Renderer
         if (m_gltf_pbr_material.loaded)
         {
             Utils::LoadGltfIntoScene(
-                render_scenes[main_scene], *this, "../data/resources/BarramundiFish.glb"
+                active_viewports[main_viewport], *this, "../data/resources/BarramundiFish.glb"
             );
         }
     }

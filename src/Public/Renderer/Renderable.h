@@ -15,7 +15,7 @@ namespace Renderer
         VulkanEngine* engine; // engine itself for public access
     };
 
-    struct DrawContext
+    struct FrameDrawContext
     {
         std::vector<RenderObject> render_objects;
 
@@ -36,7 +36,7 @@ namespace Renderer
 
         /// This is where the render objects need to be added to the draw context. The context will reset
         /// every frame.
-        virtual void Draw(DrawContext& ctx) = 0;
+        virtual void Draw(FrameDrawContext& ctx) = 0;
     };
 
     /// Base class of all things that can be identified and rendered in a scene.
@@ -55,7 +55,7 @@ namespace Renderer
         virtual ~MeshSceneItem() = default;
 
         std::unique_ptr<SceneItem> Clone() const override;
-        void Draw(DrawContext& ctx) override;
+        void Draw(FrameDrawContext& ctx) override;
 
         MeshHandle asset;
     };

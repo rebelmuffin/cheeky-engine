@@ -13,7 +13,7 @@ namespace Game
 
         void OnAdded() override;
         void OnRemoved() override;
-        void Draw(Renderer::DrawContext& ctx) override;
+        void Draw(Renderer::FrameDrawContext& ctx) override;
 
       private:
         Renderer::MeshHandle m_mesh_asset;

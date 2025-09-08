@@ -1,8 +1,8 @@
 #include "Renderer/Utility/DebugPanels.h"
 #include "Renderer/Renderable.h"
 #include "Renderer/ResourceStorage.h"
-#include "Renderer/Scene.h"
 #include "Renderer/Utility/VkLoader.h"
+#include "Renderer/Viewport.h"
 #include "Renderer/VkEngine.h"
 #include "Renderer/VkTypes.h"
 
@@ -18,28 +18,28 @@
 
 namespace Renderer::Debug
 {
-    void DrawSceneContentsImGui(VulkanEngine& engine, Scene& scene)
+    void DrawViewportContentsImGui(VulkanEngine& engine, Viewport& viewport)
     {
-        if (&engine.render_scenes[engine.main_scene] == &scene)
+        if (&engine.active_viewports[engine.main_viewport] == &viewport)
         {
-            ImGui::Text("This is the active scene.");
+            ImGui::Text("This is the main viewport.");
         }
         else
         {
-            if (ImGui::Button("Activate this scene"))
+            if (ImGui::Button("Make main viewport"))
             {
-                for (size_t i = 0; i < engine.render_scenes.size(); ++i)
+                for (size_t i = 0; i < engine.active_viewports.size(); ++i)
                 {
-                    if (&engine.render_scenes[i] == &scene)
+                    if (&engine.active_viewports[i] == &viewport)
                     {
-                        engine.main_scene = i;
+                        engine.main_viewport = i;
                     }
                 }
             }
         }
 
-        ImGui::Text("Draw Resolution: %dx%d", scene.draw_extent.width, scene.draw_extent.height);
-        ImGui::SliderFloat("Render Scale", &scene.render_scale, 0.1f, 1.0f);
+        ImGui::Text("Draw Resolution: %dx%d", viewport.draw_extent.width, viewport.draw_extent.height);
+        ImGui::SliderFloat("Render Scale", &viewport.render_scale, 0.1f, 1.0f);
 
         static float camera_yaw_rad = 0.0f;
         static float camera_pitch_rad = 0.0f;
@@ -54,8 +54,8 @@ namespace Renderer::Debug
             glm::mat4 rotation = glm::rotate(camera_pitch_rad, glm::vec3(1, 0, 0)) *
                                  glm::rotate(camera_yaw_rad, glm::vec3(0, 1, 0));
 
-            scene.frame_context.camera_position = camera_pos;
-            scene.frame_context.camera_rotation = rotation;
+            viewport.frame_context.camera_position = camera_pos;
+            viewport.frame_context.camera_rotation = rotation;
         }
 
         ImGui::Separator();
@@ -103,21 +103,21 @@ namespace Renderer::Debug
         ImGui::BeginDisabled(gltf_asset == std::nullopt);
         if (ImGui::Button("Load GLTF"))
         {
-            Utils::LoadGltfIntoScene(scene, engine, gltf_asset.value());
+            Utils::LoadGltfIntoScene(viewport, engine, gltf_asset.value());
         }
         ImGui::EndDisabled();
         ImGui::Separator();
 
         int item_to_delete = -1;
         int item_to_clone = -1;
-        if (ImGui::Button("Clear Scene"))
+        if (ImGui::Button("Clear Viewport"))
         {
-            scene.scene_items.clear();
+            viewport.scene_items.clear();
         }
-        if (ImGui::TreeNode("scene_contents", "Items: %zu", scene.scene_items.size()))
+        if (ImGui::TreeNode("viewport_contents", "Items: %zu", viewport.scene_items.size()))
         {
             int item_idx = 0;
-            for (std::unique_ptr<SceneItem>& item : scene.scene_items)
+            for (std::unique_ptr<SceneItem>& item : viewport.scene_items)
             {
                 if (ImGui::TreeNode(item->name.data()))
                 {
@@ -151,11 +151,11 @@ namespace Renderer::Debug
 
         if (item_to_delete != -1)
         {
-            scene.scene_items.erase(scene.scene_items.begin() + item_to_delete);
+            viewport.scene_items.erase(viewport.scene_items.begin() + item_to_delete);
         }
         if (item_to_clone != -1)
         {
-            scene.scene_items.emplace_back(scene.scene_items[(size_t)item_to_clone]->Clone());
+            viewport.scene_items.emplace_back(viewport.scene_items[(size_t)item_to_clone]->Clone());
         }
     }
 

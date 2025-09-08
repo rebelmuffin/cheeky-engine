@@ -3,7 +3,6 @@
 #include "Game/GameTime.h"
 #include "Game/Node.h"
 #include "Renderer/Renderable.h"
-#include "Renderer/Scene.h"
 #include "Renderer/VkEngine.h"
 
 #include <memory>
@@ -32,7 +31,7 @@ namespace Game
         /// May get called multiple times per frame to draw the same scene on different views.
         /// If camera is specified, will force that camera for the draw, otherwise will use the active
         /// camera.
-        void Draw(Renderer::DrawContext& ctx, const CameraNode* camera_node = nullptr);
+        void Draw(Renderer::FrameDrawContext& ctx, const CameraNode* camera_node = nullptr);
 
         /// Called once a frame for the logical update of the game.
         void TickUpdate(const GameTime& time);

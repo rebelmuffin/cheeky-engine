@@ -26,13 +26,13 @@ namespace Game
         Renderer::ImageHandle depth_image =
             engine.CreateDepthImage((uint32_t)cvars.width, (uint32_t)cvars.height);
 
-        Renderer::Scene& scene = engine.render_scenes.emplace_back();
-        scene.scene_name = "main game scene";
-        scene.draw_image = draw_image;
-        scene.depth_image = depth_image;
-        m_main_render_scene = &scene;
+        Renderer::Viewport& viewport = engine.active_viewports.emplace_back();
+        viewport.name = "main game scene";
+        viewport.draw_image = draw_image;
+        viewport.depth_image = depth_image;
+        m_main_render_scene = &viewport;
 
-        engine.main_scene = 1;
+        engine.main_viewport = 1;
 
         m_main_scene = std::make_unique<GameScene>();
         m_main_editor = std::make_unique<Editor::SceneEditor>(*m_main_scene);
