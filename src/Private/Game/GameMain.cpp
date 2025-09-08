@@ -19,7 +19,7 @@
 
 namespace Game
 {
-    GameMain::GameMain(Renderer::VulkanEngine& engine, CVars cvars)
+    GameMain::GameMain(Renderer::VulkanEngine& engine, CVars cvars) : m_renderer(&engine), m_cvars(cvars)
     {
         Renderer::ImageHandle draw_image =
             engine.CreateDrawImage((uint32_t)cvars.width, (uint32_t)cvars.height);
@@ -30,10 +30,11 @@ namespace Game
         scene.scene_name = "main game scene";
         scene.draw_image = draw_image;
         scene.depth_image = depth_image;
+        m_main_render_scene = &scene;
 
         engine.main_scene = 1;
 
-        m_main_scene = std::make_unique<GameScene>(engine, &scene);
+        m_main_scene = std::make_unique<GameScene>();
         m_main_editor = std::make_unique<Editor::SceneEditor>(*m_main_scene);
 
         MainSceneSetup();
@@ -41,7 +42,7 @@ namespace Game
 
     void GameMain::MainSceneSetup()
     {
-        Utils::LoadGltfIntoGameScene(m_main_scene->Root(), "../data/resources/BarramundiFish.glb");
+        Utils::LoadGltfIntoGameScene(*m_renderer, m_main_scene->Root(), m_cvars.default_scene_path);
     }
 
     void GameMain::Draw(double delta_time_seconds)
@@ -49,7 +50,8 @@ namespace Game
         m_game_time.delta_time_seconds = (float)delta_time_seconds;
         m_game_time.game_time_seconds += m_game_time.delta_time_seconds;
 
-        m_main_scene->Draw(m_game_time);
+        // draw on the main render scene.
+        m_main_scene->Draw(m_main_render_scene->frame_context);
     }
 
     void GameMain::OnImGui()

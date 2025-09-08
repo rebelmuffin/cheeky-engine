@@ -186,10 +186,12 @@ namespace Renderer
 
             if (ImGui::CollapsingHeader("Scene Lighting"))
             {
-                ImGui::ColorEdit3("Ambient Colour", &render_scenes[main_scene].ambient_colour.r);
-                ImGui::ColorEdit3("Light Colour", &render_scenes[main_scene].light_colour.r);
+                ImGui::ColorEdit3(
+                    "Ambient Colour", &render_scenes[main_scene].frame_context.ambient_colour.r
+                );
+                ImGui::ColorEdit3("Light Colour", &render_scenes[main_scene].frame_context.light_colour.r);
                 ImGui::SliderFloat3(
-                    "Light Direction", &render_scenes[main_scene].light_direction.x, -1.0f, 1.0f
+                    "Light Direction", &render_scenes[main_scene].frame_context.light_direction.x, -1.0f, 1.0f
                 );
             }
 
@@ -687,6 +689,9 @@ namespace Renderer
             current = target;
             target = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
             Utils::TransitionImage(&m_device_dispatch, cmd, scene.draw_image->image, current, target);
+
+            // clear the frame context so it's empty for the next frame
+            scene.frame_context = {};
         }
 
         // copy the main draw into swapchain
@@ -779,9 +784,10 @@ namespace Renderer
         // delete it next frame
         GetCurrentFrame().buffers_in_use.emplace_back(scene_data_buffer);
 
-        glm::mat4 view = scene.camera_rotation * glm::translate(scene.camera_position);
+        glm::mat4 view =
+            scene.frame_context.camera_rotation * glm::translate(scene.frame_context.camera_position);
         glm::mat4 projection = glm::perspective(
-            glm::radians(scene.camera_vertical_fov),
+            glm::radians(scene.frame_context.camera_vertical_fov),
             (float)scene.draw_extent.width / (float)scene.draw_extent.height,
             10000.f,
             0.1f
@@ -795,9 +801,9 @@ namespace Renderer
         scene_data.view = view;
         scene_data.projection = projection;
         scene_data.view_projection = projection * view;
-        scene_data.ambient_colour = scene.ambient_colour;
-        scene_data.light_colour = scene.light_colour;
-        scene_data.light_direction = scene.light_direction;
+        scene_data.ambient_colour = scene.frame_context.ambient_colour;
+        scene_data.light_colour = scene.frame_context.light_colour;
+        scene_data.light_direction = scene.frame_context.light_direction;
 
         vmaCopyMemoryToAllocation(
             m_allocator, &scene_data, scene_data_buffer->allocation, 0, sizeof(scene_data)
@@ -843,15 +849,9 @@ namespace Renderer
         VkRenderingInfo render_info =
             Utils::RenderingInfo(&color_attachment, &depth_attachment, scene.draw_extent);
 
-        DrawContext ctx{};
-        for (const std::unique_ptr<SceneItem>& item : scene.scene_items)
-        {
-            item->Draw(ctx);
-        }
-
         m_device_dispatch.cmdBeginRendering(cmd, &render_info);
 
-        for (const RenderObject& render_object : ctx.render_objects)
+        for (const RenderObject& render_object : scene.frame_context.render_objects)
         {
             std::array<VkDescriptorSet, 2> sets{ scene_data_descriptor,
                                                  render_object.material->material_set };
@@ -1179,9 +1179,9 @@ namespace Renderer
         new_scene.scene_name = "main scene";
         new_scene.render_scale = 1.0f;
 
-        new_scene.camera_position = glm::vec3(0.0f, 0.0f, -1.0f);
-        new_scene.camera_rotation = glm::mat4{ 1.0f }; // no rotation
-        new_scene.camera_vertical_fov = 70.0f;
+        new_scene.frame_context.camera_position = glm::vec3(0.0f, 0.0f, -1.0f);
+        new_scene.frame_context.camera_rotation = glm::mat4{ 1.0f }; // no rotation
+        new_scene.frame_context.camera_vertical_fov = 70.0f;
 
         main_scene = 0;
 

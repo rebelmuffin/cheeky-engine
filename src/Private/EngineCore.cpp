@@ -51,7 +51,7 @@ EngineCore::~EngineCore()
     SDL_DestroyWindow(m_window);
 }
 
-void EngineCore::Update() { m_game->Draw(m_last_delta_ms / 1000.0); }
+void EngineCore::Update() {}
 
 void EngineCore::RunMainLoop()
 {
@@ -97,7 +97,13 @@ void EngineCore::RunMainLoop()
 
         OnImgui();
 
+        m_game->Draw(m_last_delta_ms / 1000.0);
+
+        // renderer draw should be after any other kind of draw because things "queue" render objects for the
+        // renderer to render during its draw.
         m_renderer->Update();
+
+        // any logical updates
         Update();
     }
 }

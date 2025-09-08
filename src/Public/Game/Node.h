@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/GameTime.h"
+#include "Renderer/Renderable.h"
 #include <glm/ext/vector_float3.hpp>
 #include <glm/gtx/quaternion.hpp>
 
@@ -35,7 +36,7 @@ namespace Game
     class Node
     {
       public:
-        Node(std::string_view name, bool tick_update = false);
+        Node(std::string_view name, bool tick_update = false, bool renderable = false);
         virtual ~Node() = default;
 
         // getters
@@ -91,6 +92,9 @@ namespace Game
         /// Called when the node is removed from the scene before destruction.
         virtual void OnRemoved() {};
 
+        /// Called every time we need to draw the scene. Usually once a frame.
+        virtual void Draw(Renderer::DrawContext&) {};
+
         /// Called every tick if enabled by default or through SetTickUpdate.
         virtual void OnTickUpdate(const GameTime&) {};
 
@@ -106,7 +110,8 @@ namespace Game
         GameScene* m_owning_scene = nullptr;
         std::vector<std::unique_ptr<Node>> m_children{};
         Node* m_parent = nullptr;
-        bool m_tick_updating = false;
+        bool m_tick_updating = false; // can be changed at runtime
+        bool m_is_renderable = false; // cannot be changed at runtime
 
         Transform m_local_transform{};
         Transform m_world_transform{};

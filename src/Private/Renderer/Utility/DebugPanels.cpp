@@ -54,8 +54,8 @@ namespace Renderer::Debug
             glm::mat4 rotation = glm::rotate(camera_pitch_rad, glm::vec3(1, 0, 0)) *
                                  glm::rotate(camera_yaw_rad, glm::vec3(0, 1, 0));
 
-            scene.camera_position = camera_pos;
-            scene.camera_rotation = rotation;
+            scene.frame_context.camera_position = camera_pos;
+            scene.frame_context.camera_rotation = rotation;
         }
 
         ImGui::Separator();

@@ -40,10 +40,9 @@ namespace
 
 namespace Game::Utils
 {
-    void LoadGltfIntoGameScene(Node& node, std::filesystem::path file_path)
+    void LoadGltfIntoGameScene(Renderer::VulkanEngine& engine, Node& node, std::filesystem::path file_path)
     {
-        const std::optional<Renderer::GLTFScene> scene =
-            Renderer::Utils::LoadGltfScene(node.Scene().RenderEngine(), file_path);
+        const std::optional<Renderer::GLTFScene> scene = Renderer::Utils::LoadGltfScene(engine, file_path);
 
         if (scene.has_value() == false)
         {

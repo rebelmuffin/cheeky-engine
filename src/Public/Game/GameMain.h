@@ -4,6 +4,8 @@
 #include "Game/Editor/SceneEditor.h"
 #include "Game/GameScene.h"
 #include "Game/GameTime.h"
+#include "Renderer/Scene.h"
+#include "Renderer/VkEngine.h"
 #include <memory>
 
 namespace Game
@@ -22,7 +24,10 @@ namespace Game
       private:
         std::unique_ptr<Editor::SceneEditor> m_main_editor{};
         std::unique_ptr<GameScene> m_main_scene;
+        Renderer::Scene* m_main_render_scene;
+        Renderer::VulkanEngine* m_renderer;
         GameTime m_game_time{};
+        CVars m_cvars{};
 
         bool m_editor_enabled = true;
     };

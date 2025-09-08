@@ -10,53 +10,29 @@
 namespace Game
 {
     MeshNode::MeshNode(std::string_view name, const Renderer::MeshHandle& mesh) :
-        Node(name, true),
-        m_mesh_asset(mesh),
-        m_scene_item(nullptr)
+        Node(name, false, true),
+        m_mesh_asset(mesh)
     {
     }
 
-    void MeshNode::OnAdded()
+    void MeshNode::OnAdded() {}
+
+    void MeshNode::OnRemoved() {}
+
+    void MeshNode::Draw(Renderer::DrawContext& ctx)
     {
-        // init adds the scene item.
-        std::unique_ptr<Renderer::MeshSceneItem> scene_item = std::make_unique<Renderer::MeshSceneItem>();
-        scene_item->name = Name();
-        scene_item->asset = m_mesh_asset;
-        std::unique_ptr<Renderer::SceneItem>& item =
-            Scene().RenderScene()->scene_items.emplace_back(std::move(scene_item));
-        m_scene_item = static_cast<Renderer::MeshSceneItem*>(item.get());
-    }
-
-    void MeshNode::OnRemoved()
-    {
-        // deinit removes the scene item
-        bool found = false;
-        std::vector<std::unique_ptr<Renderer::SceneItem>>& scene_items = Scene().RenderScene()->scene_items;
-        for (auto it = scene_items.begin(); it != scene_items.end(); ++it)
+        for (const Renderer::GeoSurface& surface : m_mesh_asset->surfaces)
         {
-            if (it->get() == m_scene_item)
-            {
-                found = true;
-                scene_items.erase(it);
-                break;
-            }
-        }
+            Renderer::RenderObject obj{};
+            obj.index_buffer = m_mesh_asset->buffers.index_buffer->buffer;
+            obj.vertex_buffer_address = m_mesh_asset->buffers.vertex_buffer_address;
 
-        if (found == false)
-        {
-            LogError(
-                "Could not find the scene item to destroy within render scene. Did something else delete it?"
-            );
-        }
-    }
+            obj.first_index = surface.first_index;
+            obj.index_count = surface.index_count;
+            obj.material = &surface.material->material;
+            obj.transform = WorldTransform().ToMatrix();
 
-    void MeshNode::OnTickUpdate(const GameTime&)
-    {
-        if (m_scene_item == nullptr)
-        {
-            return;
+            ctx.render_objects.emplace_back(obj);
         }
-
-        m_scene_item->transform = WorldTransform().ToMatrix();
     }
 } // namespace Game

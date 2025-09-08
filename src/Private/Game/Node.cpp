@@ -39,7 +39,12 @@ namespace Game
         return FromMatrix(result);
     }
 
-    Node::Node(std::string_view name, bool tick_update) : m_name(name), m_tick_updating(tick_update) {}
+    Node::Node(std::string_view name, bool tick_update, bool is_renderable) :
+        m_name(name),
+        m_tick_updating(tick_update),
+        m_is_renderable(is_renderable)
+    {
+    }
 
     RootNode& Node::SceneRoot() { return const_cast<RootNode&>(std::as_const(*this).SceneRoot()); }
 

@@ -13,10 +13,9 @@ namespace Game
 
         void OnAdded() override;
         void OnRemoved() override;
-        void OnTickUpdate(const GameTime&) override;
+        void Draw(Renderer::DrawContext& ctx) override;
 
       private:
         Renderer::MeshHandle m_mesh_asset;
-        Renderer::MeshSceneItem* m_scene_item;
     };
 } // namespace Game

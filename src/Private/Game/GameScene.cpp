@@ -1,14 +1,49 @@
 #include "Game/GameScene.h"
 #include "Game/Node.h"
+
 #include <algorithm>
 #include <iterator>
 #include <memory>
 
+namespace
+{
+    void UpdateUpkeepList(std::vector<Game::Node*>& vec, Game::Node& target_node, bool enable)
+    {
+        if (enable == false)
+        {
+            const auto r_it = std::find_if(
+                vec.rbegin(),
+                vec.rend(),
+                [&target_node](const Game::Node* update_node)
+                {
+                    return target_node.Id() == update_node->Id();
+                }
+            );
+
+            if (r_it == vec.rend())
+            {
+                return;
+            }
+
+            // reverse iterator is offset by one turns out. Learned the hard way. Thanks C++
+            auto it = --r_it.base();
+
+            // we don't do an erase, we simply swap the element we're removing with the last element
+            // effectively "shrinking" the list without moving everything.
+            // If the update order needs to be predictible, this won't do but let's see how it goes.
+            *it = std::move(vec.back());
+            vec.pop_back();
+        }
+        else
+        {
+            vec.emplace_back(&target_node);
+        }
+    }
+} // namespace
+
 namespace Game
 {
-    GameScene::GameScene(Renderer::VulkanEngine& renderer, Renderer::Scene* scene) :
-        m_render_engine(&renderer),
-        m_render_scene(scene)
+    GameScene::GameScene()
     {
         m_root = std::make_unique<RootNode>();
         RegisterNode(*m_root.get());
@@ -25,12 +60,29 @@ namespace Game
         {
             SetNodeTickUpdate(node, true);
         }
+
+        if (node.m_is_renderable)
+        {
+            SetNodeRenderable(node, true);
+        }
     }
 
     void GameScene::ReleaseNode(Node& node)
     {
         m_active_nodes.erase(node.m_id);
-        SetNodeTickUpdate(node, false);
+        if (node.m_tick_updating)
+        {
+            SetNodeTickUpdate(node, false);
+        }
+        if (node.m_is_renderable)
+        {
+            SetNodeRenderable(node, false);
+        }
+
+        if (&node == m_active_camera)
+        {
+            m_active_camera = nullptr;
+        }
         node.OnRemoved();
     }
 
@@ -38,29 +90,12 @@ namespace Game
 
     void GameScene::SetNodeTickUpdate(Node& node, bool update)
     {
-        if (update == false)
-        {
-            const auto it = std::find_if(
-                m_updating_nodes.rbegin(),
-                m_updating_nodes.rend(),
-                [&node](const Node* update_node)
-                {
-                    return node.Id() == update_node->Id();
-                }
-            );
+        UpdateUpkeepList(m_updating_nodes, node, update);
+    }
 
-            if (it == m_updating_nodes.rend())
-            {
-                return;
-            }
-
-            // reverse iterator is offset by one turns out. Learned the hard way. Thanks C++
-            m_updating_nodes.erase(--it.base());
-        }
-        else
-        {
-            m_updating_nodes.emplace_back(&node);
-        }
+    void GameScene::SetNodeRenderable(Node& node, bool is_renderable)
+    {
+        UpdateUpkeepList(m_renderable_nodes, node, is_renderable);
     }
 
     void GameScene::SetPaused(bool paused) { m_paused = paused; }
@@ -75,17 +110,27 @@ namespace Game
         return nullptr;
     }
 
-    void GameScene::Draw(const GameTime& time)
+    void GameScene::Draw(Renderer::DrawContext& ctx, const CameraNode* camera_node)
     {
-        if (m_active_camera != nullptr && m_render_scene != nullptr)
+        const CameraNode* used_camera = camera_node;
+        if (used_camera == nullptr)
         {
-            m_render_scene->camera_position = m_active_camera->m_world_transform.position;
-            m_render_scene->camera_rotation = glm::mat4(m_active_camera->m_world_transform.rotation);
-            m_render_scene->camera_vertical_fov = m_active_camera->vertical_fov;
+            used_camera = m_active_camera;
+        }
+        if (used_camera != nullptr)
+        {
+            ctx.camera_position = m_active_camera->m_world_transform.position;
+            ctx.camera_rotation = glm::mat4(m_active_camera->m_world_transform.rotation);
+            ctx.camera_vertical_fov = m_active_camera->vertical_fov;
         }
 
-        UpdateAllNodes(time);
+        for (Node* renderable : m_renderable_nodes)
+        {
+            renderable->Draw(ctx);
+        }
     }
+
+    void GameScene::TickUpdate(const GameTime& time) { UpdateAllNodes(time); }
 
     void GameScene::UpdateAllNodes(const GameTime& time)
     {
