@@ -80,7 +80,4 @@ namespace Renderer::Utils
     );
 
     std::optional<GLTFScene> LoadGltfScene(VulkanEngine& engine, std::filesystem::path file_path);
-
-    bool LoadGltfIntoScene(Viewport& scene, VulkanEngine& engine, std::filesystem::path file_path);
-
 } // namespace Renderer::Utils

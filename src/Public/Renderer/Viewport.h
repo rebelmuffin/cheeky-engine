@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Renderer/Renderable.h"
+#include "Renderer/FrameDrawContext.h"
 #include "Renderer/ResourceStorage.h"
 #include "Renderer/VkTypes.h"
 
@@ -28,7 +28,6 @@ namespace Renderer
         ImageHandle depth_image;
         ImageHandle draw_image;
         FrameDrawContext frame_context; // gets reset every frame for a new draw.
-        std::vector<std::unique_ptr<SceneItem>> scene_items;
 
         // if true, a clear command will be issued to clear the draw image every frame.
         bool clear_before_draw = true;

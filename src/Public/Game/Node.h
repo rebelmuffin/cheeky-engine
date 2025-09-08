@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/GameTime.h"
-#include "Renderer/Renderable.h"
+
 #include <glm/ext/vector_float3.hpp>
 #include <glm/gtx/quaternion.hpp>
 
@@ -9,6 +9,11 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+namespace Renderer
+{
+    struct FrameDrawContext;
+}
 
 namespace Game
 {

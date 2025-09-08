@@ -3,8 +3,9 @@
 #include "Game/GameLogging.h"
 #include "Game/GameScene.h"
 #include "Game/Node.h"
-#include "Renderer/Renderable.h"
+#include "Renderer/FrameDrawContext.h"
 #include "Renderer/Utility/VkLoader.h"
+
 #include <memory>
 
 namespace Game

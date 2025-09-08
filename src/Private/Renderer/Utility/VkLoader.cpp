@@ -1,6 +1,5 @@
 #include "Renderer/Utility/VkLoader.h"
 #include "Renderer/Material.h"
-#include "Renderer/Renderable.h"
 #include "Renderer/Utility/VkInitialisers.h"
 #include "Renderer/VkEngine.h"
 #include "Renderer/VkTypes.h"
@@ -605,54 +604,5 @@ namespace Renderer::Utils
         }
 
         return scene;
-    }
-
-    bool LoadGltfIntoScene(Viewport& scene, VulkanEngine& engine, std::filesystem::path file_path)
-    {
-        const std::optional<GLTFScene>& loaded_scene = LoadGltfScene(engine, file_path);
-        if (loaded_scene.has_value() == false)
-        {
-            return false;
-        }
-
-        // now just create scene items from these
-        for (const fastgltf::Node& node : loaded_scene->scene_nodes)
-        {
-            if (node.meshIndex.has_value() == false)
-            {
-                continue;
-            }
-
-            // ignore the hierarchy for now and see what happens
-            MeshSceneItem item{};
-            item.name = node.name;
-            item.asset = loaded_scene->loaded_meshes[*node.meshIndex];
-            // our matrices should be compatible with gltf
-            fastgltf::TRS trs = std::get<fastgltf::TRS>(node.transform);
-            glm::mat4 transform = glm::translate(
-                glm::mat4(1.0f), glm::vec3(trs.translation.x(), trs.translation.y(), trs.translation.z())
-            );
-            transform *=
-                glm::mat4(glm::quat(trs.rotation.x(), trs.rotation.y(), trs.rotation.z(), trs.rotation.w()));
-            transform = glm::scale(transform, glm::vec3(trs.scale.x(), trs.scale.y(), trs.scale.z()));
-            item.transform = transform;
-
-            scene.scene_items.emplace_back(std::make_unique<MeshSceneItem>(std::move(item)));
-        }
-
-        if (loaded_scene->scene_nodes.empty())
-        {
-            // if empty, just spit out all the meshes as individual nodes.
-            for (const MeshHandle& mesh : loaded_scene->loaded_meshes)
-            {
-                MeshSceneItem item{};
-                item.name = mesh->name;
-                item.asset = mesh;
-                item.transform = glm::mat4(1.0f);
-                scene.scene_items.emplace_back(std::make_unique<MeshSceneItem>(std::move(item)));
-            }
-        }
-
-        return true;
     }
 } // namespace Renderer::Utils

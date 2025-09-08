@@ -19,21 +19,11 @@
 
 namespace Game
 {
-    GameMain::GameMain(Renderer::VulkanEngine& engine, CVars cvars) : m_renderer(&engine), m_cvars(cvars)
+    GameMain::GameMain(Renderer::VulkanEngine& engine, CVars cvars) :
+        m_main_viewport(&engine.active_viewports[engine.main_viewport]),
+        m_renderer(&engine),
+        m_cvars(cvars)
     {
-        Renderer::ImageHandle draw_image =
-            engine.CreateDrawImage((uint32_t)cvars.width, (uint32_t)cvars.height);
-        Renderer::ImageHandle depth_image =
-            engine.CreateDepthImage((uint32_t)cvars.width, (uint32_t)cvars.height);
-
-        Renderer::Viewport& viewport = engine.active_viewports.emplace_back();
-        viewport.name = "main game scene";
-        viewport.draw_image = draw_image;
-        viewport.depth_image = depth_image;
-        m_main_render_scene = &viewport;
-
-        engine.main_viewport = 1;
-
         m_main_scene = std::make_unique<GameScene>();
         m_main_editor = std::make_unique<Editor::SceneEditor>(*m_main_scene);
 
@@ -50,8 +40,8 @@ namespace Game
         m_game_time.delta_time_seconds = (float)delta_time_seconds;
         m_game_time.game_time_seconds += m_game_time.delta_time_seconds;
 
-        // draw on the main render scene.
-        m_main_scene->Draw(m_main_render_scene->frame_context);
+        // draw on the main viewport.
+        m_main_scene->Draw(m_main_viewport->frame_context);
     }
 
     void GameMain::OnImGui()

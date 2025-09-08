@@ -1,5 +1,4 @@
 #include "Renderer/Utility/DebugPanels.h"
-#include "Renderer/Renderable.h"
 #include "Renderer/ResourceStorage.h"
 #include "Renderer/Utility/VkLoader.h"
 #include "Renderer/Viewport.h"
@@ -44,7 +43,7 @@ namespace Renderer::Debug
         static float camera_yaw_rad = 0.0f;
         static float camera_pitch_rad = 0.0f;
         static glm::vec3 camera_pos = glm::vec3(0.0f, 0.0f, -1.0f);
-        if (ImGui::CollapsingHeader("Camera Settings"))
+        if (ImGui::CollapsingHeader("Override Camera Settings"))
         {
             ImGui::SliderAngle("Camera yaw", &camera_yaw_rad);
             ImGui::SliderAngle("Camera pitch", &camera_pitch_rad, -89.0f, 89.0f);
@@ -56,106 +55,6 @@ namespace Renderer::Debug
 
             viewport.frame_context.camera_position = camera_pos;
             viewport.frame_context.camera_rotation = rotation;
-        }
-
-        ImGui::Separator();
-        static long int selected_asset = -1;
-        static char filter[255];
-        std::optional<std::filesystem::path> gltf_asset = std::nullopt;
-        if (ImGui::InputText("Filter", filter, 255))
-        {
-            selected_asset = -1;
-        }
-        if (ImGui::BeginListBox("GLTF Assets"))
-        {
-            // enumerate all .gltf and .glb assets under resources
-            const char* resources_path = "../data/resources";
-            std::filesystem::recursive_directory_iterator dir_iter(
-                resources_path, std::filesystem::directory_options::skip_permission_denied
-            );
-
-            std::vector<std::filesystem::path> paths{};
-            for (std::filesystem::path file : dir_iter)
-            {
-                if (file.has_extension() &&
-                    (file.extension().compare(".gltf") == 0 || file.extension().compare(".glb") == 0) &&
-                    std::strstr(file.c_str(), filter) != nullptr)
-                {
-                    paths.emplace_back(file);
-                }
-            }
-
-            for (size_t i = 0; i < paths.size(); ++i)
-            {
-                if (ImGui::Selectable(paths[i].c_str(), (size_t)selected_asset == i))
-                {
-                    selected_asset = (long int)i;
-                }
-            }
-
-            if (selected_asset != -1)
-            {
-                gltf_asset = paths[(size_t)selected_asset];
-            }
-
-            ImGui::EndListBox();
-        }
-        ImGui::BeginDisabled(gltf_asset == std::nullopt);
-        if (ImGui::Button("Load GLTF"))
-        {
-            Utils::LoadGltfIntoScene(viewport, engine, gltf_asset.value());
-        }
-        ImGui::EndDisabled();
-        ImGui::Separator();
-
-        int item_to_delete = -1;
-        int item_to_clone = -1;
-        if (ImGui::Button("Clear Viewport"))
-        {
-            viewport.scene_items.clear();
-        }
-        if (ImGui::TreeNode("viewport_contents", "Items: %zu", viewport.scene_items.size()))
-        {
-            int item_idx = 0;
-            for (std::unique_ptr<SceneItem>& item : viewport.scene_items)
-            {
-                if (ImGui::TreeNode(item->name.data()))
-                {
-                    if (ImGui::Button("Delete"))
-                    {
-                        item_to_delete = item_idx;
-                    }
-                    if (ImGui::Button("Clone"))
-                    {
-                        item_to_clone = item_idx;
-                    }
-                    ImGui::Text("Name: %s", item->name.data());
-                    glm::vec3 scale;
-                    glm::quat rot;
-                    glm::vec3 translation;
-                    glm::vec3 skew;
-                    glm::vec4 perspective;
-                    glm::decompose(item->transform, scale, rot, translation, skew, perspective);
-                    ImGui::DragFloat3("Translation", &translation.x);
-                    ImGui::DragFloat3("Scale", &scale.x, 1.0f, 0.01f);
-
-                    glm::mat4 rotation = glm::mat4(rot);
-                    item->transform = rotation * glm::translate(translation) * glm::scale(scale);
-
-                    ImGui::TreePop();
-                }
-                item_idx++;
-            }
-            ImGui::TreePop();
-        }
-
-        if (item_to_delete != -1)
-        {
-            viewport.scene_items.erase(viewport.scene_items.begin() + item_to_delete);
-        }
-        if (item_to_clone != -1)
-        {
-            viewport.scene_items.emplace_back(viewport.scene_items[(size_t)item_to_clone]->Clone());
         }
     }
 

@@ -62,7 +62,6 @@ executable(
     'src/Private/Renderer/VkEngine.cpp',
     'src/Private/Renderer/VkTypes.cpp',
     'src/Private/Renderer/Material.cpp',
-    'src/Private/Renderer/Renderable.cpp',
     'src/Private/Renderer/Utility/VkLoader.cpp',
     'src/Private/Renderer/Utility/VkPipelines.cpp',
     'src/Private/Renderer/Utility/VkInitialisers.cpp',

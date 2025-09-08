@@ -1,9 +1,9 @@
 #include "Renderer/VkEngine.h"
 
+#include "Renderer/FrameDrawContext.h"
 #include "Renderer/Material.h"
 #include "Renderer/MaterialInterface.h"
 #include "Renderer/RenderObject.h"
-#include "Renderer/Renderable.h"
 #include "Renderer/Utility/DebugPanels.h"
 #include "Renderer/Utility/UploadRequest.h"
 #include "Renderer/Utility/VkDescriptors.h"
@@ -18,19 +18,17 @@
 #include <SDL_video.h>
 #include <SDL_vulkan.h>
 #include <VkBootstrap.h>
-#include <array>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/fwd.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/transform.hpp>
 #include <imgui.h>
-#include <mutex>
 #include <unordered_set>
-#include <utility>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -38,7 +36,9 @@
 #include <cstring>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #define VK_DEVICE_CALL(device, function, ...)                                                                \
@@ -1247,14 +1247,6 @@ namespace Renderer
             false,
             "checkerboard_image"
         );
-
-        // load testing mesh
-        if (m_gltf_pbr_material.loaded)
-        {
-            Utils::LoadGltfIntoScene(
-                active_viewports[main_viewport], *this, "../data/resources/BarramundiFish.glb"
-            );
-        }
     }
 
     void VulkanEngine::InitImgui()

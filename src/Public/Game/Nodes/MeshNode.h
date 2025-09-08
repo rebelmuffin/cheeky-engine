@@ -1,8 +1,12 @@
 #pragma once
 
 #include "Game/Node.h"
-#include "Renderer/Renderable.h"
 #include "Renderer/Utility/VkLoader.h"
+
+namespace Renderer
+{
+    struct FrameDrawContext;
+}
 
 namespace Game
 {

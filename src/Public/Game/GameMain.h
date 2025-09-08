@@ -25,7 +25,7 @@ namespace Game
       private:
         std::unique_ptr<Editor::SceneEditor> m_main_editor{};
         std::unique_ptr<GameScene> m_main_scene;
-        Renderer::Viewport* m_main_render_scene;
+        Renderer::Viewport* m_main_viewport;
         Renderer::VulkanEngine* m_renderer;
         GameTime m_game_time{};
         CVars m_cvars{};

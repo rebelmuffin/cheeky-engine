@@ -2,11 +2,15 @@
 
 #include "Game/GameTime.h"
 #include "Game/Node.h"
-#include "Renderer/Renderable.h"
 #include "Renderer/VkEngine.h"
 
 #include <memory>
 #include <unordered_map>
+
+namespace Renderer
+{
+    struct FrameDrawContext;
+}
 
 namespace Game
 {
