@@ -8,7 +8,7 @@
 		"version": "2.0.0",
 		"tasks": [
 			{
-				"label": "Build All (gcc)",
+				"label": "Build All",
 				"type": "process",
 				"command": "meson",
 				"args": [
@@ -18,34 +18,8 @@
 				],
 				"isBuildCommand": true,
 				"group": {
-					"isDefault": false,
-					"kind": "build"
-				},
-				"presentation": {
-					"reveal": "always",
-					"panel": "shared"
-				},
-				"options": {
-					"env": {
-						"CXX": "g++",
-						"CC": "gcc"
-					}
-				},
-				"problemMatcher": []
-			},
-			{
-				"label": "Build All (clang)",
-				"type": "process",
-				"command": "meson",
-				"args": [
-					"compile",
-					"-C",
-					"build-clang"
-				],
-				"isBuildCommand": true,
-				"group": {
+					"isDefault": true,
 					"kind": "build",
-					"isDefault": true
 				},
 				"presentation": {
 					"reveal": "always",
@@ -60,25 +34,11 @@
 				"problemMatcher": []
 			},
 			{
-				"label": "Reconfigure (gcc)",
+				"label": "Reconfigure",
 				"type": "process",
 				"command": "meson",
 				"args": [
 					"build",
-					"--reconfigure",
-					"--clearcache"
-				],
-				"presentation": {
-					"reveal": "always",
-					"panel": "shared"
-				}
-			},
-			{
-				"label": "Reconfigure (clang)",
-				"type": "process",
-				"command": "meson",
-				"args": [
-					"build-clang",
 					"--reconfigure",
 					"--clearcache"
 				],
@@ -121,7 +81,7 @@
 				},
 				"type": "cppdbg",
 				"request": "launch",
-				"preLaunchTask": "Build All (gcc)",
+				"preLaunchTask": "Build All",
 				"externalConsole": false,
 				"internalConsoleOptions": "openOnSessionStart",
 				"environment": [
@@ -137,7 +97,7 @@
 				"cwd": "${workspaceRoot}/build",
 				"type": "lldb",
 				"request": "launch",
-				"preLaunchTask": "Build All (gcc)",
+				"preLaunchTask": "Build All",
 				"internalConsoleOptions": "openOnSessionStart",
 			},
 			{
@@ -157,7 +117,7 @@
 				],
 				"type": "cppdbg",
 				"request": "launch",
-				"preLaunchTask": "Build All (gcc)",
+				"preLaunchTask": "Build All",
 				"externalConsole": false,
 				"internalConsoleOptions": "openOnSessionStart",
 				"environment": [
