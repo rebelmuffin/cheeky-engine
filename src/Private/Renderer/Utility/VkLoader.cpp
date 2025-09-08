@@ -12,16 +12,15 @@
 #include <glm/gtx/compatibility.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <stb_image.h>
+#include <tbb/parallel_for.h>
 #include <vulkan/vulkan_core.h>
 
 #include <algorithm>
 #include <chrono>
-#include <execution>
 #include <filesystem>
 #include <iostream>
 #include <limits>
 #include <memory>
-#include <ranges>
 #include <unordered_set>
 #include <utility>
 #include <variant>
@@ -389,12 +388,9 @@ namespace Renderer::Utils
         std::chrono::high_resolution_clock clock{};
         auto before = clock.now();
         out_images.resize(asset.textures.size());
-        // C++20 comes to the rescue
-        std::ranges::iota_view texture_indices(size_t(0), out_images.size());
-        std::for_each(
-            std::execution::par,
-            texture_indices.begin(),
-            texture_indices.end(),
+        tbb::parallel_for(
+            size_t(0),
+            out_images.size(),
             [&out_images, &engine, &asset](size_t gltf_texture_idx)
             {
                 const fastgltf::Texture& texture = asset.textures[gltf_texture_idx];
@@ -405,6 +401,7 @@ namespace Renderer::Utils
                 out_images[gltf_texture_idx] = out_image.value_or(engine.PlaceholderImage());
             }
         );
+
         auto after = clock.now();
         std::cout << "Spent: "
                   << std::chrono::duration_cast<std::chrono::milliseconds>(after - before).count()
