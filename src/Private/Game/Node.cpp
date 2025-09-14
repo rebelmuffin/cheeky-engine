@@ -24,7 +24,7 @@ namespace Game
 
     glm::mat4 Transform::ToMatrix() const
     {
-        return glm::mat4(rotation) * glm::translate(position) * glm::scale(scale);
+        return glm::translate(position) * glm::mat4(rotation) * glm::scale(scale);
     }
 
     Transform Transform::Transformed(const Transform& other) const
@@ -182,17 +182,7 @@ namespace Game
         RefreshTransform();
     }
 
-    void Node::OnImGui()
-    {
-        if (ImGui::DragFloat3("Position", &m_local_transform.position.x))
-        {
-            RefreshTransform();
-        }
-        if (ImGui::DragFloat3("Scale", &m_local_transform.scale.x, 0.5f, 0.01f))
-        {
-            RefreshTransform();
-        }
-    }
+    void Node::OnImGui() {}
 
     void Node::PostCreateChild(Node& node) { m_owning_scene->RegisterNode(node); }
 

@@ -1,8 +1,11 @@
 #include "Game/Editor/SceneEditor.h"
 #include "Game/GameScene.h"
 #include "Game/Node.h"
+
 #include "ImGuizmo.h"
-#include "imgui.h"
+#include "ThirdParty/ImGUI.h"
+#include "glm/fwd.hpp"
+#include "glm/gtc/quaternion.hpp"
 
 namespace Game::Editor
 {
@@ -38,7 +41,7 @@ namespace Game::Editor
             {
                 if (selected_node != nullptr)
                 {
-                    DrawNodeInspector(*selected_node);
+                    DrawNodeInspector(m_cached_nodes[selected_node->Id()], *selected_node);
                 }
                 else
                 {
@@ -110,7 +113,7 @@ namespace Game::Editor
             open = true;
             if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
             {
-                m_selected_node = node.Id();
+                SelectNode(node);
             }
 
             for (const std::unique_ptr<Node>& child : node.Children())
@@ -124,7 +127,7 @@ namespace Game::Editor
         // we need this to be able to select tree nodes that aren't open but have children
         if (open == false && ImGui::IsItemClicked(ImGuiMouseButton_Left))
         {
-            m_selected_node = node.Id();
+            SelectNode(node);
         }
     }
 
@@ -140,7 +143,7 @@ namespace Game::Editor
         }
     }
 
-    void SceneEditor::DrawNodeInspector(Node& node)
+    void SceneEditor::DrawNodeInspector(EditorCachedNode& cached_node, Node& node)
     {
         ImGui::Text("Name: %s", node.Name().data());
         ImGui::Text("Id: %u", node.Id());
@@ -148,6 +151,19 @@ namespace Game::Editor
         {
             m_nodes_to_delete.emplace_back(node.Id());
         }
+
+        bool transform_changed = false;
+        transform_changed |= ImGui::DragFloat3("Position", &cached_node.position.x);
+        transform_changed |= ImGui::DragFloat3("Scale", &cached_node.scale.x, 0.5f, 0.01f);
+        transform_changed |= ImGui::SliderAngle("Yaw", &cached_node.euler_angles_rot.y);
+        transform_changed |= ImGui::SliderAngle("Pitch", &cached_node.euler_angles_rot.x);
+        transform_changed |= ImGui::SliderAngle("Roll", &cached_node.euler_angles_rot.z);
+
+        if (transform_changed)
+        {
+            ApplyCachedTransform(cached_node, node);
+        }
+
         node.OnImGui();
     }
 
@@ -157,5 +173,28 @@ namespace Game::Editor
         // ImGuizmo::Manipulate(
         //     const float* view, const float* projection, OPERATION operation, MODE mode, float* matrix
         // )
+    }
+
+    void SceneEditor::SelectNode(Node& node)
+    {
+        m_selected_node = node.Id();
+        ResetCachedNode(node);
+    }
+
+    void SceneEditor::ResetCachedNode(Node& node)
+    {
+        const Transform& xform = node.LocalTransform();
+        const glm::vec3 position = xform.position;
+        const glm::vec3 scale = xform.scale;
+        const glm::vec3 euler_angles = glm::eulerAngles(xform.rotation);
+        m_cached_nodes[node.Id()] = EditorCachedNode{ position, scale, euler_angles };
+    }
+
+    void SceneEditor::ApplyCachedTransform(EditorCachedNode& cached_node, Node& node)
+    {
+        const Transform xform{ cached_node.position,
+                               cached_node.scale,
+                               glm::quat{ cached_node.euler_angles_rot } };
+        node.SetLocalTransform(xform);
     }
 } // namespace Game::Editor

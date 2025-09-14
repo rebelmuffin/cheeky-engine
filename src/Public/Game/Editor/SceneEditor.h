@@ -5,6 +5,14 @@
 
 namespace Game::Editor
 {
+    /// Structure used for storing the information relating to a single node for editor purposes.
+    struct EditorCachedNode
+    {
+        glm::vec3 position;
+        glm::vec3 scale;
+        glm::vec3 euler_angles_rot{};
+    };
+
     /// Class that represents an editor instance for a game scene.
     class SceneEditor
     {
@@ -16,8 +24,12 @@ namespace Game::Editor
       private:
         void DrawNodeEntry(Node& node);
         void DrawNodeHierarchy();
-        void DrawNodeInspector(Node& node);
+        void DrawNodeInspector(EditorCachedNode& cached_node, Node& node);
         void DrawTransformGizmos(Node& node);
+
+        void SelectNode(Node& node);
+        void ResetCachedNode(Node& node);
+        void ApplyCachedTransform(EditorCachedNode& cached_node, Node& node);
 
         GameScene* m_scene;
 
@@ -25,5 +37,6 @@ namespace Game::Editor
         bool m_node_inspector_open = true;
         NodeId_t m_selected_node = INVALID_NODE_ID;
         std::vector<NodeId_t> m_nodes_to_delete{};
+        std::unordered_map<NodeId_t, EditorCachedNode> m_cached_nodes{};
     };
 } // namespace Game::Editor
