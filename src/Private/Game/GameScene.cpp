@@ -1,6 +1,8 @@
 #include "Game/GameScene.h"
 #include "Game/Node.h"
 
+#include <glm/gtx/transform.hpp>
+
 #include <algorithm>
 #include <iterator>
 #include <memory>
@@ -110,23 +112,38 @@ namespace Game
         return nullptr;
     }
 
-    void GameScene::Draw(Renderer::FrameDrawContext& ctx, const CameraNode* camera_node)
+    void GameScene::Draw(Renderer::Viewport& viewport, const Renderer::Camera* override_camera)
     {
-        const CameraNode* used_camera = camera_node;
-        if (used_camera == nullptr)
+        if (override_camera != nullptr)
         {
-            used_camera = m_active_camera;
+            viewport.frame_context.camera = *override_camera;
         }
-        if (used_camera != nullptr)
+        else
         {
-            ctx.camera_position = m_active_camera->m_world_transform.position;
-            ctx.camera_rotation = glm::mat4(m_active_camera->m_world_transform.rotation);
-            ctx.camera_vertical_fov = m_active_camera->vertical_fov;
+            glm::vec3 camera_pos{ 0.0f };
+            glm::mat4 camera_rotation{ 1.0f };
+            float camera_fov_degrees = 70.0f;
+
+            if (m_active_camera != nullptr)
+            {
+                camera_pos = m_active_camera->m_world_transform.position;
+                camera_rotation = glm::mat4(m_active_camera->m_world_transform.rotation);
+                camera_fov_degrees = m_active_camera->vertical_fov_degrees;
+            }
+
+            viewport.frame_context.camera.view = camera_rotation * glm::translate(camera_pos);
+            viewport.frame_context.camera.projection = glm::perspective(
+                glm::radians(camera_fov_degrees),
+                (float)viewport.draw_image->image_extent.width /
+                    (float)viewport.draw_image->image_extent.height,
+                10000.0f,
+                0.1f
+            );
         }
 
         for (Node* renderable : m_renderable_nodes)
         {
-            renderable->Draw(ctx);
+            renderable->Draw(viewport.frame_context);
         }
     }
 

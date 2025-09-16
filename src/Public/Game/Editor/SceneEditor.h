@@ -2,6 +2,7 @@
 
 #include "Game/GameScene.h"
 #include "Game/Node.h"
+#include "Renderer/Viewport.h"
 
 namespace Game::Editor
 {
@@ -13,19 +14,31 @@ namespace Game::Editor
         glm::vec3 euler_angles_rot{};
     };
 
+    struct EditorCamera
+    {
+        Renderer::Camera render_camera{};
+        glm::vec3 position;
+        glm::quat rotation;
+        float vertical_fov_deg;
+    };
+
     /// Class that represents an editor instance for a game scene.
     class SceneEditor
     {
       public:
         SceneEditor(GameScene& scene);
 
-        void DrawImGui();
+        void Draw(Renderer::Viewport& editor_viewport);
+        void DrawImGui(Renderer::Viewport& editor_viewport);
+
+        Renderer::Camera& Camera();
+        bool EditorCameraEnabled();
 
       private:
         void DrawNodeEntry(Node& node);
         void DrawNodeHierarchy();
         void DrawNodeInspector(EditorCachedNode& cached_node, Node& node);
-        void DrawTransformGizmos(Node& node);
+        void DrawTransformGizmos(Renderer::Viewport& editor_viewport, Node& node);
 
         void SelectNode(Node& node);
         void ResetCachedNode(Node& node);
@@ -38,5 +51,9 @@ namespace Game::Editor
         NodeId_t m_selected_node = INVALID_NODE_ID;
         std::vector<NodeId_t> m_nodes_to_delete{};
         std::unordered_map<NodeId_t, EditorCachedNode> m_cached_nodes{};
+
+        // Camera
+        EditorCamera m_editor_camera{};
+        bool m_editor_camera_enabled = true;
     };
 } // namespace Game::Editor

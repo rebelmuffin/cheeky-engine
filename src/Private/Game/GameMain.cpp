@@ -41,7 +41,8 @@ namespace Game
         m_game_time.game_time_seconds += m_game_time.delta_time_seconds;
 
         // draw on the main viewport.
-        m_main_scene->Draw(m_main_viewport->frame_context);
+        m_main_editor->Draw(*m_main_viewport);
+        m_main_scene->Draw(*m_main_viewport);
     }
 
     void GameMain::OnImGui()
@@ -58,7 +59,7 @@ namespace Game
 
         if (m_editor_enabled)
         {
-            m_main_editor->DrawImGui();
+            m_main_editor->DrawImGui(*m_main_viewport);
         }
     }
 } // namespace Game

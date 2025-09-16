@@ -135,7 +135,7 @@ namespace Game
       public:
         CameraNode(std::string_view name);
 
-        float vertical_fov = 70.0f;
+        float vertical_fov_degrees = 70.0f;
     };
 
     template <typename T, typename... Args>

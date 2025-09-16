@@ -22,6 +22,7 @@
 #include <glm/fwd.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/transform.hpp>
+#include <glm/trigonometric.hpp>
 #include <imgui.h>
 #include <unordered_set>
 #include <vk_mem_alloc.h>
@@ -790,14 +791,8 @@ namespace Renderer
         // delete it next frame
         GetCurrentFrame().buffers_in_use.emplace_back(scene_data_buffer);
 
-        glm::mat4 view =
-            viewport.frame_context.camera_rotation * glm::translate(viewport.frame_context.camera_position);
-        glm::mat4 projection = glm::perspective(
-            glm::radians(viewport.frame_context.camera_vertical_fov),
-            (float)viewport.draw_extent.width / (float)viewport.draw_extent.height,
-            10000.f,
-            0.1f
-        );
+        glm::mat4 view = viewport.frame_context.camera.view;
+        glm::mat4 projection = viewport.frame_context.camera.projection;
 
         // invert the Y direction on projection matrix so that we are more similar
         // to opengl and gltf axis
@@ -1185,9 +1180,16 @@ namespace Renderer
         new_viewport.name = "main viewport";
         new_viewport.render_scale = 1.0f;
 
-        new_viewport.frame_context.camera_position = glm::vec3(0.0f, 0.0f, -1.0f);
-        new_viewport.frame_context.camera_rotation = glm::mat4{ 1.0f }; // no rotation
-        new_viewport.frame_context.camera_vertical_fov = 70.0f;
+        glm::vec3 camera_pos{ 0.0f, 0.0f, -1.0f };
+        glm::mat4 camera_rot{ 1.0f };
+        float camera_fov_degrees = 70.0f;
+        new_viewport.frame_context.camera.view = camera_rot * glm::translate(camera_pos);
+        new_viewport.frame_context.camera.projection = glm::perspective(
+            glm::radians(camera_fov_degrees),
+            (float)backbuffer_size.x / (float)backbuffer_size.y,
+            10000.0f,
+            0.1f
+        );
 
         main_viewport = 0;
 

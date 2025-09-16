@@ -4,14 +4,26 @@
 
 #include "ImGuizmo.h"
 #include "ThirdParty/ImGUI.h"
-#include "glm/fwd.hpp"
-#include "glm/gtc/quaternion.hpp"
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/fwd.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/transform.hpp>
 
 namespace Game::Editor
 {
     SceneEditor::SceneEditor(GameScene& scene) : m_scene(&scene) {}
 
-    void SceneEditor::DrawImGui()
+    void SceneEditor::Draw(Renderer::Viewport& editor_viewport)
+    {
+        float aspect_ratio = (float)editor_viewport.draw_image->image_extent.width /
+                             (float)editor_viewport.draw_image->image_extent.height;
+        m_editor_camera.render_camera.view =
+            glm::mat4(m_editor_camera.rotation) * glm::translate(m_editor_camera.position);
+        m_editor_camera.render_camera.projection =
+            glm::perspective(glm::radians(m_editor_camera.vertical_fov_deg), aspect_ratio, 10000.0f, 0.1f);
+    }
+
+    void SceneEditor::DrawImGui(Renderer::Viewport& editor_viewport)
     {
         if (ImGui::BeginMainMenuBar())
         {
@@ -67,7 +79,7 @@ namespace Game::Editor
 
         if (m_enable_transform_gizmos && selected_node != nullptr)
         {
-            DrawTransformGizmos(*selected_node);
+            DrawTransformGizmos(editor_viewport, *selected_node);
         }
 
         for (NodeId_t node_id : m_nodes_to_delete)
@@ -82,6 +94,9 @@ namespace Game::Editor
         }
         m_nodes_to_delete.clear();
     }
+
+    Renderer::Camera& SceneEditor::Camera() { return m_editor_camera.render_camera; }
+    bool SceneEditor::EditorCameraEnabled() { return m_editor_camera_enabled; }
 
     void SceneEditor::DrawNodeEntry(Node& node)
     {
@@ -167,7 +182,7 @@ namespace Game::Editor
         node.OnImGui();
     }
 
-    void SceneEditor::DrawTransformGizmos(Node&)
+    void SceneEditor::DrawTransformGizmos(Renderer::Viewport&, Node&)
     {
         // glm::mat4x4 transform = node.WorldTransform().ToMatrix();
         // ImGuizmo::Manipulate(

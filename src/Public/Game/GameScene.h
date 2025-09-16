@@ -2,6 +2,7 @@
 
 #include "Game/GameTime.h"
 #include "Game/Node.h"
+#include "Renderer/Utility/Camera.h"
 #include "Renderer/VkEngine.h"
 
 #include <memory>
@@ -33,9 +34,9 @@ namespace Game
         RootNode& Root() { return *m_root.get(); }
 
         /// May get called multiple times per frame to draw the same scene on different views.
-        /// If camera is specified, will force that camera for the draw, otherwise will use the active
-        /// camera.
-        void Draw(Renderer::FrameDrawContext& ctx, const CameraNode* camera_node = nullptr);
+        /// If render camera is specified, will force that camera for the draw, otherwise will use the active
+        /// scene camera.
+        void Draw(Renderer::Viewport& viewport, const Renderer::Camera* override_camera = nullptr);
 
         /// Called once a frame for the logical update of the game.
         void TickUpdate(const GameTime& time);

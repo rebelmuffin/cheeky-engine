@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Renderer/RenderObject.h"
+#include "Renderer/Utility/Camera.h"
 #include "Renderer/Utility/VkLoader.h"
 #include "Renderer/VkTypes.h"
 #include <memory>
@@ -13,9 +14,7 @@ namespace Renderer
     {
         std::vector<RenderObject> render_objects;
 
-        float camera_vertical_fov = 70.0f;
-        glm::mat4 camera_rotation = glm::mat4(1.0f);
-        glm::vec3 camera_position = glm::vec3(0.0f);
+        Camera camera;
 
         // environment data
         glm::vec4 ambient_colour = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
