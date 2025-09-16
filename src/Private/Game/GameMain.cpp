@@ -5,6 +5,7 @@
 #include "Game/Nodes/MeshNode.h"
 #include "Game/Utility/SceneCreationUtils.h"
 #include "Renderer/Material.h"
+#include "Renderer/Utility/Camera.h"
 #include "Renderer/Utility/VkLoader.h"
 #include "Renderer/VkTypes.h"
 
@@ -19,9 +20,10 @@
 
 namespace Game
 {
-    GameMain::GameMain(Renderer::VulkanEngine& engine, CVars cvars) :
+    GameMain::GameMain(SDL_Window* window, Renderer::VulkanEngine& engine, CVars cvars) :
         m_main_viewport(&engine.active_viewports[engine.main_viewport]),
         m_renderer(&engine),
+        m_main_window(window),
         m_cvars(cvars)
     {
         m_main_scene = std::make_unique<GameScene>();
@@ -41,8 +43,15 @@ namespace Game
         m_game_time.game_time_seconds += m_game_time.delta_time_seconds;
 
         // draw on the main viewport.
-        m_main_editor->Draw(*m_main_viewport);
-        m_main_scene->Draw(*m_main_viewport);
+        m_main_editor->Draw(delta_time_seconds, m_main_window, *m_main_viewport);
+
+        Renderer::Camera* override_camera = nullptr;
+        if (m_main_editor->EditorCameraEnabled())
+        {
+            override_camera = &m_main_editor->Camera();
+        }
+
+        m_main_scene->Draw(*m_main_viewport, override_camera);
     }
 
     void GameMain::OnImGui()
@@ -59,7 +68,7 @@ namespace Game
 
         if (m_editor_enabled)
         {
-            m_main_editor->DrawImGui(*m_main_viewport);
+            m_main_editor->DrawImGui();
         }
     }
 } // namespace Game

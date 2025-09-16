@@ -42,7 +42,7 @@ EngineCore::EngineCore(CVars cvars)
     constexpr const char* font_path = "../data/fonts/roboto.ttf";
     ImGui::GetIO().Fonts->AddFontFromFileTTF(font_path, 14);
 
-    m_game = std::make_unique<Game::GameMain>(*m_renderer, cvars);
+    m_game = std::make_unique<Game::GameMain>(m_window, *m_renderer, cvars);
 }
 
 EngineCore::~EngineCore()
@@ -93,7 +93,7 @@ void EngineCore::RunMainLoop()
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
-        // ImGuizmo::BeginFrame();
+        ImGuizmo::BeginFrame();
 
         OnImgui();
 

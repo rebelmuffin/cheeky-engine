@@ -1,29 +1,46 @@
 #include "Game/Editor/SceneEditor.h"
+#include "EngineUtils.h"
 #include "Game/GameScene.h"
 #include "Game/Node.h"
 
-#include "ImGuizmo.h"
 #include "ThirdParty/ImGUI.h"
+#include <ImGuizmo.h>
+#include <SDL_keyboard.h>
+#include <SDL_keycode.h>
+#include <SDL_mouse.h>
+#include <glm/common.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/quaternion_geometric.hpp>
+#include <glm/ext/quaternion_trigonometric.hpp>
 #include <glm/fwd.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/transform.hpp>
+#include <glm/trigonometric.hpp>
+
+#include <cmath>
 
 namespace Game::Editor
 {
     SceneEditor::SceneEditor(GameScene& scene) : m_scene(&scene) {}
 
-    void SceneEditor::Draw(Renderer::Viewport& editor_viewport)
+    void SceneEditor::Draw(double delta_time_seconds, SDL_Window* window, Renderer::Viewport& editor_viewport)
     {
         float aspect_ratio = (float)editor_viewport.draw_image->image_extent.width /
                              (float)editor_viewport.draw_image->image_extent.height;
+        glm::quat rotation = glm::angleAxis(m_editor_camera.pitch_rad, glm::vec3(1, 0, 0)) *
+                             glm::angleAxis(m_editor_camera.yaw_rad, glm::vec3(0, 1, 0));
+
+        // m_editor_camera.render_camera.view = glm::mat4(rotation) *
+        // glm::translate(m_editor_camera.position);
         m_editor_camera.render_camera.view =
-            glm::mat4(m_editor_camera.rotation) * glm::translate(m_editor_camera.position);
+            glm::mat4(rotation) * glm::translate(glm::mat4(1.0f), -m_editor_camera.position);
         m_editor_camera.render_camera.projection =
             glm::perspective(glm::radians(m_editor_camera.vertical_fov_deg), aspect_ratio, 10000.0f, 0.1f);
+
+        HandleInput(delta_time_seconds, window);
     }
 
-    void SceneEditor::DrawImGui(Renderer::Viewport& editor_viewport)
+    void SceneEditor::DrawImGui()
     {
         if (ImGui::BeginMainMenuBar())
         {
@@ -73,13 +90,24 @@ namespace Game::Editor
             {
                 ImGui::Text("todo");
             }
+            if (ImGui::CollapsingHeader("Camera"))
+            {
+                ImGui::SliderAngle("Yaw", &m_editor_camera.yaw_rad);
+                ImGui::SliderAngle("Pitch", &m_editor_camera.pitch_rad);
+                float fov_rad = glm::radians(m_editor_camera.vertical_fov_deg);
+                if (ImGui::SliderAngle("Vertical FOV", &fov_rad))
+                {
+                    m_editor_camera.vertical_fov_deg = glm::degrees(fov_rad);
+                }
+                ImGui::DragFloat3("Position", &m_editor_camera.position.x);
+            }
             DrawNodeHierarchy();
         }
         ImGui::End();
 
         if (m_enable_transform_gizmos && selected_node != nullptr)
         {
-            DrawTransformGizmos(editor_viewport, *selected_node);
+            DrawTransformGizmos(*selected_node);
         }
 
         for (NodeId_t node_id : m_nodes_to_delete)
@@ -97,6 +125,64 @@ namespace Game::Editor
 
     Renderer::Camera& SceneEditor::Camera() { return m_editor_camera.render_camera; }
     bool SceneEditor::EditorCameraEnabled() { return m_editor_camera_enabled; }
+
+    void SceneEditor::HandleInput(double delta_time_seconds, SDL_Window* window)
+    {
+        glm::ivec2 last_mouse_pos = m_last_mouse_pos;
+        glm::ivec2 mouse_pos;
+        uint32_t mouse_button_mask = SDL_GetGlobalMouseState(&mouse_pos.x, &mouse_pos.y);
+        m_last_mouse_pos = mouse_pos;
+
+        if (mouse_button_mask & SDL_BUTTON_RMASK)
+        {
+            glm::ivec2 mouse_delta{ 0 };
+            if (EngineUtils::IsPointWithinWindow(window, mouse_pos) &&
+                EngineUtils::IsPointWithinWindow(window, last_mouse_pos))
+            {
+                mouse_delta = mouse_pos - last_mouse_pos;
+            }
+
+            const float max_pitch = glm::radians(89.0f);
+            const float min_pitch = glm::radians(-89.0f);
+
+            m_editor_camera.yaw_rad += (float)delta_time_seconds * (float)mouse_delta.x;
+            m_editor_camera.yaw_rad = EngineUtils::NormaliseAngleRadians(m_editor_camera.yaw_rad);
+            float pitch_delta = (float)delta_time_seconds * (float)mouse_delta.y;
+            m_editor_camera.pitch_rad =
+                glm::clamp(m_editor_camera.pitch_rad + pitch_delta, min_pitch, max_pitch);
+
+            SDL_SetRelativeMouseMode(SDL_TRUE);
+        }
+        else
+        {
+            SDL_SetRelativeMouseMode(SDL_FALSE);
+        }
+
+        // Get camera basis vectors directly from rotation
+        glm::mat4 view = m_editor_camera.render_camera.view;
+
+        // Transform base vectors by rotation
+        glm::vec3 camera_right = glm::vec3(view[0][0], view[1][0], view[2][0]);
+        glm::vec3 camera_forward = -glm::vec3(view[0][2], view[1][2], view[2][2]);
+
+        const uint8_t* key_states = SDL_GetKeyboardState(nullptr);
+        if (key_states[SDL_SCANCODE_W])
+        {
+            m_editor_camera.position += camera_forward * (float)delta_time_seconds;
+        }
+        if (key_states[SDL_SCANCODE_S])
+        {
+            m_editor_camera.position -= camera_forward * (float)delta_time_seconds;
+        }
+        if (key_states[SDL_SCANCODE_D])
+        {
+            m_editor_camera.position += camera_right * (float)delta_time_seconds;
+        }
+        if (key_states[SDL_SCANCODE_A])
+        {
+            m_editor_camera.position -= camera_right * (float)delta_time_seconds;
+        }
+    }
 
     void SceneEditor::DrawNodeEntry(Node& node)
     {
@@ -182,12 +268,22 @@ namespace Game::Editor
         node.OnImGui();
     }
 
-    void SceneEditor::DrawTransformGizmos(Renderer::Viewport&, Node&)
+    void SceneEditor::DrawTransformGizmos(Node& node)
     {
-        // glm::mat4x4 transform = node.WorldTransform().ToMatrix();
-        // ImGuizmo::Manipulate(
-        //     const float* view, const float* projection, OPERATION operation, MODE mode, float* matrix
-        // )
+        glm::mat4 transform = node.WorldTransform().ToMatrix();
+        ImGuiIO& io = ImGui::GetIO();
+        ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+        if (ImGuizmo::Manipulate(
+                &m_editor_camera.render_camera.view[0][0],
+                &m_editor_camera.render_camera.projection[0][0],
+                ImGuizmo::OPERATION::UNIVERSAL,
+                ImGuizmo::MODE::WORLD,
+                &transform[0][0]
+            ))
+        {
+            node.SetLocalTransform(Transform::FromMatrix(transform));
+            ResetCachedNode(node); // since we replace the transform directly, we need to do this.
+        }
     }
 
     void SceneEditor::SelectNode(Node& node)

@@ -3,6 +3,8 @@
 #include "Game/GameScene.h"
 #include "Game/Node.h"
 #include "Renderer/Viewport.h"
+#include "Renderer/VkEngine.h"
+#include <glm/ext/scalar_constants.hpp>
 
 namespace Game::Editor
 {
@@ -18,8 +20,9 @@ namespace Game::Editor
     {
         Renderer::Camera render_camera{};
         glm::vec3 position;
-        glm::quat rotation;
-        float vertical_fov_deg;
+        float yaw_rad = glm::pi<float>();
+        float pitch_rad;
+        float vertical_fov_deg = 70.0f;
     };
 
     /// Class that represents an editor instance for a game scene.
@@ -28,17 +31,18 @@ namespace Game::Editor
       public:
         SceneEditor(GameScene& scene);
 
-        void Draw(Renderer::Viewport& editor_viewport);
-        void DrawImGui(Renderer::Viewport& editor_viewport);
+        void Draw(double delta_time_seconds, SDL_Window* window, Renderer::Viewport& editor_viewport);
+        void DrawImGui();
 
         Renderer::Camera& Camera();
         bool EditorCameraEnabled();
 
       private:
+        void HandleInput(double delta_time_seconds, SDL_Window* window);
         void DrawNodeEntry(Node& node);
         void DrawNodeHierarchy();
         void DrawNodeInspector(EditorCachedNode& cached_node, Node& node);
-        void DrawTransformGizmos(Renderer::Viewport& editor_viewport, Node& node);
+        void DrawTransformGizmos(Node& node);
 
         void SelectNode(Node& node);
         void ResetCachedNode(Node& node);
@@ -55,5 +59,8 @@ namespace Game::Editor
         // Camera
         EditorCamera m_editor_camera{};
         bool m_editor_camera_enabled = true;
+
+        // inputs
+        glm::ivec2 m_last_mouse_pos{ 0, 0 };
     };
 } // namespace Game::Editor
