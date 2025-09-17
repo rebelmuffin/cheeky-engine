@@ -81,6 +81,10 @@ namespace Game
         /// Attach this node to given node, detaching from the current parent.
         void AttachToParent(Node& new_parent);
 
+        void SetWorldTransform(const Transform& transform);
+        void SetWorldPosition(const glm::vec3& position);
+        void SetWorldRotation(const glm::quat& rotation);
+        void SetWorldScale(const glm::vec3& scale);
         void SetLocalTransform(const Transform& transform);
         void SetLocalPosition(const glm::vec3& position);
         void SetLocalRotation(const glm::quat& rotation);

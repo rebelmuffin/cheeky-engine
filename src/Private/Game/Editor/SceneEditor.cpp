@@ -4,6 +4,7 @@
 #include "Game/Node.h"
 
 #include "ThirdParty/ImGUI.h"
+#include "imgui.h"
 #include <ImGuizmo.h>
 #include <SDL_keyboard.h>
 #include <SDL_keycode.h>
@@ -254,15 +255,42 @@ namespace Game::Editor
         }
 
         bool transform_changed = false;
-        transform_changed |= ImGui::DragFloat3("Position", &cached_node.position.x);
-        transform_changed |= ImGui::DragFloat3("Scale", &cached_node.scale.x, 0.5f, 0.01f);
-        transform_changed |= ImGui::SliderAngle("Yaw", &cached_node.euler_angles_rot.y);
-        transform_changed |= ImGui::SliderAngle("Pitch", &cached_node.euler_angles_rot.x);
-        transform_changed |= ImGui::SliderAngle("Roll", &cached_node.euler_angles_rot.z);
+        bool local = false;
+        if (ImGui::BeginTabBar("local_world_transform_bar"))
+        {
+            if (ImGui::BeginTabItem("Local"))
+            {
+                local = true;
+                transform_changed |= ImGui::DragFloat3("Position", &cached_node.local_position.x);
+                transform_changed |= ImGui::DragFloat3("Scale", &cached_node.local_scale.x, 0.5f, 0.01f);
+                transform_changed |= ImGui::SliderAngle("Yaw", &cached_node.local_euler_rot.y);
+                transform_changed |= ImGui::SliderAngle("Pitch", &cached_node.local_euler_rot.x);
+                transform_changed |= ImGui::SliderAngle("Roll", &cached_node.local_euler_rot.z);
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("World"))
+            {
+                local = false;
+                transform_changed |= ImGui::DragFloat3("Position", &cached_node.world_position.x);
+                transform_changed |= ImGui::DragFloat3("Scale", &cached_node.world_scale.x, 0.5f, 0.01f);
+                transform_changed |= ImGui::SliderAngle("Yaw", &cached_node.world_euler_rot.y);
+                transform_changed |= ImGui::SliderAngle("Pitch", &cached_node.world_euler_rot.x);
+                transform_changed |= ImGui::SliderAngle("Roll", &cached_node.world_euler_rot.z);
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
+        }
 
         if (transform_changed)
         {
-            ApplyCachedTransform(cached_node, node);
+            if (local)
+            {
+                ApplyLocalCachedTransform(cached_node, node);
+            }
+            else
+            {
+                ApplyWorldCachedTransform(cached_node, node);
+            }
         }
 
         node.OnImGui();
@@ -277,11 +305,11 @@ namespace Game::Editor
                 &m_editor_camera.render_camera.view[0][0],
                 &m_editor_camera.render_camera.projection[0][0],
                 ImGuizmo::OPERATION::UNIVERSAL,
-                ImGuizmo::MODE::WORLD,
+                ImGuizmo::MODE::LOCAL,
                 &transform[0][0]
             ))
         {
-            node.SetLocalTransform(Transform::FromMatrix(transform));
+            node.SetWorldTransform(Transform::FromMatrix(transform));
             ResetCachedNode(node); // since we replace the transform directly, we need to do this.
         }
     }
@@ -294,18 +322,45 @@ namespace Game::Editor
 
     void SceneEditor::ResetCachedNode(Node& node)
     {
-        const Transform& xform = node.LocalTransform();
-        const glm::vec3 position = xform.position;
-        const glm::vec3 scale = xform.scale;
-        const glm::vec3 euler_angles = glm::eulerAngles(xform.rotation);
-        m_cached_nodes[node.Id()] = EditorCachedNode{ position, scale, euler_angles };
+        EditorCachedNode cached_node;
+        ResetCachedNodeLocal(cached_node, node);
+        ResetCachedNodeWorld(cached_node, node);
+        m_cached_nodes[node.Id()] = cached_node;
     }
 
-    void SceneEditor::ApplyCachedTransform(EditorCachedNode& cached_node, Node& node)
+    void SceneEditor::ResetCachedNodeLocal(EditorCachedNode& cached_node, Node& node)
     {
-        const Transform xform{ cached_node.position,
-                               cached_node.scale,
-                               glm::quat{ cached_node.euler_angles_rot } };
+        const Transform& local_xform = node.LocalTransform();
+        cached_node.local_position = local_xform.position;
+        cached_node.local_scale = local_xform.scale;
+        cached_node.local_euler_rot = glm::eulerAngles(local_xform.rotation);
+    }
+    void SceneEditor::ResetCachedNodeWorld(EditorCachedNode& cached_node, Node& node)
+    {
+        const Transform& world_xform = node.WorldTransform();
+        cached_node.world_position = world_xform.position;
+        cached_node.world_scale = world_xform.scale;
+        cached_node.world_euler_rot = glm::eulerAngles(world_xform.rotation);
+    }
+
+    void SceneEditor::ApplyLocalCachedTransform(EditorCachedNode& cached_node, Node& node)
+    {
+        const Transform xform{ cached_node.local_position,
+                               cached_node.local_scale,
+                               glm::quat{ cached_node.local_euler_rot } };
         node.SetLocalTransform(xform);
+
+        // when we update local, we need to reset the world transform cache.
+        ResetCachedNodeWorld(cached_node, node);
+    }
+    void SceneEditor::ApplyWorldCachedTransform(EditorCachedNode& cached_node, Node& node)
+    {
+        const Transform xform{ cached_node.world_position,
+                               cached_node.world_scale,
+                               glm::quat{ cached_node.world_euler_rot } };
+        node.SetWorldTransform(xform);
+
+        // when we update world, we need to reset the local transform cache.
+        ResetCachedNodeLocal(cached_node, node);
     }
 } // namespace Game::Editor

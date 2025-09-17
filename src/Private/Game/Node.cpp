@@ -1,4 +1,5 @@
 #include "Game/Node.h"
+#include "EngineUtils.h"
 #include "Game/GameLogging.h"
 #include "Game/GameScene.h"
 
@@ -29,14 +30,27 @@ namespace Game
 
     Transform Transform::Transformed(const Transform& other) const
     {
-        glm::mat4 result = ToMatrix() * other.ToMatrix();
-        return FromMatrix(result);
+        // we only scale the position by the parent matrix, scale and rotation can be handled directly.
+        // now I understand why Godot separates the origin and basis.
+        glm::mat4 parent_rot_scale_mat = other.ToMatrix();
+        Transform ret{};
+        ret.position = glm::vec3(parent_rot_scale_mat * glm::vec4(position, 1.0f));
+        ret.scale = scale * other.scale;
+        ret.rotation = other.rotation * rotation;
+
+        return ret;
     }
 
     Transform Transform::InverseTransformed(const Transform& other) const
     {
-        glm::mat4 result = other.ToMatrix() * ToMatrix();
-        return FromMatrix(result);
+        Transform ret{};
+        glm::mat4 parent_rot_scale_mat = other.ToMatrix();
+        glm::mat4 inv_parent = glm::inverse(parent_rot_scale_mat);
+        ret.position = glm::vec3(inv_parent * glm::vec4(position, 1.0f));
+        ret.scale = scale / other.scale;
+        ret.rotation = glm::inverse(other.rotation) * rotation;
+
+        return ret;
     }
 
     Node::Node(std::string_view name, bool tick_update, bool is_renderable) :
@@ -159,6 +173,31 @@ namespace Game
         }
 
         m_parent->MoveChild(Id(), new_parent);
+    }
+
+    void Node::SetWorldTransform(const Transform& transform)
+    {
+        const Transform& parent_xform = Parent()->WorldTransform();
+        m_local_transform = transform.InverseTransformed(parent_xform);
+        RefreshTransform();
+    }
+    void Node::SetWorldPosition(const glm::vec3& position)
+    {
+        Transform new_xform(m_world_transform);
+        new_xform.position = position;
+        SetWorldTransform(new_xform);
+    }
+    void Node::SetWorldRotation(const glm::quat& rotation)
+    {
+        Transform new_xform(m_world_transform);
+        new_xform.rotation = rotation;
+        SetWorldTransform(new_xform);
+    }
+    void Node::SetWorldScale(const glm::vec3& scale)
+    {
+        Transform new_xform(m_world_transform);
+        new_xform.scale = scale;
+        SetWorldTransform(new_xform);
     }
 
     void Node::SetLocalTransform(const Transform& transform)

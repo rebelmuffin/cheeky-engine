@@ -11,9 +11,13 @@ namespace Game::Editor
     /// Structure used for storing the information relating to a single node for editor purposes.
     struct EditorCachedNode
     {
-        glm::vec3 position;
-        glm::vec3 scale;
-        glm::vec3 euler_angles_rot{};
+        glm::vec3 local_position;
+        glm::vec3 local_scale;
+        glm::vec3 local_euler_rot{};
+
+        glm::vec3 world_position;
+        glm::vec3 world_scale;
+        glm::vec3 world_euler_rot{};
     };
 
     struct EditorCamera
@@ -46,7 +50,10 @@ namespace Game::Editor
 
         void SelectNode(Node& node);
         void ResetCachedNode(Node& node);
-        void ApplyCachedTransform(EditorCachedNode& cached_node, Node& node);
+        void ResetCachedNodeLocal(EditorCachedNode& cached_node, Node& node);
+        void ResetCachedNodeWorld(EditorCachedNode& cached_node, Node& node);
+        void ApplyLocalCachedTransform(EditorCachedNode& cached_node, Node& node);
+        void ApplyWorldCachedTransform(EditorCachedNode& cached_node, Node& node);
 
         GameScene* m_scene;
 
