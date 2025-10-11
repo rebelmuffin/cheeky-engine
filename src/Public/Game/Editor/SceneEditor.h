@@ -43,6 +43,8 @@ namespace Game::Editor
 
       private:
         void HandleInput(double delta_time_seconds, SDL_Window* window);
+        void HandleMouseInput(double delta_seconds, SDL_Window* window);
+        void HandleKeyboardInput(double delta_seconds);
         void DrawNodeEntry(Node& node);
         void DrawNodeHierarchy();
         void DrawNodeInspector(EditorCachedNode& cached_node, Node& node);

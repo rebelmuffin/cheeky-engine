@@ -4,11 +4,11 @@
 #include "Game/Node.h"
 
 #include "ThirdParty/ImGUI.h"
-#include "imgui.h"
 #include <ImGuizmo.h>
 #include <SDL_keyboard.h>
 #include <SDL_keycode.h>
 #include <SDL_mouse.h>
+#include <SDL_scancode.h>
 #include <glm/common.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/quaternion_geometric.hpp>
@@ -127,14 +127,16 @@ namespace Game::Editor
     Renderer::Camera& SceneEditor::Camera() { return m_editor_camera.render_camera; }
     bool SceneEditor::EditorCameraEnabled() { return m_editor_camera_enabled; }
 
-    void SceneEditor::HandleInput(double delta_time_seconds, SDL_Window* window)
+    void SceneEditor::HandleMouseInput(double delta_time_seconds, SDL_Window* window)
     {
+        const float camera_mouse_rotation_multiplier = 1.0f;
+
         glm::ivec2 last_mouse_pos = m_last_mouse_pos;
         glm::ivec2 mouse_pos;
         uint32_t mouse_button_mask = SDL_GetGlobalMouseState(&mouse_pos.x, &mouse_pos.y);
         m_last_mouse_pos = mouse_pos;
 
-        if (mouse_button_mask & SDL_BUTTON_RMASK)
+        if (mouse_button_mask & SDL_BUTTON_RMASK && ImGui::GetIO().WantCaptureMouse == false)
         {
             glm::ivec2 mouse_delta{ 0 };
             if (EngineUtils::IsPointWithinWindow(window, mouse_pos) &&
@@ -143,14 +145,10 @@ namespace Game::Editor
                 mouse_delta = mouse_pos - last_mouse_pos;
             }
 
-            const float max_pitch = glm::radians(89.0f);
-            const float min_pitch = glm::radians(-89.0f);
-
+            mouse_delta *= camera_mouse_rotation_multiplier;
             m_editor_camera.yaw_rad += (float)delta_time_seconds * (float)mouse_delta.x;
-            m_editor_camera.yaw_rad = EngineUtils::NormaliseAngleRadians(m_editor_camera.yaw_rad);
             float pitch_delta = (float)delta_time_seconds * (float)mouse_delta.y;
-            m_editor_camera.pitch_rad =
-                glm::clamp(m_editor_camera.pitch_rad + pitch_delta, min_pitch, max_pitch);
+            m_editor_camera.pitch_rad += pitch_delta;
 
             SDL_SetRelativeMouseMode(SDL_TRUE);
         }
@@ -158,31 +156,91 @@ namespace Game::Editor
         {
             SDL_SetRelativeMouseMode(SDL_FALSE);
         }
+    }
+
+    void SceneEditor::HandleKeyboardInput(double delta_time_seconds)
+    {
+        const float camera_rotation_rad_per_sec = glm::radians(110.0f);
+        const float camera_movement_unit_per_sec = 1.0f;
 
         // Get camera basis vectors directly from rotation
         glm::mat4 view = m_editor_camera.render_camera.view;
 
         // Transform base vectors by rotation
+        glm::vec3 camera_up = glm::vec3(view[0][1], view[1][1], view[2][1]);
         glm::vec3 camera_right = glm::vec3(view[0][0], view[1][0], view[2][0]);
         glm::vec3 camera_forward = -glm::vec3(view[0][2], view[1][2], view[2][2]);
 
         const uint8_t* key_states = SDL_GetKeyboardState(nullptr);
+
+        // WASD for forward/right axis movement
         if (key_states[SDL_SCANCODE_W])
         {
-            m_editor_camera.position += camera_forward * (float)delta_time_seconds;
+            m_editor_camera.position +=
+                camera_forward * (float)delta_time_seconds * camera_movement_unit_per_sec;
         }
         if (key_states[SDL_SCANCODE_S])
         {
-            m_editor_camera.position -= camera_forward * (float)delta_time_seconds;
+            m_editor_camera.position -=
+                camera_forward * (float)delta_time_seconds * camera_movement_unit_per_sec;
         }
         if (key_states[SDL_SCANCODE_D])
         {
-            m_editor_camera.position += camera_right * (float)delta_time_seconds;
+            m_editor_camera.position +=
+                camera_right * (float)delta_time_seconds * camera_movement_unit_per_sec;
         }
         if (key_states[SDL_SCANCODE_A])
         {
-            m_editor_camera.position -= camera_right * (float)delta_time_seconds;
+            m_editor_camera.position -=
+                camera_right * (float)delta_time_seconds * camera_movement_unit_per_sec;
         }
+
+        // Q/E for down/up
+        if (key_states[SDL_SCANCODE_E])
+        {
+            m_editor_camera.position += camera_up * (float)delta_time_seconds * camera_movement_unit_per_sec;
+        }
+        if (key_states[SDL_SCANCODE_Q])
+        {
+            m_editor_camera.position -= camera_up * (float)delta_time_seconds * camera_movement_unit_per_sec;
+        }
+
+        // arrow keys for camera rotation without mouse input
+        if (key_states[SDL_SCANCODE_UP])
+        {
+            m_editor_camera.pitch_rad -= camera_rotation_rad_per_sec * (float)delta_time_seconds;
+        }
+        if (key_states[SDL_SCANCODE_DOWN])
+        {
+            m_editor_camera.pitch_rad += camera_rotation_rad_per_sec * (float)delta_time_seconds;
+        }
+        if (key_states[SDL_SCANCODE_RIGHT])
+        {
+            m_editor_camera.yaw_rad += camera_rotation_rad_per_sec * (float)delta_time_seconds;
+        }
+        if (key_states[SDL_SCANCODE_LEFT])
+        {
+            m_editor_camera.yaw_rad -= camera_rotation_rad_per_sec * (float)delta_time_seconds;
+        }
+    }
+
+    void SceneEditor::HandleInput(double delta_time_seconds, SDL_Window* window)
+    {
+        if (ImGui::GetIO().WantCaptureMouse == false)
+        {
+            HandleMouseInput(delta_time_seconds, window);
+        }
+
+        if (ImGui::GetIO().WantCaptureKeyboard == false)
+        {
+            HandleKeyboardInput(delta_time_seconds);
+        }
+
+        const float max_pitch = glm::radians(89.0f);
+        const float min_pitch = glm::radians(-89.0f);
+
+        m_editor_camera.yaw_rad = EngineUtils::NormaliseAngleRadians(m_editor_camera.yaw_rad);
+        m_editor_camera.pitch_rad = glm::clamp(m_editor_camera.pitch_rad, min_pitch, max_pitch);
     }
 
     void SceneEditor::DrawNodeEntry(Node& node)
