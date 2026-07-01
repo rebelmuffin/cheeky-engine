@@ -177,8 +177,15 @@ namespace Game
 
     void Node::SetWorldTransform(const Transform& transform)
     {
-        const Transform& parent_xform = Parent()->WorldTransform();
-        m_local_transform = transform.InverseTransformed(parent_xform);
+        if (m_parent == nullptr)
+        {
+            m_local_transform = transform;
+        }
+        else
+        {
+            const Transform& parent_xform = Parent()->WorldTransform();
+            m_local_transform = transform.InverseTransformed(parent_xform);
+        }
         RefreshTransform();
     }
     void Node::SetWorldPosition(const glm::vec3& position)
