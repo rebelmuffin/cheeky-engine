@@ -5,6 +5,8 @@
 #include <glm/ext/scalar_constants.hpp>
 #include <glm/vec2.hpp>
 
+#include <cmath>
+
 namespace EngineUtils
 {
     bool IsPointWithinWindow(SDL_Window* window, const glm::ivec2 point)
