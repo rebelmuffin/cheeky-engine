@@ -16,7 +16,7 @@ namespace Renderer
     class VulkanEngine;
 
     using StorageId_t = size_t;
-    using ReferenceCount_t = std::atomic_uint32_t;
+    using ReferenceCount_t = std::atomic_int32_t;
 
     constexpr StorageId_t INVALID_RESOURCE_ID = 0ul;
 
@@ -35,6 +35,8 @@ namespace Renderer
         ReferenceCountedHandle(ReferenceCountedHandle<T>&& other);                    // move ctor
         ReferenceCountedHandle<T>& operator=(ReferenceCountedHandle<T>&& other);      // move assignment
         ~ReferenceCountedHandle();
+
+        void DestroyHandle();
 
         T* resource = nullptr;
         StorageId_t id = 0;
@@ -221,6 +223,11 @@ namespace Renderer
     template <typename T>
     ReferenceCountedHandle<T>& ReferenceCountedHandle<T>::operator=(ReferenceCountedHandle<T>&& other)
     {
+        if (IsValid() && owning_storage->destroyed == false)
+        {
+            DestroyHandle();
+        }
+
         resource = std::move(other.resource);
         id = std::move(other.id);
         ref_counter = std::move(other.ref_counter);
@@ -238,11 +245,17 @@ namespace Renderer
     template <typename T>
     ReferenceCountedHandle<T>::~ReferenceCountedHandle()
     {
+        DestroyHandle();
+    }
+
+    template<typename T>
+    void ReferenceCountedHandle<T>::DestroyHandle()
+    {
         // storage might have been destroyed. In that case, this is a dead handle anyway and ref_counter is
         // dangling.
         if (IsValid() && owning_storage->destroyed == false)
         {
-            // handle just for deleted meaning the counter goes down. If 0, it's deletus time
+            // handle just for deleted meaning the counter goes down. If -1, it's deletus time
             --(*ref_counter);
             if (*ref_counter < 0)
             {
