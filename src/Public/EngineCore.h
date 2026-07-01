@@ -3,6 +3,8 @@
 #include "CVars.h"
 #include "Game/GameMain.h"
 #include "Renderer/VkEngine.h"
+#include "Renderer/Window.h"
+
 #include <memory>
 
 struct SDL_Window;
@@ -23,7 +25,7 @@ class EngineCore
     void Update();
     void OnImgui();
 
-    SDL_Window* m_window;
+    std::unique_ptr<Renderer::Window> m_window;
     std::unique_ptr<Renderer::VulkanEngine> m_renderer;
     std::unique_ptr<Game::GameMain> m_game;
 

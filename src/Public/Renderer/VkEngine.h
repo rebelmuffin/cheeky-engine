@@ -10,6 +10,7 @@
 #include "Renderer/Utility/VkLoader.h"
 #include "Renderer/Viewport.h"
 #include "Renderer/VkTypes.h"
+#include "Window.h"
 
 #include "ThirdParty/ImGUI.h"
 #include <VkBootstrapDispatch.h>
@@ -64,9 +65,7 @@ namespace Renderer
     {
       public:
         VulkanEngine(
-            uint32_t window_width,
-            uint32_t window_height,
-            SDL_Window* window,
+            const Window& window,
             float backbuffer_scale,
             bool use_validation_layers,
             bool immediate_uploads
@@ -185,7 +184,7 @@ namespace Renderer
         void CreateSwapchain(uint32_t width, uint32_t height);
 
         void DestroySwapchain();
-        void ResizeSwapchain();
+        void OnWindowResize();
         void SetAllocationName(VmaAllocation allocation, const char* name);
 
         VkInstance m_instance = nullptr;
@@ -238,8 +237,8 @@ namespace Renderer
         VkQueue m_graphics_queue;
         uint32_t m_graphics_queue_family;
 
-        VkExtent2D m_window_extent;
-        SDL_Window* m_window;
+        VkExtent2D m_last_window_extent;
+        const Window* m_window;
 
         VmaAllocator m_allocator;
 
@@ -247,7 +246,7 @@ namespace Renderer
         bool m_force_all_uploads_immediate;
         bool m_enable_image_debugging = true;
 
-        // uploads that are pending to be done on next frame.
+        // uploads that are pending to be done on next frame.        Window* m_window;
         std::mutex m_pending_upload_mutex{};
         std::vector<std::unique_ptr<Utils::IUploadRequest>> m_pending_uploads;
 

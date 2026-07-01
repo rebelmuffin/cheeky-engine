@@ -13,11 +13,13 @@ layout(location = 0) out vec4 outFragColor;
 
 void main()
 {
-    float light_intensity = max(dot(scene_data.light_direction.xyz, inNormal), 0.1f); // minimum 0.1f intensity
+    float light_intensity =
+        max(dot(scene_data.light_direction.xyz, inNormal), 0.1f); // minimum 0.1f intensity
 
-    vec3 base_colour = inColour * texture(colour_texture, inUV).xyz;
+    vec4 colour_sample = texture(colour_texture, inUV);
+    vec3 base_colour = inColour * colour_sample.xyz;
     vec3 ambient_colour = base_colour * scene_data.ambient_colour.xyz;
     vec3 colour_with_light = base_colour * light_intensity * scene_data.light_colour.xyz;
 
-    outFragColor = vec4(colour_with_light + ambient_colour, 1.0f); // no transparency yet
+    outFragColor = vec4(colour_with_light + ambient_colour, colour_sample.a); // no transparency yet
 }

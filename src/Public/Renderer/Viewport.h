@@ -37,6 +37,7 @@ namespace Renderer
         glm::vec2 viewport_position;
         glm::vec2 viewport_extent;
         float render_scale = 1.0f;
+        bool resize_with_window = false;
 
         VkExtent2D draw_extent; // calculated every frame from image size and render scale.
         std::string name;

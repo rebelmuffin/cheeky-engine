@@ -11,27 +11,12 @@
 
 EngineCore::EngineCore(CVars cvars)
 {
-    // We initialize SDL and create a window with it.
-    SDL_Init(SDL_INIT_VIDEO);
-
-    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
-
-    m_window = SDL_CreateWindow(
-        "Vulkan Engine",
-        SDL_WINDOWPOS_UNDEFINED,
-        SDL_WINDOWPOS_UNDEFINED,
-        cvars.width,
-        cvars.height,
-        window_flags
+    m_window = std::make_unique<Renderer::Window>(
+        cvars.width, cvars.height, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED
     );
 
     m_renderer = std::make_unique<Renderer::VulkanEngine>(
-        cvars.width,
-        cvars.height,
-        m_window,
-        cvars.backbuffer_scale,
-        cvars.use_validation_layers,
-        cvars.force_immediate_uploads
+        *m_window, cvars.backbuffer_scale, cvars.use_validation_layers, cvars.force_immediate_uploads
     );
     if (m_renderer->Init() == false)
     {
@@ -42,14 +27,10 @@ EngineCore::EngineCore(CVars cvars)
     constexpr const char* font_path = "../data/fonts/roboto.ttf";
     ImGui::GetIO().Fonts->AddFontFromFileTTF(font_path, 14);
 
-    m_game = std::make_unique<Game::GameMain>(m_window, *m_renderer, cvars);
+    m_game = std::make_unique<Game::GameMain>(m_window->GetWindow(), *m_renderer, cvars);
 }
 
-EngineCore::~EngineCore()
-{
-    m_renderer->Cleanup();
-    SDL_DestroyWindow(m_window);
-}
+EngineCore::~EngineCore() { m_renderer->Cleanup(); }
 
 void EngineCore::Update() {}
 

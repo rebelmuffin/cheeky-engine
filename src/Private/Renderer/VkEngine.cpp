@@ -51,19 +51,17 @@
 namespace Renderer
 {
     VulkanEngine::VulkanEngine(
-        uint32_t window_width,
-        uint32_t window_height,
-        SDL_Window* window,
-        float backbuffer_scale,
-        bool use_validation_layers,
-        bool immediate_uploads
+        const Window& window, float backbuffer_scale, bool use_validation_layers, bool immediate_uploads
     ) :
         m_backbuffer_scale(backbuffer_scale),
-        m_window_extent({ window_width, window_height }),
-        m_window(window),
+        m_window(&window),
         m_use_validation_layers(use_validation_layers),
         m_force_all_uploads_immediate(immediate_uploads)
     {
+        int32_t width, height;
+        m_window->GetDimensions(&width, &height);
+        m_last_window_extent.width = width;
+        m_last_window_extent.height = height;
     }
 
     bool VulkanEngine::Init()
@@ -74,7 +72,7 @@ namespace Renderer
         }
 
         InitAllocator();
-        CreateSwapchain(m_window_extent.width, m_window_extent.height);
+        CreateSwapchain(m_last_window_extent.width, m_last_window_extent.height);
         InitCommands();
         InitSyncStructures();
         InitFrameDescriptors();
@@ -182,7 +180,7 @@ namespace Renderer
                 ImGui::Text(
                     "Swapchain Resolution: %dx%d", m_swapchain_extent.width, m_swapchain_extent.height
                 );
-                ImGui::Text("Window Resolution: %dx%d", m_window_extent.width, m_window_extent.height);
+                ImGui::Text("Window Resolution: %dx%d", m_last_window_extent.width, m_last_window_extent.height);
             }
 
             if (ImGui::CollapsingHeader("Scene Lighting"))
@@ -236,9 +234,17 @@ namespace Renderer
             return;
         }
 
+        int32_t window_width, window_height;
+        m_window->GetDimensions(&window_width, &window_height);
+        if (window_width != static_cast<int32_t>(m_last_window_extent.width) ||
+            window_height != static_cast<int32_t>(m_last_window_extent.height))
+        {
+            m_resize_requested = true;
+        }
+
         if (m_resize_requested)
         {
-            ResizeSwapchain();
+            OnWindowResize();
             return; // no render while resizing (or minimised!)
         }
 
@@ -937,7 +943,7 @@ namespace Renderer
         m_instance = vkb_instance.instance;
         m_debug_messenger = vkb_instance.debug_messenger;
 
-        SDL_Vulkan_CreateSurface(m_window, m_instance, &m_surface);
+        SDL_Vulkan_CreateSurface(m_window->GetWindow(), m_instance, &m_surface);
 
         VkPhysicalDeviceVulkan13Features features13{};
         features13.dynamicRendering = true;
@@ -1171,7 +1177,9 @@ namespace Renderer
         );
 
         // create the default viewport
-        glm::vec2 backbuffer_size{ m_window_extent.width, m_window_extent.height };
+        int width, height;
+        m_window->GetDimensions(&width, &height);
+        glm::vec2 backbuffer_size{ width, height };
         backbuffer_size *= m_backbuffer_scale;
 
         Renderer::Viewport& new_viewport = active_viewports.emplace_back();
@@ -1179,6 +1187,7 @@ namespace Renderer
         new_viewport.depth_image = CreateDepthImage((uint32_t)backbuffer_size.x, (uint32_t)backbuffer_size.y);
         new_viewport.name = "main viewport";
         new_viewport.render_scale = 1.0f;
+        new_viewport.resize_with_window = true; // to make sure the buffer resizes with window
 
         glm::vec3 camera_pos{ 0.0f, 0.0f, -1.0f };
         glm::mat4 camera_rot{ 1.0f };
@@ -1287,7 +1296,7 @@ namespace Renderer
         );
 
         ImGui::CreateContext();
-        ImGui_ImplSDL2_InitForVulkan(m_window);
+        ImGui_ImplSDL2_InitForVulkan(m_window->GetWindow());
         ImGui_ImplVulkan_InitInfo init_info{};
         init_info.Instance = m_instance;
         init_info.PhysicalDevice = m_gpu;
@@ -1419,22 +1428,43 @@ namespace Renderer
         m_swapchain = VK_NULL_HANDLE;
     }
 
-    void VulkanEngine::ResizeSwapchain()
+    void VulkanEngine::OnWindowResize()
     {
         m_device_dispatch.deviceWaitIdle();
 
         DestroySwapchain();
 
+        int32_t old_width = static_cast<int32_t>(m_last_window_extent.width);
+        int32_t old_height = static_cast<int32_t>(m_last_window_extent.height);
+
         int32_t width, height;
-        SDL_GetWindowSize(m_window, &width, &height);
+        m_window->GetDimensions(&width, &height);
         if (width == 0 || height == 0)
         {
             // window is minimized, wait until we get a non-zero size
             return;
         }
 
-        m_window_extent = VkExtent2D{ uint32_t(width), uint32_t(height) };
-        CreateSwapchain(m_window_extent.width, m_window_extent.height);
+        m_last_window_extent = VkExtent2D{ uint32_t(width), uint32_t(height) };
+        CreateSwapchain(m_last_window_extent.width, m_last_window_extent.height);
+
+        // now resize any existing viewports that need resizing
+        for (Viewport& viewport : active_viewports)
+        {
+            if (viewport.resize_with_window == false)
+            {
+                continue;
+            }
+
+            uint32_t draw_img_width = viewport.draw_image->image_extent.width;
+            uint32_t draw_img_height = viewport.draw_image->image_extent.height;
+            uint32_t new_draw_img_width = (draw_img_width / old_width) * width;
+            uint32_t new_draw_img_height = (draw_img_height / old_height) * height;
+            m_image_storage.DestroyResource(*this, *viewport.draw_image.resource);
+            m_image_storage.DestroyResource(*this, *viewport.depth_image.resource);
+            viewport.draw_image = CreateDrawImage(new_draw_img_width, new_draw_img_height);
+            viewport.depth_image = CreateDepthImage(new_draw_img_width, new_draw_img_height);
+        }
 
         m_resize_requested = false;
     }

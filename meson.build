@@ -60,6 +60,7 @@ executable(
     'src/Private/main.cpp',
     'src/Private/EngineCore.cpp',
     'src/Private/EngineUtils.cpp',
+    'src/Private/Renderer/Window.cpp',
     'src/Private/Renderer/VkEngine.cpp',
     'src/Private/Renderer/VkTypes.cpp',
     'src/Private/Renderer/Material.cpp',
