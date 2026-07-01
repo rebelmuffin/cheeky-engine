@@ -1460,8 +1460,6 @@ namespace Renderer
             uint32_t draw_img_height = viewport.draw_image->image_extent.height;
             uint32_t new_draw_img_width = (draw_img_width / old_width) * width;
             uint32_t new_draw_img_height = (draw_img_height / old_height) * height;
-            m_image_storage.DestroyResource(*this, *viewport.draw_image.resource);
-            m_image_storage.DestroyResource(*this, *viewport.depth_image.resource);
             viewport.draw_image = CreateDrawImage(new_draw_img_width, new_draw_img_height);
             viewport.depth_image = CreateDepthImage(new_draw_img_width, new_draw_img_height);
         }
