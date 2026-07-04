@@ -1,5 +1,0 @@
-[wrap-file]
-directory = stb_image
-
-[provide]
-stb_image = stb_image_dep
