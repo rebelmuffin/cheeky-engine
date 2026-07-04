@@ -13,7 +13,7 @@ if (CMAKE_VERSION VERSION_GREATER 3.12)
     set_property(TARGET cheeky PROPERTY CXX_STANDARD 20)
 endif ()
 
-target_include_directories(cheeky PUBLIC "src/public")
+target_include_directories(cheeky PUBLIC "src/Public")
 target_link_libraries(cheeky
         PUBLIC
         SDL3::SDL3
@@ -25,6 +25,7 @@ target_link_libraries(cheeky
         imgui
         fastgltf::fastgltf
         stb
+        tbb
 )
 
 # move SDL3.dll to the correct place

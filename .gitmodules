@@ -16,3 +16,6 @@
 [submodule "third_party/glm"]
 	path = third_party/glm
 	url = https://github.com/g-truc/glm
+[submodule "third_party/onetbb"]
+	path = third_party/onetbb
+	url = https://github.com/uxlfoundation/oneTBB
