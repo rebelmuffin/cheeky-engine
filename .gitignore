@@ -1,6 +1,7 @@
 *.kdev4
 .vscode
 .cache
+.idea
 
 # macOS crap
 .DS_Store
@@ -18,4 +19,13 @@
 # ignore local dev content
 /data/resources/dev
 
+# temporal stuff
+imgui.ini
+
+# build stuff
+cmake_install.cmake
+Makefile
+*.a
+build
+CMakeFiles/
 */CMakeFiles/*
