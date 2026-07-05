@@ -48,7 +48,6 @@ namespace Renderer
         VkCommandBuffer command_buffer = nullptr;
 
         VkSemaphore swapchain_semaphore = nullptr; // so this frame waits for swapchain before rendering
-        VkSemaphore render_semaphore = nullptr;    // so the present can wait for this frame to finish
         VkFence render_fence = nullptr;            // so we can wait for this frame on cpu
 
         Utils::DescriptorAllocatorDynamic frame_descriptors;
@@ -65,10 +64,7 @@ namespace Renderer
     {
       public:
         VulkanEngine(
-            const Window& window,
-            float backbuffer_scale,
-            bool use_validation_layers,
-            bool immediate_uploads
+            const Window& window, float backbuffer_scale, bool use_validation_layers, bool immediate_uploads
         );
         VulkanEngine(const VulkanEngine&) = delete; // no copy pls
 
@@ -225,6 +221,7 @@ namespace Renderer
 
         std::vector<VkImage> m_swapchain_images;
         std::vector<VkImageView> m_swapchain_image_views;
+        std::vector<VkSemaphore> m_swapchain_render_finished_semaphores;
         VkExtent2D m_swapchain_extent;
 
         FrameData m_frames[FRAME_OVERLAP];

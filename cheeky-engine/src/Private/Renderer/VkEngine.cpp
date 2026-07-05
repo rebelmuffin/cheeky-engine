@@ -314,10 +314,10 @@ namespace Renderer
         {
             VkBufferUsageFlags staging_buffer_usage = usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
             VmaMemoryUsage staging_memory_usage = VMA_MEMORY_USAGE_AUTO;
-            VmaAllocationCreateFlags allocation_flags =
+            VmaAllocationCreateFlags staging_allocation_flags =
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
             BufferHandle staging_buffer = CreateBuffer(
-                buffer_size, staging_buffer_usage, staging_memory_usage, allocation_flags, debug_name
+                buffer_size, staging_buffer_usage, staging_memory_usage, staging_allocation_flags, debug_name
             );
 
             vmaCopyMemoryToAllocation(m_allocator, buffer_data, staging_buffer->allocation, 0, buffer_size);
@@ -630,20 +630,20 @@ namespace Renderer
     void VulkanEngine::Draw()
     {
         constexpr uint64_t one_second_ns = 1'000'000'000;
-        VK_CHECK(m_device_dispatch.waitForFences(1, &GetCurrentFrame().render_fence, true, one_second_ns));
-        VK_CHECK(m_device_dispatch.resetFences(1, &GetCurrentFrame().render_fence));
+        FrameData& current_frame = GetCurrentFrame();
+        VK_CHECK(m_device_dispatch.waitForFences(1, &current_frame.render_fence, true, one_second_ns));
 
-        GetCurrentFrame().deletion_queue.Flush();
-        GetCurrentFrame().buffers_in_use.clear();
-        GetCurrentFrame().images_in_use.clear();
-        GetCurrentFrame().frame_descriptors.ClearDescriptors(m_device_dispatch);
+        current_frame.deletion_queue.Flush();
+        current_frame.buffers_in_use.clear();
+        current_frame.images_in_use.clear();
+        current_frame.frame_descriptors.ClearDescriptors(m_device_dispatch);
 
         // this is where we exterminate the resources pending destruction.
         DestroyPendingResources();
 
         uint32_t swapchain_image_index;
         VkResult result = m_device_dispatch.acquireNextImageKHR(
-            m_swapchain, one_second_ns, GetCurrentFrame().swapchain_semaphore, nullptr, &swapchain_image_index
+            m_swapchain, one_second_ns, current_frame.swapchain_semaphore, nullptr, &swapchain_image_index
         );
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
@@ -655,7 +655,9 @@ namespace Renderer
             return; // try again next frame
         }
 
-        VkCommandBuffer cmd = GetCurrentFrame().command_buffer;
+        VK_CHECK(m_device_dispatch.resetFences(1, &current_frame.render_fence));
+
+        VkCommandBuffer cmd = current_frame.command_buffer;
         VK_CHECK(m_device_dispatch.resetCommandBuffer(cmd, 0));
 
         VkCommandBufferBeginInfo cmdBeginInfo =
@@ -756,20 +758,24 @@ namespace Renderer
         VkCommandBufferSubmitInfo cmd_info = Utils::CommandBufferSubmitInfo(cmd);
 
         VkSemaphoreSubmitInfo wait_info = Utils::SemaphoreSubmitInfo(
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, GetCurrentFrame().swapchain_semaphore
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, current_frame.swapchain_semaphore
         );
         VkSemaphoreSubmitInfo signal_info = Utils::SemaphoreSubmitInfo(
-            VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, GetCurrentFrame().render_semaphore
+            VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+            m_swapchain_render_finished_semaphores[swapchain_image_index]
         );
 
         VkSubmitInfo2 submit_info = Utils::SubmitInfo(&cmd_info, &signal_info, &wait_info);
 
         VK_CHECK(
-            m_device_dispatch.queueSubmit2(m_graphics_queue, 1, &submit_info, GetCurrentFrame().render_fence)
+            m_device_dispatch.queueSubmit2(m_graphics_queue, 1, &submit_info, current_frame.render_fence)
         );
 
-        VkPresentInfoKHR present_info =
-            Utils::PresentInfo(&m_swapchain, &GetCurrentFrame().render_semaphore, &swapchain_image_index);
+        VkPresentInfoKHR present_info = Utils::PresentInfo(
+            &m_swapchain,
+            &m_swapchain_render_finished_semaphores[swapchain_image_index],
+            &swapchain_image_index
+        );
         result = m_device_dispatch.queuePresentKHR(m_graphics_queue, &present_info);
         if (result == VK_SUBOPTIMAL_KHR)
         {
@@ -852,6 +858,13 @@ namespace Renderer
         VkClearValue clear_value{};
         clear_value.depthStencil.depth = 0.0f; // zero is far in reversed depth
 
+        Utils::TransitionImage(
+            &m_device_dispatch,
+            cmd,
+            viewport.depth_image->image,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+        );
         VkRenderingAttachmentInfo depth_attachment = Utils::AttachmentInfo(
             viewport.depth_image->image_view, &clear_value, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
         );
@@ -1070,15 +1083,11 @@ namespace Renderer
             VK_CHECK(m_device_dispatch.createSemaphore(
                 &semaphoreCreateInfo, nullptr, &m_frames[i].swapchain_semaphore
             ));
-            VK_CHECK(m_device_dispatch.createSemaphore(
-                &semaphoreCreateInfo, nullptr, &m_frames[i].render_semaphore
-            ));
 
             m_deletion_queue.PushFunction(
                 "semaphores x2",
                 [i, this]()
                 {
-                    m_device_dispatch.destroySemaphore(m_frames[i].render_semaphore, nullptr);
                     m_device_dispatch.destroySemaphore(m_frames[i].swapchain_semaphore, nullptr);
                 }
             );
@@ -1288,6 +1297,7 @@ namespace Renderer
         );
 
         ImGui::CreateContext();
+
         ImGui_ImplSDL3_InitForVulkan(m_window->GetWindow());
         ImGui_ImplVulkan_InitInfo init_info{};
         init_info.Instance = m_instance;
@@ -1326,6 +1336,7 @@ namespace Renderer
         for (std::size_t i = 0; i < m_swapchain_image_views.size(); ++i)
         {
             m_device_dispatch.destroyImageView(m_swapchain_image_views[i], nullptr);
+            m_device_dispatch.destroySemaphore(m_swapchain_render_finished_semaphores[i], nullptr);
         }
         m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr);
 
@@ -1349,6 +1360,15 @@ namespace Renderer
         m_swapchain = vkb_swapchain.swapchain;
         m_swapchain_images = vkb_swapchain.get_images().value();
         m_swapchain_image_views = vkb_swapchain.get_image_views().value();
+
+        VkSemaphoreCreateInfo semaphore_create_info = Utils::SemaphoreCreateInfo(0);
+        m_swapchain_render_finished_semaphores.resize(m_swapchain_image_views.size());
+        for (uint32_t i = 0; i < m_swapchain_image_views.size(); ++i)
+        {
+            m_device_dispatch.createSemaphore(
+                &semaphore_create_info, nullptr, &m_swapchain_render_finished_semaphores[i]
+            );
+        }
     }
 
     ImageHandle VulkanEngine::CreateDrawImage(uint32_t width, uint32_t height)
@@ -1414,8 +1434,10 @@ namespace Renderer
         for (std::size_t i = 0; i < m_swapchain_image_views.size(); ++i)
         {
             m_device_dispatch.destroyImageView(m_swapchain_image_views[i], nullptr);
+            m_device_dispatch.destroySemaphore(m_swapchain_render_finished_semaphores[i], nullptr);
         }
         m_swapchain_image_views.clear();
+        m_swapchain_render_finished_semaphores.clear();
 
         m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr);
         m_swapchain = VK_NULL_HANDLE;
