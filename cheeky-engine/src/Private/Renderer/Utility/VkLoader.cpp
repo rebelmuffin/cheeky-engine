@@ -5,13 +5,13 @@
 #include "Renderer/VkTypes.h"
 
 #include "ThirdParty/fastgltf.h"
-#include "fastgltf/types.hpp"
+#include "ThirdParty/tbb.h"
+#include <fastgltf/types.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/gtx/compatibility.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <stb_image.h>
-#include <tbb/parallel_for.h>
 #include <vulkan/vulkan_core.h>
 
 #include <algorithm>

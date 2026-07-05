@@ -155,9 +155,9 @@ namespace Renderer::Debug
             [](StorageId_t, const AllocatedBuffer& buf, int last_column)
             {
                 ImGui::TableSetColumnIndex(last_column + 1);
-                ImGui::Text("%zu bytes", (size_t)buf.allocation_info.size);
+                ImGui::Text("%zu bytes", static_cast<size_t>(buf.allocation_info.size));
                 ImGui::TableSetColumnIndex(last_column + 2);
-                ImGui::Text("0x%p", buf.buffer);
+                ImGui::Text("0x%p", reinterpret_cast<void*>(buf.buffer));
             },
             custom_column_count
         );

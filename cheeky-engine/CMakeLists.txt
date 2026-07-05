@@ -9,6 +9,12 @@ add_executable(cheeky ${ENGINE_SRC}
 set_property(TARGET cheeky PROPERTY
         DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         CXX_STANDARD 20
+        COMPILE_WARNING_AS_ERROR ON
+)
+
+target_compile_options(cheeky PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic -Werror>
 )
 
 find_package(Vulkan REQUIRED)
