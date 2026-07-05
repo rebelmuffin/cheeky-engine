@@ -18,16 +18,4 @@
 # ignore local dev content
 /data/resources/dev
 
-# ignore generated subprojects
-/subprojects/*
-!/subprojects/*.wrap
-
-# don't ignore non-generated subprojects
-!/subprojects/volk
-!/subprojects/vkbootstrap
-!/subprojects/tinyobjloader
-!/subprojects/stb_image
-!/subprojects/imgui
-/subprojects/imgui/backends/vulkan/*.u32
-!/subprojects/fastgltf
-!/subprojects/imguizmo
+*/CMakeFiles/*
