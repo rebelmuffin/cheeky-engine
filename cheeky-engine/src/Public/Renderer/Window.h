@@ -12,9 +12,11 @@ namespace Renderer
         ~Window();
 
         void Resize(int width, int height);
+        void SetCaptureMouse(bool capture_mouse);
 
         [[nodiscard]] SDL_Window* GetWindow() const { return m_window; }
         [[nodiscard]] SDL_Surface* GetSurface() const;
+        bool IsPixelPositionInWindow(int x, int y) const;
 
         void GetDimensions(int* width, int* height) const;
 

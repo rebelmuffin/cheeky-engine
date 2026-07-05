@@ -24,7 +24,9 @@ namespace Game::Editor
 {
     SceneEditor::SceneEditor(GameScene& scene) : m_scene(&scene) {}
 
-    void SceneEditor::Draw(double delta_time_seconds, SDL_Window* window, Renderer::Viewport& editor_viewport)
+    void SceneEditor::Draw(
+        const double delta_time_seconds, Renderer::Window* window, Renderer::Viewport& editor_viewport
+    )
     {
         const glm::quat rotation = glm::angleAxis(m_editor_camera.pitch_rad, glm::vec3(1, 0, 0)) *
                                    glm::angleAxis(m_editor_camera.yaw_rad, glm::vec3(0, 1, 0));
@@ -60,7 +62,7 @@ namespace Game::Editor
 
         Node* selected_node = m_scene->NodeFromId(m_selected_node);
 
-        ImVec2 viewport_size = ImGui::GetMainViewport()->WorkSize;
+        const ImVec2 viewport_size = ImGui::GetMainViewport()->WorkSize;
         const float panel_width = viewport_size.x / 5.0f;
         const float panel_height = viewport_size.y;
         const float panel_pos_y = ImGui::GetMainViewport()->WorkPos.y;
@@ -117,7 +119,7 @@ namespace Game::Editor
             DrawTransformGizmos(*selected_node);
         }
 
-        for (NodeId_t node_id : m_nodes_to_delete)
+        for (const NodeId_t node_id : m_nodes_to_delete)
         {
             Node* node = m_scene->NodeFromId(node_id);
             if (node == nullptr)
@@ -133,38 +135,38 @@ namespace Game::Editor
     Renderer::Camera& SceneEditor::Camera() { return m_editor_camera.render_camera; }
     bool SceneEditor::EditorCameraEnabled() { return m_editor_camera_enabled; }
 
-    void SceneEditor::HandleMouseInput(double delta_time_seconds, SDL_Window* window)
+    void SceneEditor::HandleMouseInput(const double delta_time_seconds, Renderer::Window* window)
     {
         const float camera_mouse_rotation_multiplier = 1.0f;
 
-        glm::vec2 last_mouse_pos = m_last_mouse_pos;
+        const glm::vec2 last_mouse_pos = m_last_mouse_pos;
         glm::vec2 mouse_pos;
-        uint32_t mouse_button_mask = SDL_GetGlobalMouseState(&mouse_pos.x, &mouse_pos.y);
+        const uint32_t mouse_button_mask = SDL_GetGlobalMouseState(&mouse_pos.x, &mouse_pos.y);
         m_last_mouse_pos = mouse_pos;
 
         if (mouse_button_mask & SDL_BUTTON_RMASK && ImGui::GetIO().WantCaptureMouse == false)
         {
             glm::ivec2 mouse_delta{ 0 };
-            if (EngineUtils::IsPointWithinWindow(window, mouse_pos) &&
-                EngineUtils::IsPointWithinWindow(window, last_mouse_pos))
+            if (window->IsPixelPositionInWindow(mouse_pos.x, mouse_pos.y) &&
+                window->IsPixelPositionInWindow(last_mouse_pos.x, last_mouse_pos.y))
             {
                 mouse_delta = mouse_pos - last_mouse_pos;
             }
 
             mouse_delta *= camera_mouse_rotation_multiplier;
             m_editor_camera.yaw_rad += (float)delta_time_seconds * (float)mouse_delta.x;
-            float pitch_delta = (float)delta_time_seconds * (float)mouse_delta.y;
+            const float pitch_delta = (float)delta_time_seconds * (float)mouse_delta.y;
             m_editor_camera.pitch_rad += pitch_delta;
 
-            ImGui_ImplSDL3_SetMouseCaptureMode(ImGui_ImplSDL3_MouseCaptureMode_Enabled);
+            window->SetCaptureMouse(true);
         }
         else
         {
-            ImGui_ImplSDL3_SetMouseCaptureMode(ImGui_ImplSDL3_MouseCaptureMode_Disabled);
+            window->SetCaptureMouse(false);
         }
     }
 
-    void SceneEditor::HandleKeyboardInput(double delta_time_seconds)
+    void SceneEditor::HandleKeyboardInput(const double delta_time_seconds)
     {
         const float camera_rotation_rad_per_sec = glm::radians(110.0f);
         const float camera_movement_unit_per_sec = 1.0f;
@@ -173,9 +175,9 @@ namespace Game::Editor
         glm::mat4 view = m_editor_camera.render_camera.view;
 
         // Transform base vectors by rotation
-        glm::vec3 camera_up = glm::vec3(view[0][1], view[1][1], view[2][1]);
-        glm::vec3 camera_right = glm::vec3(view[0][0], view[1][0], view[2][0]);
-        glm::vec3 camera_forward = -glm::vec3(view[0][2], view[1][2], view[2][2]);
+        const glm::vec3 camera_up = glm::vec3(view[0][1], view[1][1], view[2][1]);
+        const glm::vec3 camera_right = glm::vec3(view[0][0], view[1][0], view[2][0]);
+        const glm::vec3 camera_forward = -glm::vec3(view[0][2], view[1][2], view[2][2]);
 
         const bool* key_states = SDL_GetKeyboardState(nullptr);
 
@@ -230,7 +232,7 @@ namespace Game::Editor
         }
     }
 
-    void SceneEditor::HandleInput(double delta_time_seconds, SDL_Window* window)
+    void SceneEditor::HandleInput(const double delta_time_seconds, Renderer::Window* window)
     {
         if (ImGui::GetIO().WantCaptureMouse == false)
         {
@@ -300,7 +302,7 @@ namespace Game::Editor
     void SceneEditor::DrawNodeHierarchy()
     {
         // not using listbox because it has a weird shape.
-        ImGuiChildFlags flags = ImGuiChildFlags_Borders | ImGuiChildFlags_FrameStyle;
+        const ImGuiChildFlags flags = ImGuiChildFlags_Borders | ImGuiChildFlags_FrameStyle;
         ImGui::Text("Nodes");
         if (ImGui::BeginChild("nodes_list", ImVec2{}, flags))
         {
@@ -363,7 +365,7 @@ namespace Game::Editor
     void SceneEditor::DrawTransformGizmos(Node& node)
     {
         glm::mat4 transform = node.WorldTransform().ToMatrix();
-        ImGuiIO& io = ImGui::GetIO();
+        const ImGuiIO& io = ImGui::GetIO();
         ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
         if (ImGuizmo::Manipulate(
                 &m_editor_camera.render_camera.view[0][0],

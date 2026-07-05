@@ -28,7 +28,7 @@ EngineCore::EngineCore(CVars cvars)
     constexpr const char* font_path = "data/fonts/roboto.ttf";
     ImGui::GetIO().Fonts->AddFontFromFileTTF(font_path, 14);
 
-    m_game = std::make_unique<Game::GameMain>(m_window->GetWindow(), *m_renderer, cvars);
+    m_game = std::make_unique<Game::GameMain>(m_window.get(), *m_renderer, cvars);
 }
 
 EngineCore::~EngineCore() { m_renderer->Cleanup(); }

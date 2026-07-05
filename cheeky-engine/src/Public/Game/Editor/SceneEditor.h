@@ -35,15 +35,15 @@ namespace Game::Editor
       public:
         SceneEditor(GameScene& scene);
 
-        void Draw(double delta_time_seconds, SDL_Window* window, Renderer::Viewport& editor_viewport);
+        void Draw(double delta_time_seconds, Renderer::Window* window, Renderer::Viewport& editor_viewport);
         void DrawImGui();
 
         Renderer::Camera& Camera();
         bool EditorCameraEnabled();
 
       private:
-        void HandleInput(double delta_time_seconds, SDL_Window* window);
-        void HandleMouseInput(double delta_seconds, SDL_Window* window);
+        void HandleInput(double delta_time_seconds, Renderer::Window* window);
+        void HandleMouseInput(double delta_seconds, Renderer::Window* window);
         void HandleKeyboardInput(double delta_seconds);
         void DrawNodeEntry(Node& node);
         void DrawNodeHierarchy();

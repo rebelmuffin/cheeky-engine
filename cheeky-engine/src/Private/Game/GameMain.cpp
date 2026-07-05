@@ -20,7 +20,7 @@
 
 namespace Game
 {
-    GameMain::GameMain(SDL_Window* window, Renderer::VulkanEngine& engine, CVars cvars) :
+    GameMain::GameMain(Renderer::Window* window, Renderer::VulkanEngine& engine, CVars cvars) :
         m_main_viewport(&engine.active_viewports[engine.main_viewport]),
         m_renderer(&engine),
         m_main_window(window),
