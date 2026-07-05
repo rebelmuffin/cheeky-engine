@@ -39,14 +39,14 @@ namespace Renderer
         void DestroyHandle();
 
         T* resource = nullptr;
-        StorageId_t id = 0;
+        StorageId_t id = INVALID_RESOURCE_ID;
 
         T* operator->() { return resource; }
         const T* operator->() const { return resource; }
         T& operator*() { return *resource; }
         const T& operator*() const { return *resource; }
 
-        bool IsValid() { return id != INVALID_RESOURCE_ID; }
+        bool IsValid() const { return id != INVALID_RESOURCE_ID; }
 
       private:
         ReferenceCountedHandle(T& resource, StorageId_t id, ResourceStorage<T>& owning_storage);

@@ -25,21 +25,22 @@ namespace Renderer
         Viewport& operator=(const Viewport&) = delete;
         Viewport& operator=(Viewport&&) = default;
 
-        ImageHandle depth_image;
-        ImageHandle draw_image;
-        FrameDrawContext frame_context; // gets reset every frame for a new draw.
+        ImageHandle depth_image{};
+        ImageHandle draw_image{};
+        FrameDrawContext frame_context{}; // gets reset every frame for a new draw.
+        BufferHandle scene_data_buffer{};
 
         // if true, a clear command will be issued to clear the draw image every frame.
         bool clear_before_draw = true;
 
         // if you want to draw multiple scenes onto the same textures, use the viewport options below. If
         // zero, will cover the entire draw_image.
-        glm::vec2 viewport_position;
-        glm::vec2 viewport_extent;
+        glm::vec2 viewport_position{};
+        glm::vec2 viewport_extent{};
         float render_scale = 1.0f;
         bool resize_with_window = false;
 
-        VkExtent2D draw_extent; // calculated every frame from image size and render scale.
-        std::string name;
+        VkExtent2D draw_extent{}; // calculated every frame from image size and render scale.
+        std::string name{};
     };
 } // namespace Renderer

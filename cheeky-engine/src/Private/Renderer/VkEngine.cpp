@@ -784,20 +784,21 @@ namespace Renderer
         ++frame_number;
     }
 
-    void VulkanEngine::DrawViewportGeometry(const Viewport& viewport, VkCommandBuffer cmd)
+    void VulkanEngine::DrawViewportGeometry(Viewport& viewport, VkCommandBuffer cmd)
     {
         // create the scene data!
         // cpu to gpu so we can skip uploading it. Hopefully the data is small enough to fit in the
         // GPU cache so it won't need to read from system memory. if that is not the case, lol
-        BufferHandle scene_data_buffer = CreateBuffer(
-            sizeof(GPUSceneData),
-            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-            VMA_MEMORY_USAGE_CPU_TO_GPU,
-            VMA_ALLOCATION_CREATE_MAPPED_BIT,
-            "scene data buffer"
-        );
-        // delete it next frame
-        GetCurrentFrame().buffers_in_use.emplace_back(scene_data_buffer);
+        if (viewport.scene_data_buffer.IsValid() == false)
+        {
+            viewport.scene_data_buffer = CreateBuffer(
+                sizeof(GPUSceneData),
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                VMA_MEMORY_USAGE_CPU_TO_GPU,
+                VMA_ALLOCATION_CREATE_MAPPED_BIT,
+                "scene data buffer"
+            );
+        }
 
         glm::mat4 view = viewport.frame_context.camera.view;
         glm::mat4 projection = viewport.frame_context.camera.projection;
@@ -815,7 +816,7 @@ namespace Renderer
         scene_data.light_direction = viewport.frame_context.light_direction;
 
         vmaCopyMemoryToAllocation(
-            m_allocator, &scene_data, scene_data_buffer->allocation, 0, sizeof(scene_data)
+            m_allocator, &scene_data, viewport.scene_data_buffer->allocation, 0, sizeof(scene_data)
         );
 
         // now we just need to bind it
@@ -825,7 +826,7 @@ namespace Renderer
         // update scene data descriptor
         Utils::DescriptorWriter writer{};
         writer.WriteBuffer(
-            0, scene_data_buffer->buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+            0, viewport.scene_data_buffer->buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
         );
         writer.UpdateSet(m_device_dispatch, scene_data_descriptor);
 

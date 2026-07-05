@@ -167,7 +167,7 @@ namespace Renderer
         // draw loop
         void Draw();
         void DrawViewportBackground(const Viewport& viewport, VkCommandBuffer cmd);
-        void DrawViewportGeometry(const Viewport& viewport, VkCommandBuffer cmd);
+        void DrawViewportGeometry(Viewport& viewport, VkCommandBuffer cmd);
         void DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view);
 
         bool InitVulkan();
