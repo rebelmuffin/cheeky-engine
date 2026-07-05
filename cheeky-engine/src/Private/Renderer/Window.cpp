@@ -1,6 +1,6 @@
 #include "Renderer/Window.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 namespace Renderer
 {
@@ -9,7 +9,8 @@ namespace Renderer
         SDL_InitSubSystem(SDL_INIT_VIDEO);
 
         SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
-        m_window = SDL_CreateWindow("Cheeky", pos_x, pos_y, initial_width, initial_height, window_flags);
+        m_window = SDL_CreateWindow("Cheeky", initial_width, initial_height, window_flags);
+        SDL_SetWindowPosition(m_window, pos_x, pos_y);
         m_start_width = initial_width;
         m_start_height = initial_height;
     }

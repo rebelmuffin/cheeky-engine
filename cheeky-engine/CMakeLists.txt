@@ -1,21 +1,24 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.24)
 
 # Add source to this project's executable.
 file(GLOB_RECURSE ENGINE_SRC "src/Private/*.cpp")
 
-add_executable(cheeky ${ENGINE_SRC})
+add_executable(cheeky ${ENGINE_SRC}
+        src/Private/Renderer/Utility/Camera.cpp)
 
 set_property(TARGET cheeky PROPERTY
         DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        CXX_STANDARD 20
 )
 
-if (CMAKE_VERSION VERSION_GREATER 3.12)
-    set_property(TARGET cheeky PROPERTY CXX_STANDARD 20)
-endif ()
+find_package(Vulkan REQUIRED)
+message("Found Vulkan Version: ${Vulkan_VERSION}")
+message("Found Vulkan Libraries: ${Vulkan_INCLUDE_DIRS}")
 
 target_include_directories(cheeky PUBLIC "src/Public")
 target_link_libraries(cheeky
         PUBLIC
+        Vulkan::Vulkan
         SDL3::SDL3
         glm::glm-header-only
         VulkanMemoryAllocator

@@ -1,6 +1,7 @@
 #include "Renderer/Utility/VkPipelines.h"
 #include "Renderer/Utility/VkInitialisers.h"
 
+#include <filesystem>
 #include <fstream>
 
 namespace Renderer::Utils
@@ -9,6 +10,8 @@ namespace Renderer::Utils
         const vkb::DispatchTable& device_dispatch, const char* file_path, VkShaderModule* out_shader_module
     )
     {
+        std::cout << std::filesystem::current_path() << std::endl;
+
         // open with cursor at the end
         std::ifstream file(file_path, std::ios::ate | std::ios::binary);
         if (file.is_open() == false)

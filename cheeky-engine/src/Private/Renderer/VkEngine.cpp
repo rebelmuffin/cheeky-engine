@@ -14,16 +14,16 @@
 #include "Renderer/VkTypes.h"
 
 #include "ThirdParty/ImGUI.h"
-#include <SDL.h>
-#include <SDL_video.h>
-#include <SDL_vulkan.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_video.h>
+#include <SDL3/SDL_vulkan.h>
+#include <ThirdParty/ImGUI.h>
 #include <VkBootstrap.h>
 #include <glm/ext/vector_float4.hpp>
 #include <glm/fwd.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/trigonometric.hpp>
-#include <imgui.h>
 #include <unordered_set>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
@@ -180,7 +180,9 @@ namespace Renderer
                 ImGui::Text(
                     "Swapchain Resolution: %dx%d", m_swapchain_extent.width, m_swapchain_extent.height
                 );
-                ImGui::Text("Window Resolution: %dx%d", m_last_window_extent.width, m_last_window_extent.height);
+                ImGui::Text(
+                    "Window Resolution: %dx%d", m_last_window_extent.width, m_last_window_extent.height
+                );
             }
 
             if (ImGui::CollapsingHeader("Scene Lighting"))
@@ -943,7 +945,7 @@ namespace Renderer
         m_instance = vkb_instance.instance;
         m_debug_messenger = vkb_instance.debug_messenger;
 
-        SDL_Vulkan_CreateSurface(m_window->GetWindow(), m_instance, &m_surface);
+        SDL_Vulkan_CreateSurface(m_window->GetWindow(), m_instance, nullptr, &m_surface);
 
         VkPhysicalDeviceVulkan13Features features13{};
         features13.dynamicRendering = true;
@@ -1189,17 +1191,6 @@ namespace Renderer
         new_viewport.render_scale = 1.0f;
         new_viewport.resize_with_window = true; // to make sure the buffer resizes with window
 
-        glm::vec3 camera_pos{ 0.0f, 0.0f, -1.0f };
-        glm::mat4 camera_rot{ 1.0f };
-        float camera_fov_degrees = 70.0f;
-        new_viewport.frame_context.camera.view = camera_rot * glm::translate(camera_pos);
-        new_viewport.frame_context.camera.projection = glm::perspective(
-            glm::radians(camera_fov_degrees),
-            (float)backbuffer_size.x / (float)backbuffer_size.y,
-            10000.0f,
-            0.1f
-        );
-
         main_viewport = 0;
 
         // load default textures
@@ -1296,7 +1287,7 @@ namespace Renderer
         );
 
         ImGui::CreateContext();
-        ImGui_ImplSDL2_InitForVulkan(m_window->GetWindow());
+        ImGui_ImplSDL3_InitForVulkan(m_window->GetWindow());
         ImGui_ImplVulkan_InitInfo init_info{};
         init_info.Instance = m_instance;
         init_info.PhysicalDevice = m_gpu;
@@ -1307,11 +1298,12 @@ namespace Renderer
         init_info.ImageCount = 3;
         init_info.UseDynamicRendering = true;
 
-        init_info.PipelineRenderingCreateInfo = {};
-        init_info.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-        init_info.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-        init_info.PipelineRenderingCreateInfo.pColorAttachmentFormats = &m_swapchain_format;
-        init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+        init_info.PipelineInfoMain.PipelineRenderingCreateInfo = {};
+        init_info.PipelineInfoMain.PipelineRenderingCreateInfo.sType =
+            VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+        init_info.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+        init_info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &m_swapchain_format;
+        init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 
         ImGui_ImplVulkan_Init(&init_info);
 

@@ -63,12 +63,11 @@ namespace Renderer::Debug
             glm::mat4 rotation = glm::rotate(camera_pitch_rad, glm::vec3(1, 0, 0)) *
                                  glm::rotate(camera_yaw_rad, glm::vec3(0, 1, 0));
 
-            float aspect_ratio = (float)viewport.draw_image->image_extent.width /
-                                 (float)viewport.draw_image->image_extent.height;
-            viewport.frame_context.camera.view = rotation * glm::translate(camera_pos);
-            viewport.frame_context.camera.projection = glm::perspective(
-                camera_fov_rad, aspect_ratio, camera_far_plane, camera_near_plane
-            ); // far and near are intentionally swapped
+            const float width = viewport.draw_image->image_extent.width;
+            const float height = viewport.draw_image->image_extent.height;
+            viewport.frame_context.camera.Setup(
+                { rotation, camera_pos, width, height, camera_fov_rad, camera_near_plane, camera_far_plane }
+            );
         }
     }
 

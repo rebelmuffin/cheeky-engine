@@ -1,7 +1,6 @@
 #include "EngineUtils.h"
-#include "SDL_video.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #include <glm/ext/scalar_constants.hpp>
 #include <glm/vec2.hpp>
 

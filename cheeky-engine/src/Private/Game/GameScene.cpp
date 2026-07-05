@@ -131,13 +131,10 @@ namespace Game
                 camera_fov_degrees = m_active_camera->vertical_fov_degrees;
             }
 
-            viewport.frame_context.camera.view = camera_rotation * glm::translate(camera_pos);
-            viewport.frame_context.camera.projection = glm::perspective(
-                glm::radians(camera_fov_degrees),
-                (float)viewport.draw_image->image_extent.width /
-                    (float)viewport.draw_image->image_extent.height,
-                10000.0f,
-                0.1f
+            const float width = viewport.draw_image->image_extent.width;
+            const float height = viewport.draw_image->image_extent.height;
+            viewport.frame_context.camera.Setup(
+                { camera_rotation, camera_pos, width, height, glm::radians(camera_fov_degrees) }
             );
         }
 

@@ -12,7 +12,7 @@ struct CVars
     float backbuffer_scale = 1.0f;
     bool use_validation_layers = true;
     bool force_immediate_uploads = false;
-    char default_scene_path[512] = "../data/resources/BarramundiFish.glb";
+    char default_scene_path[512] = "data/resources/BarramundiFish.glb";
 
     uint32_t ReadFromFile(std::filesystem::path path)
     {

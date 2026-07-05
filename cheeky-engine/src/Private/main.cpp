@@ -6,7 +6,7 @@
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[])
 {
     CVars cvars{};
-    cvars.ReadFromFile("../.cvars");
+    cvars.ReadFromFile(".cvars");
 
     EngineCore engine(cvars);
     if (engine.InitialisationFailed())

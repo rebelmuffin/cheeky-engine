@@ -55,7 +55,7 @@ namespace Renderer
         // load in the shaders
         VkShaderModule frag_shader;
         if (Utils::LoadShaderModule(
-                *interface.device_dispatch_table, "../data/shader/gltf_pbr.frag.spv", &frag_shader
+                *interface.device_dispatch_table, "data/shader/gltf_pbr.frag.spv", &frag_shader
             ) == false)
         {
             std::cerr << "[!] Failed to load glTF PBR fragment shader." << std::endl;
@@ -64,7 +64,7 @@ namespace Renderer
 
         VkShaderModule vert_shader;
         if (Utils::LoadShaderModule(
-                *interface.device_dispatch_table, "../data/shader/gltf_pbr.vert.spv", &vert_shader
+                *interface.device_dispatch_table, "data/shader/gltf_pbr.vert.spv", &vert_shader
             ) == false)
         {
             std::cerr << "[!] Failed to load glTF PBR vertex shader." << std::endl;

@@ -5,10 +5,10 @@
 
 #include "ThirdParty/ImGUI.h"
 #include <ImGuizmo.h>
-#include <SDL_keyboard.h>
-#include <SDL_keycode.h>
-#include <SDL_mouse.h>
-#include <SDL_scancode.h>
+#include <SDL3/SDL_keyboard.h>
+#include <SDL3/SDL_keycode.h>
+#include <SDL3/SDL_mouse.h>
+#include <SDL3/SDL_scancode.h>
 #include <glm/common.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/quaternion_geometric.hpp>
@@ -26,17 +26,20 @@ namespace Game::Editor
 
     void SceneEditor::Draw(double delta_time_seconds, SDL_Window* window, Renderer::Viewport& editor_viewport)
     {
-        float aspect_ratio = (float)editor_viewport.draw_image->image_extent.width /
-                             (float)editor_viewport.draw_image->image_extent.height;
-        glm::quat rotation = glm::angleAxis(m_editor_camera.pitch_rad, glm::vec3(1, 0, 0)) *
-                             glm::angleAxis(m_editor_camera.yaw_rad, glm::vec3(0, 1, 0));
+        const glm::quat rotation = glm::angleAxis(m_editor_camera.pitch_rad, glm::vec3(1, 0, 0)) *
+                                   glm::angleAxis(m_editor_camera.yaw_rad, glm::vec3(0, 1, 0));
 
-        // m_editor_camera.render_camera.view = glm::mat4(rotation) *
-        // glm::translate(m_editor_camera.position);
-        m_editor_camera.render_camera.view =
-            glm::mat4(rotation) * glm::translate(glm::mat4(1.0f), -m_editor_camera.position);
-        m_editor_camera.render_camera.projection =
-            glm::perspective(glm::radians(m_editor_camera.vertical_fov_deg), aspect_ratio, 10000.0f, 0.1f);
+        const float width = editor_viewport.draw_image->image_extent.width;
+        const float height = editor_viewport.draw_image->image_extent.height;
+        m_editor_camera.render_camera.Setup(
+            Renderer::CameraSetupParams{ rotation,
+                                         m_editor_camera.position,
+                                         width,
+                                         height,
+                                         glm::radians(m_editor_camera.vertical_fov_deg),
+                                         m_camera_near,
+                                         m_camera_far }
+        );
 
         HandleInput(delta_time_seconds, window);
     }
@@ -101,6 +104,9 @@ namespace Game::Editor
                     m_editor_camera.vertical_fov_deg = glm::degrees(fov_rad);
                 }
                 ImGui::DragFloat3("Position", &m_editor_camera.position.x);
+
+                ImGui::DragFloat("Near Z", &m_camera_near);
+                ImGui::DragFloat("Far Z", &m_camera_far);
             }
             DrawNodeHierarchy();
         }
@@ -131,8 +137,8 @@ namespace Game::Editor
     {
         const float camera_mouse_rotation_multiplier = 1.0f;
 
-        glm::ivec2 last_mouse_pos = m_last_mouse_pos;
-        glm::ivec2 mouse_pos;
+        glm::vec2 last_mouse_pos = m_last_mouse_pos;
+        glm::vec2 mouse_pos;
         uint32_t mouse_button_mask = SDL_GetGlobalMouseState(&mouse_pos.x, &mouse_pos.y);
         m_last_mouse_pos = mouse_pos;
 
@@ -150,11 +156,11 @@ namespace Game::Editor
             float pitch_delta = (float)delta_time_seconds * (float)mouse_delta.y;
             m_editor_camera.pitch_rad += pitch_delta;
 
-            SDL_SetRelativeMouseMode(SDL_TRUE);
+            ImGui_ImplSDL3_SetMouseCaptureMode(ImGui_ImplSDL3_MouseCaptureMode_Enabled);
         }
         else
         {
-            SDL_SetRelativeMouseMode(SDL_FALSE);
+            ImGui_ImplSDL3_SetMouseCaptureMode(ImGui_ImplSDL3_MouseCaptureMode_Disabled);
         }
     }
 
@@ -171,7 +177,7 @@ namespace Game::Editor
         glm::vec3 camera_right = glm::vec3(view[0][0], view[1][0], view[2][0]);
         glm::vec3 camera_forward = -glm::vec3(view[0][2], view[1][2], view[2][2]);
 
-        const uint8_t* key_states = SDL_GetKeyboardState(nullptr);
+        const bool* key_states = SDL_GetKeyboardState(nullptr);
 
         // WASD for forward/right axis movement
         if (key_states[SDL_SCANCODE_W])

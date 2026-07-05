@@ -66,10 +66,11 @@ namespace Game::Editor
         std::unordered_map<NodeId_t, EditorCachedNode> m_cached_nodes{};
 
         // Camera
+        float m_camera_far = 10000.0f, m_camera_near = 0.1f;
         EditorCamera m_editor_camera{};
         bool m_editor_camera_enabled = true;
 
         // inputs
-        glm::ivec2 m_last_mouse_pos{ 0, 0 };
+        glm::vec2 m_last_mouse_pos{ 0, 0 };
     };
 } // namespace Game::Editor

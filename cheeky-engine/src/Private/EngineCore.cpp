@@ -4,7 +4,7 @@
 
 #include "ImGuizmo.h"
 #include "ThirdParty/ImGUI.h"
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include <chrono>
 #include <memory>
@@ -21,10 +21,11 @@ EngineCore::EngineCore(CVars cvars)
     if (m_renderer->Init() == false)
     {
         m_initialisation_failure = true;
+        return;
     }
 
     // load imgui fonts
-    constexpr const char* font_path = "../data/fonts/roboto.ttf";
+    constexpr const char* font_path = "data/fonts/roboto.ttf";
     ImGui::GetIO().Fonts->AddFontFromFileTTF(font_path, 14);
 
     m_game = std::make_unique<Game::GameMain>(m_window->GetWindow(), *m_renderer, cvars);
@@ -43,24 +44,21 @@ void EngineCore::RunMainLoop()
     {
         while (SDL_PollEvent(&e) != 0)
         {
-            if (e.type == SDL_QUIT)
+            if (e.type == SDL_EVENT_QUIT)
             {
                 quit = true;
             }
 
-            if (e.type == SDL_WINDOWEVENT)
+            if (e.type == SDL_EVENT_WINDOW_MINIMIZED)
             {
-                if (e.window.event == SDL_WINDOWEVENT_MINIMIZED)
-                {
-                    m_renderer->stop_rendering = true;
-                }
-                if (e.window.event == SDL_WINDOWEVENT_RESTORED)
-                {
-                    m_renderer->stop_rendering = false;
-                }
+                m_renderer->stop_rendering = true;
+            }
+            if (e.type == SDL_EVENT_WINDOW_RESTORED)
+            {
+                m_renderer->stop_rendering = false;
             }
 
-            ImGui_ImplSDL2_ProcessEvent(&e);
+            ImGui_ImplSDL3_ProcessEvent(&e);
         }
 
         // update delta time
@@ -72,7 +70,7 @@ void EngineCore::RunMainLoop()
         m_last_update_us = now_us;
 
         ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplSDL2_NewFrame();
+        ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
 

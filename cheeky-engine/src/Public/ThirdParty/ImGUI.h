@@ -12,8 +12,8 @@
 #endif
 
 #include "imgui.h"
-#include "imgui/backends/imgui_impl_sdl2.h"
-#include "imgui/backends/imgui_impl_vulkan.h"
+#include "backends/imgui_impl_sdl3.h"
+#include "backends/imgui_impl_vulkan.h"
 #include "imgui_internal.h"
 
 #ifdef __clang__
