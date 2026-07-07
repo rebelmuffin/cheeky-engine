@@ -275,6 +275,18 @@ namespace Renderer
         ));
         SetAllocationName(buffer.allocation, debug_name);
 
+#ifdef CHEEKY_ENABLE_MEMORY_TRACKING
+        VkDebugUtilsObjectNameInfoEXT nameInfo{
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .pNext = nullptr,
+            .objectType = VK_OBJECT_TYPE_BUFFER,
+            .objectHandle = (uint64_t)buffer.buffer,
+            .pObjectName = debug_name,
+        };
+
+        VK_CHECK(m_device_dispatch.setDebugUtilsObjectNameEXT(&nameInfo));
+#endif
+
         return m_buffer_storage.AddResource(buffer, debug_name);
     }
 
