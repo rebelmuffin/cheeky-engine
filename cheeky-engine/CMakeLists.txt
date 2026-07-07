@@ -3,10 +3,9 @@ cmake_minimum_required(VERSION 3.24)
 # Add source to this project's executable.
 file(GLOB_RECURSE ENGINE_SRC "src/Private/*.cpp")
 
-add_executable(cheeky ${ENGINE_SRC}
-        src/Private/Renderer/Utility/Camera.cpp)
+add_executable(cheeky ${ENGINE_SRC})
 
-set_property(TARGET cheeky PROPERTY
+set_target_properties(cheeky PROPERTIES
         DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         CXX_STANDARD 20
         COMPILE_WARNING_AS_ERROR ON
@@ -15,6 +14,7 @@ set_property(TARGET cheeky PROPERTY
 target_compile_options(cheeky PRIVATE
         $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
         $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic -Werror>
+        $<$<CXX_COMPILER_ID:AppleClang>:-Wno-nullability-extension>
 )
 
 find_package(Vulkan REQUIRED)
