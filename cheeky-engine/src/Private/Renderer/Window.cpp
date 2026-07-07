@@ -27,7 +27,12 @@ namespace Renderer
         }
     }
 
-    void Window::SetCaptureMouse(const bool capture_mouse) { SDL_SetWindowRelativeMouseMode(m_window, capture_mouse); }
+    void Window::SetCaptureMouse([[maybe_unused]] const bool capture_mouse)
+    {
+#ifndef __APPLE__
+        SDL_SetWindowRelativeMouseMode(m_window, capture_mouse);
+#endif
+    }
 
     SDL_Surface* Window::GetSurface() const { return SDL_GetWindowSurface(m_window); }
 
