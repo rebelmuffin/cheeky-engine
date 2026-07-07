@@ -46,3 +46,4 @@ add_custom_command(TARGET cheeky POST_BUILD
 
 # for glm vector rotation
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
+add_definitions(-DCHEEKY_ENABLE_MEMORY_TRACKING)

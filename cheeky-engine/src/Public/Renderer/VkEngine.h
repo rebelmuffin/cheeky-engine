@@ -10,6 +10,7 @@
 #include "Renderer/Utility/VkLoader.h"
 #include "Renderer/Viewport.h"
 #include "Renderer/VkTypes.h"
+#include "Swapchain.h"
 #include "Window.h"
 
 #include "ThirdParty/ImGUI.h"
@@ -179,7 +180,6 @@ namespace Renderer
 
         void CreateSwapchain(uint32_t width, uint32_t height);
 
-        void DestroySwapchain();
         void OnWindowResize();
         void SetAllocationName(VmaAllocation allocation, const char* name);
 
@@ -188,8 +188,6 @@ namespace Renderer
         VkPhysicalDevice m_gpu = nullptr;
         VkDevice m_device = nullptr;
         VkSurfaceKHR m_surface = nullptr;
-        VkSwapchainKHR m_swapchain = nullptr;
-        VkFormat m_swapchain_format;
 
         vkb::InstanceDispatchTable m_instance_dispatch;
         vkb::DispatchTable m_device_dispatch;
@@ -219,10 +217,7 @@ namespace Renderer
         MaterialInstance m_test_pbr_instance;
         BufferHandle m_test_pbr_uniform;
 
-        std::vector<VkImage> m_swapchain_images;
-        std::vector<VkImageView> m_swapchain_image_views;
-        std::vector<VkSemaphore> m_swapchain_render_finished_semaphores;
-        VkExtent2D m_swapchain_extent;
+        std::unique_ptr<Swapchain> m_swapchain;
 
         FrameData m_frames[FRAME_OVERLAP];
 

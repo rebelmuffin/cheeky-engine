@@ -10,20 +10,14 @@
 #include "Renderer/Utility/VkImages.h"
 #include "Renderer/Utility/VkInitialisers.h"
 #include "Renderer/Utility/VkLoader.h"
-#include "Renderer/Utility/VkPipelines.h"
 #include "Renderer/VkTypes.h"
 
 #include "ThirdParty/ImGUI.h"
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_video.h>
 #include <SDL3/SDL_vulkan.h>
-#include <ThirdParty/ImGUI.h>
 #include <VkBootstrap.h>
 #include <glm/ext/vector_float4.hpp>
-#include <glm/fwd.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtx/transform.hpp>
-#include <glm/trigonometric.hpp>
 #include <unordered_set>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
@@ -32,9 +26,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
-#include <cstdint>
 #include <cstdlib>
-#include <cstring>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -102,7 +94,7 @@ namespace Renderer
 
     void VulkanEngine::Cleanup()
     {
-        m_device_dispatch.deviceWaitIdle();
+        VK_CHECK(m_device_dispatch.deviceWaitIdle());
 
         // nuke the frame descriptors
         for (FrameData& frame : m_frames)
@@ -110,8 +102,7 @@ namespace Renderer
             frame.deletion_queue.Flush();
         }
 
-        // swapchain isn't handled by the deletion queue because it gets recreated at runtime
-        DestroySwapchain();
+        m_swapchain = nullptr;
 
         // destroy all resource storages
         m_image_storage.Clear(*this);
@@ -178,7 +169,7 @@ namespace Renderer
                 ImGui::Text("Frame: %d", frame_number);
                 ImGui::Text("Backbuffer Scale: %.2f", m_backbuffer_scale);
                 ImGui::Text(
-                    "Swapchain Resolution: %dx%d", m_swapchain_extent.width, m_swapchain_extent.height
+                    "Swapchain Resolution: %dx%d", m_swapchain->Extent().width, m_swapchain->Extent().height
                 );
                 ImGui::Text(
                     "Window Resolution: %dx%d", m_last_window_extent.width, m_last_window_extent.height
@@ -382,6 +373,18 @@ namespace Renderer
         VkImageViewCreateInfo image_view_info = Utils::ImageViewCreateInfo(format, image.image, aspect_flags);
         image_view_info.subresourceRange.levelCount = image_info.mipLevels;
         VK_CHECK(m_device_dispatch.createImageView(&image_view_info, nullptr, &image.image_view));
+
+#ifdef CHEEKY_ENABLE_MEMORY_TRACKING
+        VkDebugUtilsObjectNameInfoEXT nameInfo{
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .pNext = nullptr,
+            .objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
+            .objectHandle = (uint64_t)image.image_view,
+            .pObjectName = debug_name,
+        };
+
+        VK_CHECK(m_device_dispatch.setDebugUtilsObjectNameEXT(&nameInfo));
+#endif
 
         ImageHandle handle = m_image_storage.AddResource(image, debug_name);
 
@@ -643,8 +646,19 @@ namespace Renderer
 
         uint32_t swapchain_image_index;
         VkResult result = m_device_dispatch.acquireNextImageKHR(
-            m_swapchain, one_second_ns, current_frame.swapchain_semaphore, nullptr, &swapchain_image_index
+            m_swapchain->VkSwapchain(),
+            one_second_ns,
+            current_frame.swapchain_semaphore,
+            nullptr,
+            &swapchain_image_index
         );
+
+        SwapchainImage* swapchain_image = m_swapchain->GetSwapchainImage(swapchain_image_index);
+        if (swapchain_image == nullptr)
+        {
+            return; // something's cooked
+        }
+
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
             m_resize_requested = true;
@@ -714,28 +728,22 @@ namespace Renderer
         // copy the main draw into swapchain
         VkImageLayout current = VK_IMAGE_LAYOUT_UNDEFINED;
         VkImageLayout target = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        Utils::TransitionImage(
-            &m_device_dispatch, cmd, m_swapchain_images[swapchain_image_index], current, target
-        );
+        Utils::TransitionImage(&m_device_dispatch, cmd, swapchain_image->image, current, target);
         Utils::CopyImageToImage(
             &m_device_dispatch,
             cmd,
             active_viewports[main_viewport].draw_image->image,
-            m_swapchain_images[swapchain_image_index],
+            swapchain_image->image,
             active_viewports[main_viewport].draw_extent,
-            m_swapchain_extent
+            m_swapchain->Extent()
         );
         current = target;
         target = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        Utils::TransitionImage(
-            &m_device_dispatch, cmd, m_swapchain_images[swapchain_image_index], current, target
-        );
-        DrawImgui(cmd, m_swapchain_image_views[swapchain_image_index]);
+        Utils::TransitionImage(&m_device_dispatch, cmd, swapchain_image->image, current, target);
+        DrawImgui(cmd, swapchain_image->view);
         current = target;
         target = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        Utils::TransitionImage(
-            &m_device_dispatch, cmd, m_swapchain_images[swapchain_image_index], current, target
-        );
+        Utils::TransitionImage(&m_device_dispatch, cmd, swapchain_image->image, current, target);
 
         // if texture debugging, transition all draw images for viewports to shader read only.
         if (m_enable_image_debugging)
@@ -761,8 +769,7 @@ namespace Renderer
             VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, current_frame.swapchain_semaphore
         );
         VkSemaphoreSubmitInfo signal_info = Utils::SemaphoreSubmitInfo(
-            VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
-            m_swapchain_render_finished_semaphores[swapchain_image_index]
+            VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, swapchain_image->queue_submit_semaphore
         );
 
         VkSubmitInfo2 submit_info = Utils::SubmitInfo(&cmd_info, &signal_info, &wait_info);
@@ -772,9 +779,7 @@ namespace Renderer
         );
 
         VkPresentInfoKHR present_info = Utils::PresentInfo(
-            &m_swapchain,
-            &m_swapchain_render_finished_semaphores[swapchain_image_index],
-            &swapchain_image_index
+            &m_swapchain->VkSwapchain(), &swapchain_image->queue_submit_semaphore, &swapchain_image_index
         );
         result = m_device_dispatch.queuePresentKHR(m_graphics_queue, &present_info);
         if (result == VK_SUBOPTIMAL_KHR)
@@ -924,7 +929,7 @@ namespace Renderer
         // swapchain extent because we're drawing directly onto it
         constexpr VkRenderingAttachmentInfo* depth_attachment_info = nullptr;
         VkRenderingInfo rendering_info =
-            Utils::RenderingInfo(&attachment_info, depth_attachment_info, m_swapchain_extent);
+            Utils::RenderingInfo(&attachment_info, depth_attachment_info, m_swapchain->Extent());
 
         m_device_dispatch.cmdBeginRendering(cmd, &rendering_info);
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
@@ -1313,7 +1318,8 @@ namespace Renderer
         init_info.PipelineInfoMain.PipelineRenderingCreateInfo.sType =
             VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
         init_info.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-        init_info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &m_swapchain_format;
+        init_info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats =
+            &m_swapchain->Format();
         init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 
         ImGui_ImplVulkan_Init(&init_info);
@@ -1332,43 +1338,8 @@ namespace Renderer
 
     void VulkanEngine::CreateSwapchain(uint32_t width, uint32_t height)
     {
-        // destroy in case it already exists
-        for (std::size_t i = 0; i < m_swapchain_image_views.size(); ++i)
-        {
-            m_device_dispatch.destroyImageView(m_swapchain_image_views[i], nullptr);
-            m_device_dispatch.destroySemaphore(m_swapchain_render_finished_semaphores[i], nullptr);
-        }
-        m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr);
-
-        vkb::SwapchainBuilder builder(m_gpu, m_device, m_surface);
-
-        m_swapchain_format = VK_FORMAT_B8G8R8A8_UNORM;
-
-        vkb::Swapchain vkb_swapchain =
-            builder
-                .set_desired_format(
-                    VkSurfaceFormatKHR{ .format = m_swapchain_format,
-                                        .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR }
-                )
-                .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR) // #TODO: Implement MAILBOX present
-                .set_desired_extent(width, height)
-                .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-                .build()
-                .value();
-
-        m_swapchain_extent = vkb_swapchain.extent;
-        m_swapchain = vkb_swapchain.swapchain;
-        m_swapchain_images = vkb_swapchain.get_images().value();
-        m_swapchain_image_views = vkb_swapchain.get_image_views().value();
-
-        VkSemaphoreCreateInfo semaphore_create_info = Utils::SemaphoreCreateInfo(0);
-        m_swapchain_render_finished_semaphores.resize(m_swapchain_image_views.size());
-        for (uint32_t i = 0; i < m_swapchain_image_views.size(); ++i)
-        {
-            m_device_dispatch.createSemaphore(
-                &semaphore_create_info, nullptr, &m_swapchain_render_finished_semaphores[i]
-            );
-        }
+        m_swapchain = std::make_unique<Swapchain>(m_device_dispatch);
+        m_swapchain->Create(width, height, m_gpu, m_surface);
     }
 
     ImageHandle VulkanEngine::CreateDrawImage(uint32_t width, uint32_t height)
@@ -1429,26 +1400,8 @@ namespace Renderer
         return reinterpret_cast<ImTextureID>(m_debug_image_map[image->image]);
     }
 
-    void VulkanEngine::DestroySwapchain()
-    {
-        for (std::size_t i = 0; i < m_swapchain_image_views.size(); ++i)
-        {
-            m_device_dispatch.destroyImageView(m_swapchain_image_views[i], nullptr);
-            m_device_dispatch.destroySemaphore(m_swapchain_render_finished_semaphores[i], nullptr);
-        }
-        m_swapchain_image_views.clear();
-        m_swapchain_render_finished_semaphores.clear();
-
-        m_device_dispatch.destroySwapchainKHR(m_swapchain, nullptr);
-        m_swapchain = VK_NULL_HANDLE;
-    }
-
     void VulkanEngine::OnWindowResize()
     {
-        m_device_dispatch.deviceWaitIdle();
-
-        DestroySwapchain();
-
         int32_t old_width = static_cast<int32_t>(m_last_window_extent.width);
         int32_t old_height = static_cast<int32_t>(m_last_window_extent.height);
 
@@ -1461,7 +1414,7 @@ namespace Renderer
         }
 
         m_last_window_extent = VkExtent2D{ uint32_t(width), uint32_t(height) };
-        CreateSwapchain(m_last_window_extent.width, m_last_window_extent.height);
+        m_swapchain->Create(m_last_window_extent.width, m_last_window_extent.height, m_gpu, m_surface);
 
         // now resize any existing viewports that need resizing
         for (Viewport& viewport : active_viewports)
