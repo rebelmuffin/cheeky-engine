@@ -1,58 +1,14 @@
 #include "Game/Node.h"
-#include "EngineUtils.h"
+#include "Game/ECS/Components/TransformComponent.h"
 #include "Game/GameLogging.h"
 #include "Game/GameScene.h"
 
-#include "ThirdParty/ImGUI.h"
 #include <algorithm>
-#include <glm/gtx/matrix_decompose.hpp>
-#include <glm/matrix.hpp>
 #include <memory>
 #include <utility>
 
 namespace Game
 {
-    Transform Transform::FromMatrix(glm::mat4 mat)
-    {
-        Transform xform{};
-
-        glm::vec3 skew;
-        glm::vec4 perspective;
-        glm::decompose(mat, xform.scale, xform.rotation, xform.position, skew, perspective);
-
-        return xform;
-    }
-
-    glm::mat4 Transform::ToMatrix() const
-    {
-        return glm::translate(position) * glm::mat4(rotation) * glm::scale(scale);
-    }
-
-    Transform Transform::Transformed(const Transform& other) const
-    {
-        // we only scale the position by the parent matrix, scale and rotation can be handled directly.
-        // now I understand why Godot separates the origin and basis.
-        glm::mat4 parent_rot_scale_mat = other.ToMatrix();
-        Transform ret{};
-        ret.position = glm::vec3(parent_rot_scale_mat * glm::vec4(position, 1.0f));
-        ret.scale = scale * other.scale;
-        ret.rotation = other.rotation * rotation;
-
-        return ret;
-    }
-
-    Transform Transform::InverseTransformed(const Transform& other) const
-    {
-        Transform ret{};
-        glm::mat4 parent_rot_scale_mat = other.ToMatrix();
-        glm::mat4 inv_parent = glm::inverse(parent_rot_scale_mat);
-        ret.position = glm::vec3(inv_parent * glm::vec4(position, 1.0f));
-        ret.scale = scale / other.scale;
-        ret.rotation = glm::inverse(other.rotation) * rotation;
-
-        return ret;
-    }
-
     Node::Node(std::string_view name, bool tick_update, bool is_renderable) :
         m_name(name),
         m_tick_updating(tick_update),
@@ -177,6 +133,11 @@ namespace Game
 
     void Node::SetWorldTransform(const Transform& transform)
     {
+        if (Transform::Equals(transform, m_world_transform))
+        {
+            return;
+        }
+
         if (m_parent == nullptr)
         {
             m_local_transform = transform;
@@ -209,6 +170,11 @@ namespace Game
 
     void Node::SetLocalTransform(const Transform& transform)
     {
+        if (Transform::Equals(transform, m_local_transform))
+        {
+            return;
+        }
+
         m_local_transform = transform;
         RefreshTransform();
     }
@@ -255,7 +221,10 @@ namespace Game
         {
             node->RefreshTransform();
         }
+
+        OnTransformUpdated();
     }
+
 
     RootNode::RootNode() : Node("root node", false) {}
 

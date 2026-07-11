@@ -1,6 +1,9 @@
 #pragma once
 
+#include "Game/ECS.h"
 #include "Game/GameTime.h"
+#include "Game/NodeId.h"
+#include "Game/Utility/Transform.h"
 
 #include <glm/ext/vector_float3.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -17,22 +20,6 @@ namespace Renderer
 
 namespace Game
 {
-    struct Transform
-    {
-        glm::vec3 position{};
-        glm::vec3 scale = glm::vec3(1.0f, 1.0f, 1.0f);
-        glm::quat rotation = glm::identity<glm::quat>();
-
-        static Transform FromMatrix(glm::mat4 mat);
-        glm::mat4 ToMatrix() const;
-
-        Transform Transformed(const Transform& other) const;
-        Transform InverseTransformed(const Transform& other) const;
-    };
-
-    using NodeId_t = uint32_t;
-    constexpr NodeId_t INVALID_NODE_ID = 0u;
-
     class GameScene;
     class RootNode;
 
@@ -64,6 +51,10 @@ namespace Game
         /// Create a child of this node. This is the intended way of creating any nodes within a game scene.
         template <typename T, typename... Args>
         T& CreateChild(Args... args);
+
+        /// Create a child of this node, preallocated.
+        template <typename T>
+        T& CreateChild(std::unique_ptr<T>&& node_unique);
 
         /// Set whether this node should be updated every tick through OnTickUpdate.
         void SetTickUpdate(bool tick_update_enabled);
@@ -109,6 +100,8 @@ namespace Game
 
         virtual std::string DebugDisplayName() { return m_name; }
 
+        virtual void OnTransformUpdated() {};
+
       private:
         void PostCreateChild(Node& node);
         Node* AddChild(std::unique_ptr<Node>&& node);
@@ -151,6 +144,17 @@ namespace Game
         );
 
         std::unique_ptr<T> node_unique = std::make_unique<T>(std::forward<Args>(args)...);
+        return CreateChild(std::move(node_unique));
+    }
+
+    template <typename T>
+    T& Node::CreateChild(std::unique_ptr<T>&& node_unique)
+    {
+        static_assert(
+            std::is_base_of_v<Node, T>,
+            "Trying to create a child node that does not inherit from Game::Node. This is unsupported."
+        );
+
         T& node_ref = *node_unique.get();
         AddChild(std::move(node_unique));
         PostCreateChild(node_ref);

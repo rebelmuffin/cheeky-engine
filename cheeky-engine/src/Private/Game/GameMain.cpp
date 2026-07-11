@@ -1,21 +1,20 @@
 #include "Game/GameMain.h"
+#include "Game/ECS/Components/EngineData.h"
+#include "Game/ECS/Components/RenderContext.h"
+#include "Game/ECS/Components/SceneData.h"
+#include "Game/ECS/GameSystem.h"
+#include "Game/ECS/Systems/MeshRenderSystem.h"
+#include "Game/ECS/Systems/TransformUpkeep.h"
 #include "Game/Editor/SceneEditor.h"
 #include "Game/GameScene.h"
 #include "Game/GameTime.h"
-#include "Game/Nodes/MeshNode.h"
 #include "Game/Utility/SceneCreationUtils.h"
-#include "Renderer/Material.h"
 #include "Renderer/Utility/Camera.h"
 #include "Renderer/Utility/VkLoader.h"
-#include "Renderer/VkTypes.h"
 
 #include "ThirdParty/ImGUI.h"
-#include <glm/ext/vector_float3.hpp>
-#include <glm/fwd.hpp>
-#include <glm/trigonometric.hpp>
 
 #include <memory>
-#include <string>
 #include <vector>
 
 namespace Game
@@ -29,12 +28,28 @@ namespace Game
         m_main_scene = std::make_unique<GameScene>();
         m_main_editor = std::make_unique<Editor::SceneEditor>(*m_main_scene);
 
+        InitECS();
         MainSceneSetup();
+    }
+
+    void GameMain::InitECS()
+    {
+        m_ecs_world = std::make_unique<ECS::World>();
+        m_ecs_world->set<ECS::SceneData>({ m_main_scene.get() });
+        m_ecs_world->set<ECS::EngineData>({ m_renderer });
+
+        m_systems.emplace_back(std::make_unique<ECS::Systems::TransformUpkeep>(*m_ecs_world));
+        m_systems.emplace_back(std::make_unique<ECS::Systems::MeshRenderSystem>(*m_ecs_world));
+
+        for (const std::unique_ptr<ECS::GameSystem>& system : m_systems)
+        {
+            system->OnInitialise();
+        }
     }
 
     void GameMain::MainSceneSetup()
     {
-        Utils::LoadGltfIntoGameScene(*m_renderer, m_main_scene->Root(), m_cvars.default_scene_path);
+        Utils::LoadGltfIntoGameSceneECS(*m_ecs_world, m_main_scene->Root(), m_cvars.default_scene_path);
     }
 
     void GameMain::Draw(double delta_time_seconds)
@@ -52,6 +67,27 @@ namespace Game
         }
 
         m_main_scene->Draw(*m_main_viewport, override_camera);
+
+        TickECS();
+    }
+
+    void GameMain::TickECS()
+    {
+        m_ecs_world->each(
+            [time = m_game_time](ECS::Entity e, ECS::WorldTransform& tx)
+            {
+                constexpr float rot_deg_per_sec = 10.0f;
+                const float rot_amount_deg = rot_deg_per_sec * time.delta_time_seconds;
+                const float rot_amount_rad = glm::radians(rot_amount_deg);
+                Transform new_tx = tx.Transform();
+                new_tx.rotation = glm::rotate(new_tx.rotation, rot_amount_rad, { 0.0f, 1.0f, 0.0f });
+                e.set<ECS::WorldTransform>({ new_tx });
+            }
+        );
+
+        m_ecs_world->set<GameTime>(m_game_time);
+        m_ecs_world->set<ECS::RenderContext>({ &m_main_viewport->frame_context });
+        std::ignore = m_ecs_world->progress(m_game_time.delta_time_seconds);
     }
 
     void GameMain::OnImGui()

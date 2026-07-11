@@ -58,7 +58,7 @@ namespace Game::Editor
         void ApplyWorldCachedTransform(EditorCachedNode& cached_node, Node& node);
 
         GameScene* m_scene;
-
+        
         bool m_enable_transform_gizmos = true;
         bool m_node_inspector_open = true;
         NodeId_t m_selected_node = INVALID_NODE_ID;
