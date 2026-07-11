@@ -19,3 +19,9 @@
 [submodule "third_party/onetbb"]
 	path = third_party/onetbb
 	url = https://github.com/uxlfoundation/oneTBB
+[submodule "third_party/flecs"]
+	path = third_party/flecs
+	url = https://github.com/SanderMertens/flecs
+[submodule "third_party/box3d"]
+	path = third_party/box3d
+	url = https://github.com/erincatto/box3d

@@ -35,6 +35,7 @@ target_link_libraries(cheeky
         fastgltf::fastgltf
         stb
         tbb
+        flecs
 )
 
 # move SDL3.dll to the correct place
