@@ -36,6 +36,7 @@ target_link_libraries(cheeky
         stb
         tbb
         flecs
+        box3d::box3d
 )
 
 # move SDL3.dll to the correct place

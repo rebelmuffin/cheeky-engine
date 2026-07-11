@@ -13,6 +13,7 @@ add_subdirectory("third_party/VulkanMemoryAllocator")
 add_subdirectory("third_party/stb")
 add_subdirectory("third_party/onetbb")
 add_subdirectory("third_party/flecs")
+add_subdirectory("third_party/box3d")
 
 add_subdirectory("cheeky-engine")
 
