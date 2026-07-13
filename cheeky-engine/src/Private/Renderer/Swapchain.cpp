@@ -7,22 +7,13 @@
 namespace Renderer
 {
     Swapchain::Swapchain(const vkb::DispatchTable& device_dispatch) : m_device_dispatch(&device_dispatch) {}
-    Swapchain::~Swapchain()
-    {
-        if (m_created)
-        {
-            Destroy();
-        }
-    }
+    Swapchain::~Swapchain() { Destroy(); }
 
     void Swapchain::Create(uint32_t width, uint32_t height, VkPhysicalDevice gpu, VkSurfaceKHR surface)
     {
         VK_CHECK(m_device_dispatch->deviceWaitIdle());
 
-        if (m_created)
-        {
-            Destroy();
-        }
+        Destroy();
 
         vkb::SwapchainBuilder builder(gpu, m_device_dispatch->device, surface);
 
@@ -42,6 +33,10 @@ namespace Renderer
         m_extent = vkb_swapchain.extent;
         m_swapchain = vkb_swapchain.swapchain;
 
+        // BEWARE: this has to be called once. Calling GET_IMAGE_VIEWS actually allocates new image views
+        //         every time, cool interface bro
+        std::vector<VkImageView> swapchain_image_views = vkb_swapchain.get_image_views().value();
+        std::vector<VkImage> swapchain_images = vkb_swapchain.get_images().value();
         m_swapchain_images.resize(vkb_swapchain.image_count);
         VkSemaphoreCreateInfo semaphore_create_info = Utils::SemaphoreCreateInfo(0);
         for (uint32_t i = 0; i < vkb_swapchain.image_count; i++)
@@ -49,9 +44,8 @@ namespace Renderer
             VkSemaphore semaphore{};
             VK_CHECK(m_device_dispatch->createSemaphore(&semaphore_create_info, nullptr, &semaphore));
 
-            m_swapchain_images[i] = SwapchainImage{ vkb_swapchain.get_images().value()[i],
-                                                    vkb_swapchain.get_image_views().value()[i],
-                                                    semaphore };
+            m_swapchain_images[i] =
+                SwapchainImage{ swapchain_images[i], swapchain_image_views[i], semaphore };
 
 #ifdef CHEEKY_ENABLE_MEMORY_TRACKING
             VkDebugUtilsObjectNameInfoEXT nameInfo{
@@ -76,7 +70,11 @@ namespace Renderer
             m_device_dispatch->destroyImageView(img.view, nullptr);
             m_device_dispatch->destroySemaphore(img.queue_submit_semaphore, nullptr);
         }
-        m_device_dispatch->destroySwapchainKHR(m_swapchain, nullptr);
+        if (m_swapchain != VK_NULL_HANDLE)
+        {
+            m_device_dispatch->destroySwapchainKHR(m_swapchain, nullptr);
+        }
+
         m_swapchain_images.clear();
         m_extent = {};
         m_created = false;
