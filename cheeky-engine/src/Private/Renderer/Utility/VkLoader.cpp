@@ -11,6 +11,7 @@
 #include <glm/ext/vector_float4.hpp>
 #include <glm/gtx/compatibility.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <simdjson.h>
 #include <stb_image.h>
 #include <vulkan/vulkan_core.h>
 
@@ -26,6 +27,50 @@
 
 namespace
 {
+    void ReadExtras(simdjson::dom::object* extras, std::size_t, fastgltf::Category cat, void* user_pointer)
+    {
+        if (cat != fastgltf::Category::Nodes)
+        {
+            return;
+        }
+
+        Renderer::GLTFExtrasList& extras_data = *static_cast<Renderer::GLTFExtrasList*>(user_pointer);
+
+        Renderer::GLTFExtras extras_node{};
+        for (const auto& field : *extras)
+        {
+            if (field.value.is_bool())
+            {
+                extras_node[std::string(field.key)] = field.value.get_bool();
+            }
+            else if (field.value.is_int64())
+            {
+                extras_node[std::string(field.key)] = { field.value.get_int64() };
+            }
+            else if (field.value.is_double())
+            {
+                extras_node[std::string(field.key)] = { field.value.get_double() };
+            }
+            else if (field.value.is_string())
+            {
+                extras_node[std::string(field.key)] = { std::string(field.value.get_string().value()) };
+            }
+            else if (field.value.is_array())
+            {
+                const simdjson::dom::array array = field.value.get_array();
+                if (array.size() == 3 && array.at(0).is_double())
+                {
+                    extras_node[std::string(field.key)] = { glm::vec3{
+                        static_cast<float>(array.at(0).get_double()),
+                        static_cast<float>(array.at(1).get_double()),
+                        static_cast<float>(array.at(2).get_double()) } };
+                }
+            }
+        }
+
+        extras_data.emplace_back(extras_node);
+    }
+
     /// Intermediate structure that uses shared ptrs to easily move the nodes around that we convert back to
     /// GLTFNode before returning.
     struct IntermediateGLTFNode
@@ -55,7 +100,9 @@ namespace
     }
 
     std::optional<fastgltf::Asset> FastGltfLoadAsset(
-        std::filesystem::path file_path, fastgltf::Options extra_options = fastgltf::Options::None
+        std::filesystem::path file_path,
+        Renderer::GLTFExtrasList* extras,
+        fastgltf::Options extra_options = fastgltf::Options::None
     )
     {
         std::cout << "[*] Loading glTF file: " << file_path << std::endl;
@@ -72,6 +119,11 @@ namespace
         const fastgltf::Category categories = fastgltf::Category::All;
 
         fastgltf::Parser parser;
+        if (extras != nullptr)
+        {
+            parser.setExtrasParseCallback(ReadExtras);
+            parser.setUserPointer(extras);
+        }
 
         fastgltf::Expected<fastgltf::Asset> parse_result =
             parser.loadGltf(load_result.get(), file_path.parent_path(), loading_options, categories);
@@ -321,7 +373,7 @@ namespace Renderer::Utils
         VulkanEngine* engine, std::filesystem::path file_path
     )
     {
-        std::optional<fastgltf::Asset> opt_asset = FastGltfLoadAsset(file_path);
+        std::optional<fastgltf::Asset> opt_asset = FastGltfLoadAsset(file_path, nullptr);
         if (opt_asset == std::nullopt)
         {
             return std::nullopt;
@@ -367,9 +419,11 @@ namespace Renderer::Utils
 
     std::optional<GLTFScene> LoadGltfScene(VulkanEngine& engine, std::filesystem::path file_path)
     {
+        GLTFScene scene{};
         // we want to load the textures in as well, so we can create the materials with correct textures
         const std::optional<const fastgltf::Asset>& opt_asset = FastGltfLoadAsset(
             file_path,
+            &scene.extras,
             fastgltf::Options::DecomposeNodeMatrices | fastgltf::Options::LoadExternalImages |
                 fastgltf::Options::LoadExternalBuffers
         );
@@ -379,7 +433,6 @@ namespace Renderer::Utils
         }
         const fastgltf::Asset& asset = *opt_asset;
 
-        GLTFScene scene{};
         std::vector<ImageHandle>& out_images = scene.loaded_textures;
         std::vector<std::shared_ptr<GLTFMaterial>>& out_materials = scene.loaded_materials;
         std::vector<MeshHandle>& out_meshes = scene.loaded_meshes;

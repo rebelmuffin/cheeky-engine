@@ -55,12 +55,15 @@ namespace Renderer
         glm::mat4 transform{};
     };
 
+    using GLTFExtras = std::unordered_map<std::string, std::variant<bool, double, int64_t, std::string, glm::vec3>>;
+    using GLTFExtrasList = std::vector<GLTFExtras>;
     struct GLTFScene
     {
         std::vector<ImageHandle> loaded_textures{};
         std::vector<std::shared_ptr<GLTFMaterial>> loaded_materials{};
         std::vector<MeshHandle> loaded_meshes{};
         std::vector<fastgltf::Node> scene_nodes{};
+        GLTFExtrasList extras{};
 
         // hierarchical representation of the scene nodes. The root node itself is not a real node, iterate
         // through its children instead.
