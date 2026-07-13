@@ -1,8 +1,6 @@
 #pragma once
 
-#include "Game/ECS/Components/TransformComponent.h"
 #include "Game/ECS/GameSystem.h"
-#include "Game/Node.h"
 
 namespace Game::ECS::Systems
 {

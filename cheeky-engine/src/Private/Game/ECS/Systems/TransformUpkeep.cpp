@@ -2,6 +2,7 @@
 
 #include "Game/ECS/Components/SceneData.h"
 #include "Game/ECS/Components/SceneNodeComponent.h"
+#include "Game/ECS/Components/TransformComponent.h"
 #include "Game/GameScene.h"
 
 namespace
