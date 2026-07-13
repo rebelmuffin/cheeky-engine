@@ -29,6 +29,10 @@ EngineCore::EngineCore(CVars cvars)
     ImGui::GetIO().Fonts->AddFontFromFileTTF(font_path, 14);
 
     m_game = std::make_unique<Game::GameMain>(m_window.get(), *m_renderer, cvars);
+    m_last_update_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                           std::chrono::steady_clock().now().time_since_epoch()
+    )
+                           .count();
 }
 
 EngineCore::~EngineCore() { m_renderer->Cleanup(); }
