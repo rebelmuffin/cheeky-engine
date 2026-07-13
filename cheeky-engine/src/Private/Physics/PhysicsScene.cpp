@@ -30,7 +30,13 @@ namespace Physics
         return { b3CreateBody(m_world, &bodyDef) };
     }
 
-    void PhysicsScene::DestroyBody(BodyHandle body) { b3DestroyBody(body.body_id); }
+    void PhysicsScene::DestroyBody(BodyHandle body)
+    {
+        if (b3Body_IsValid(body.body_id))
+        {
+            b3DestroyBody(body.body_id);
+        }
+    }
 
     ColliderHandle PhysicsScene::CreateSphereCollider(
         BodyHandle attached_body, const glm::vec3& position, float radius
@@ -39,6 +45,8 @@ namespace Physics
         b3Sphere sphere{ { position.x, position.y, position.z }, radius };
         b3ShapeDef shape_def = b3DefaultShapeDef();
         shape_def.density = 1.0f;
+        shape_def.enableContactEvents = true;
+        shape_def.enableHitEvents = true;
         b3ShapeId shape_id = b3CreateSphereShape(attached_body.body_id, &shape_def, &sphere);
         return { shape_id };
     }
@@ -57,6 +65,8 @@ namespace Physics
         b3BoxHull hull = b3MakeTransformedBoxHull(half_extents.x, half_extents.y, half_extents.z, transform);
         b3ShapeDef shape_def = b3DefaultShapeDef();
         shape_def.density = 1.0f;
+        shape_def.enableContactEvents = true;
+        shape_def.enableHitEvents = true;
         b3ShapeId shape_id = b3CreateHullShape(attached_body.body_id, &shape_def, &hull.base);
         return { shape_id };
     }
@@ -64,7 +74,29 @@ namespace Physics
     void PhysicsScene::DestroyCollider(ColliderHandle collider)
     {
         constexpr bool update_mass = true;
-        b3DestroyShape(collider.shape_id, update_mass);
+        if (b3Shape_IsValid(collider.shape_id))
+        {
+            b3DestroyShape(collider.shape_id, update_mass);
+        }
+    }
+
+    void PhysicsScene::GetBodyTransform(BodyHandle body, glm::vec3* position, glm::quat* rotation)
+    {
+        b3Transform xform = b3Body_GetTransform(body.body_id);
+        if (position != nullptr)
+        {
+            position->x = xform.p.x;
+            position->y = xform.p.y;
+            position->z = xform.p.z;
+        }
+
+        if (rotation != nullptr)
+        {
+            rotation->x = xform.q.v.x;
+            rotation->y = xform.q.v.y;
+            rotation->z = xform.q.v.z;
+            rotation->w = xform.q.s;
+        }
     }
 
     void PhysicsScene::Step(const float time_step)

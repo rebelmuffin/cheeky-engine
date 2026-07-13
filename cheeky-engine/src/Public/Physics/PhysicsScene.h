@@ -35,6 +35,8 @@ namespace Physics
         );
         void DestroyCollider(ColliderHandle collider);
 
+        void GetBodyTransform(BodyHandle body, glm::vec3* position, glm::quat* rotation);
+
         void Step(float time_step);
 
       private:
