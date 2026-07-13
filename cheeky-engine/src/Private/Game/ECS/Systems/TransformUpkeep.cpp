@@ -14,7 +14,8 @@ namespace
             return nullptr;
         }
 
-        const Game::ECS::SceneData& scene_data = e.world().get<Game::ECS::SceneData>();
+        const Game::ECS::World& world = e.world();
+        const Game::ECS::SceneData& scene_data = world.get<Game::ECS::SceneData>();
         if (scene_data.game_scene == nullptr)
         {
             return nullptr; // lol

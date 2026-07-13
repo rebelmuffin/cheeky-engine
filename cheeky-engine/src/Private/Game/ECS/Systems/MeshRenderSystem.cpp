@@ -18,7 +18,8 @@ namespace Game::ECS::Systems
                     return;
                 }
 
-                const RenderContext& ctx = e.world().get<RenderContext>();
+                const World& world = e.world();
+                const RenderContext& ctx = world.get<RenderContext>();
                 const Renderer::MeshAsset& mesh_asset = *mesh_component.mesh_asset;
                 const glm::mat4& xform_mat = transform.Transform().ToMatrix();
                 for (const Renderer::GeoSurface& surface : mesh_asset.surfaces)
