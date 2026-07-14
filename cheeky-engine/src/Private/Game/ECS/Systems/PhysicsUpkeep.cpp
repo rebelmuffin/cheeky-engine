@@ -83,7 +83,7 @@ namespace Game::ECS::Systems
                         return;
                     }
 
-                    const WorldTransform& transform = entity.ensure<WorldTransform>();
+                    const WorldTransform& transform = entity.get<WorldTransform>();
 
                     // regardless of why this is getting updated, recreate it.
                     // might need to be more efficient with this later on
