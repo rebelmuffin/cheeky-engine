@@ -1,5 +1,6 @@
 #include "Physics/PhysicsDebugger.h"
 
+#include "Utilities/LineDrawer.h"
 #include "imgui.h"
 
 namespace
@@ -47,11 +48,15 @@ namespace
 
         ImGui::PopID();
     }
-}
+} // namespace
 
 namespace Physics
 {
-    PhysicsDebugger::PhysicsDebugger(PhysicsScene& scene) : m_scene(&scene) {}
+    PhysicsDebugger::PhysicsDebugger(PhysicsScene& scene) :
+        m_scene(&scene),
+        m_drawer(scene)
+    {
+    }
 
     void PhysicsDebugger::ImGui()
     {
@@ -60,6 +65,7 @@ namespace Physics
             if (ImGui::BeginMenu("Game"))
             {
                 ImGui::Checkbox("Physics Debugger", &m_enabled);
+                ImGui::Checkbox("Draw Physics", &m_debug_draw);
                 ImGui::EndMenu();
             }
             ImGui::EndMainMenuBar();
@@ -125,5 +131,13 @@ namespace Physics
             }
         }
         ImGui::End();
+    }
+
+    void PhysicsDebugger::Draw()
+    {
+        if (m_debug_draw)
+        {
+            m_drawer.Draw();
+        }
     }
 } // namespace Physics

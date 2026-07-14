@@ -54,5 +54,6 @@ namespace Physics
         float m_frequency = 60.0f; // 60 times per sec
 
         friend class PhysicsDebugger;
+        friend class PhysicsDrawer;
     };
 } // namespace Physics

@@ -75,6 +75,8 @@ namespace Game
 
         m_main_scene->Draw(*m_main_viewport, override_camera);
 
+        m_physics_debugger->Draw();
+
         TickECS();
     }
 

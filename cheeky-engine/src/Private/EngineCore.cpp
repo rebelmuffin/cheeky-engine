@@ -4,6 +4,8 @@
 
 #include "ImGuizmo.h"
 #include "ThirdParty/ImGUI.h"
+#include "Utilities/LineDrawer.h"
+
 #include <SDL3/SDL.h>
 
 #include <chrono>
@@ -81,6 +83,13 @@ void EngineCore::RunMainLoop()
         OnImgui();
 
         m_game->Draw(m_last_delta_ms / 1000.0);
+
+        Debug::LineDrawer::Instance().AddLine(glm::vec3(100.0f, 0.0f, 0.0f), glm::vec3(-100.0f, 0.0f, 0.0f));
+        Debug::LineDrawer::Instance().AddLine(glm::vec3(0.0f, 100.0f, 0.0f), glm::vec3(0.0f, -100.0f, 0.0f));
+
+        Debug::LineDrawer::Instance().OnRender(
+            *m_renderer, m_renderer->active_viewports[m_renderer->main_viewport], m_last_delta_ms / 1000.0f
+        );
 
         // renderer draw should be after any other kind of draw because things "queue" render objects for the
         // renderer to render during its draw.
