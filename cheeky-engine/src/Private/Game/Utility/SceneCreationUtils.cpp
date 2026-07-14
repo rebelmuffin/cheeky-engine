@@ -49,7 +49,7 @@ namespace
         Game::Node& game_node_parent,
         const Renderer::GLTFNode& gltf_node,
         const Renderer::GLTFScene& gltf_scene,
-        const Renderer::GLTFExtras& extras
+        const Renderer::GLTFExtras* extras
     )
     {
         Game::ECSNode* created_node = nullptr;
@@ -77,39 +77,42 @@ namespace
             CreateGameNodeFromGLTFNodeECS(world, *created_node, child, gltf_scene, extras);
         }
 
-        const auto collision_type_it = extras.find("collision_type");
-        if (collision_type_it != extras.end())
+        if (extras != nullptr)
         {
-            // there's collision!
-            if (std::get<std::string>(collision_type_it->second) == "sphere")
+            const auto collision_type_it = extras->find("collision_type");
+            if (collision_type_it != extras->end())
             {
-                float radius = std::get<double>(extras.at("collision_radius"));
-                entity.insert(
-                    [radius](Game::ECS::SphereCollider& col)
-                    {
-                        col = { radius };
-                    }
-                );
-            }
-            else if (std::get<std::string>(collision_type_it->second) == "box")
-            {
-                glm::vec3 half_extents = std::get<glm::vec3>(extras.at("collision_half_extents"));
-                entity.insert(
-                    [half_extents](Game::ECS::BoxCollider& col)
-                    {
-                        col = { half_extents };
-                    }
-                );
-            }
+                // there's collision!
+                if (std::get<std::string>(collision_type_it->second) == "sphere")
+                {
+                    float radius = std::get<double>(extras->at("collision_radius"));
+                    entity.insert(
+                        [radius](Game::ECS::SphereCollider& col)
+                        {
+                            col = { radius };
+                        }
+                    );
+                }
+                else if (std::get<std::string>(collision_type_it->second) == "box")
+                {
+                    glm::vec3 half_extents = std::get<glm::vec3>(extras->at("collision_half_extents"));
+                    entity.insert(
+                        [half_extents](Game::ECS::BoxCollider& col)
+                        {
+                            col = { half_extents };
+                        }
+                    );
+                }
 
-            bool is_dynamic = false;
-            if (extras.find("body_dynamic") != extras.end())
-            {
-                is_dynamic = std::get<bool>(extras.at("body_dynamic"));
-            }
+                bool is_dynamic = false;
+                if (extras->find("body_dynamic") != extras->end())
+                {
+                    is_dynamic = std::get<bool>(extras->at("body_dynamic"));
+                }
 
-            // do this at the end to initialise the body
-            std::ignore = entity.set(Game::ECS::PhysicsBodyComponent{ is_dynamic });
+                // do this at the end to initialise the body
+                std::ignore = entity.set(Game::ECS::PhysicsBodyComponent{ is_dynamic });
+            }
         }
 
         return *created_node;
@@ -170,7 +173,12 @@ namespace Game::Utils
             for (size_t i = 0; i < scene->root_node->children.size(); i++)
             {
                 const Renderer::GLTFNode& child = scene->root_node->children[i];
-                const Renderer::GLTFExtras& extras = scene->extras[i];
+                const Renderer::GLTFExtras* extras = nullptr;
+                if (scene->extras.size() > i)
+                {
+                    extras = &scene->extras.at(i);
+                }
+
                 CreateGameNodeFromGLTFNodeECS(world, scene_root, child, *scene, extras);
             }
             return;
