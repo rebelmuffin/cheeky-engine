@@ -2,6 +2,53 @@
 
 #include "imgui.h"
 
+namespace
+{
+    void ImGuiShape(Physics::ShapeId shape_id)
+    {
+        ImGui::PushID(shape_id.index1);
+
+        ImGui::Text("Name: %s", b3Shape_GetName(shape_id));
+        b3AABB aabb = b3Shape_GetAABB(shape_id);
+        b3Vec3 center = b3AABB_Center(aabb);
+        ImGui::Text("Center: %.2f %.2f %.2f", center.x, center.y, center.z);
+
+        b3ShapeType type = b3Shape_GetType(shape_id);
+        if (type == b3_sphereShape)
+        {
+            b3Sphere sphere = b3Shape_GetSphere(shape_id);
+            ImGui::Text("Sphere");
+            ImGui::Text("Radius: %.2f", sphere.radius);
+        }
+
+        ImGui::PopID();
+    }
+
+    void ImGuiBody(Physics::BodyId body_id)
+    {
+        ImGui::PushID(body_id.index1);
+
+        b3Transform xform = b3Body_GetTransform(body_id);
+
+        ImGui::Text("Name: %s", b3Body_GetName(body_id));
+        ImGui::Text("Position: %.2f %.2f %.2f", xform.p.x, xform.p.y, xform.p.z);
+
+        int shape_count = b3Body_GetShapeCount(body_id);
+        std::vector<b3ShapeId> shape_ids(shape_count);
+        b3Body_GetShapes(body_id, shape_ids.data(), shape_ids.size());
+        if (ImGui::TreeNode("body_shapes", "Shapes: %d", shape_count))
+        {
+            for (int i = 0; i < shape_count; i++)
+            {
+                ImGuiShape(shape_ids[i]);
+            }
+            ImGui::TreePop();
+        }
+
+        ImGui::PopID();
+    }
+}
+
 namespace Physics
 {
     PhysicsDebugger::PhysicsDebugger(PhysicsScene& scene) : m_scene(&scene) {}
@@ -50,8 +97,11 @@ namespace Physics
                     for (int i = 0; i < contacts.beginCount; i++)
                     {
                         const b3ContactBeginTouchEvent& beginTouchEvent = contacts.beginEvents[i];
-                        ImGui::Text("Shape A: %s", b3Shape_GetName(beginTouchEvent.shapeIdA));
-                        ImGui::Text("Shape B: %s", b3Shape_GetName(beginTouchEvent.shapeIdB));
+                        BodyId body_a = b3Shape_GetBody(beginTouchEvent.shapeIdA);
+                        ImGuiBody(body_a);
+
+                        BodyId body_b = b3Shape_GetBody(beginTouchEvent.shapeIdB);
+                        ImGuiBody(body_b);
                     }
                     ImGui::TreePop();
                 }
