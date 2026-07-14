@@ -9,7 +9,7 @@
 #include <chrono>
 #include <memory>
 
-EngineCore::EngineCore(CVars cvars)
+EngineCore::EngineCore(CVars cvars) : m_cvars(cvars)
 {
     m_window = std::make_unique<Renderer::Window>(
         cvars.width, cvars.height, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED
@@ -103,6 +103,15 @@ void EngineCore::OnImgui()
             ImGui::EndMenu();
         }
 
+        if (ImGui::BeginMenu("Game"))
+        {
+            if (ImGui::Button("Restart"))
+            {
+                RestartGame();
+            }
+            ImGui::EndMenu();
+        }
+
         imgui_menu_cursor_y = ImGui::GetTextLineHeightWithSpacing() * 2.0f;
         ImGui::EndMainMenuBar();
     }
@@ -130,6 +139,11 @@ void EngineCore::OnImgui()
     }
 
     m_game->OnImGui();
+}
+
+void EngineCore::RestartGame()
+{
+    m_game = std::make_unique<Game::GameMain>(m_window.get(), *m_renderer, m_cvars);
 }
 
 bool EngineCore::InitialisationFailed() { return m_initialisation_failure; }
