@@ -7,7 +7,7 @@ namespace Game
 {
     ECSNode::ECSNode(ECS::World& ecs_world, std::string_view name) :
         Node(name, false, false),
-        m_entity_id(ecs_world.entity())
+        m_entity_id(ECS::Entity(ecs_world, name.data()))
     {
     }
 

@@ -31,6 +31,7 @@ namespace Game
         m_main_scene = std::make_unique<GameScene>();
         m_main_editor = std::make_unique<Editor::SceneEditor>(*m_main_scene);
         m_physics_scene = std::make_unique<Physics::PhysicsScene>();
+        m_physics_debugger = std::make_unique<Physics::PhysicsDebugger>(*m_physics_scene);
 
         InitECS();
         MainSceneSetup();
@@ -100,5 +101,7 @@ namespace Game
         {
             m_main_editor->DrawImGui();
         }
+
+        m_physics_debugger->ImGui();
     }
 } // namespace Game

@@ -18,7 +18,6 @@ namespace Game::ECS::Systems
                 [](flecs::iter& it)
                 {
                     const World& world = it.world();
-                    // const GameTime& time = world.get<GameTime>();
 
                     Physics::PhysicsScene* physics = world.get<SceneData>().physics_scene;
                     if (physics == nullptr)
@@ -26,7 +25,7 @@ namespace Game::ECS::Systems
                         return;
                     }
 
-                    physics->Step(1 / 560.0f);
+                    physics->Step();
                 }
             );
 

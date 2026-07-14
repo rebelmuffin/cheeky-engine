@@ -28,20 +28,20 @@ namespace
             .scale = transform.Transform().scale,
         };
 
-        const Physics::BodyHandle handle = physics.CreateBody(params, body.is_dynamic);
+        const Physics::BodyHandle handle = physics.CreateBody(params, body.is_dynamic, entity.name());
         std::ignore = entity.set<Physics::BodyHandle>(handle);
 
         if (const Game::ECS::SphereCollider* sphere = entity.try_get<Game::ECS::SphereCollider>())
         {
             const Physics::ColliderHandle col_handle =
-                physics.CreateSphereCollider(handle, {}, sphere->Radius());
+                physics.CreateSphereCollider(handle, {}, sphere->Radius(), entity.name());
             AddColliderToBody(entity, col_handle);
         }
         if (const Game::ECS::BoxCollider* box = entity.try_get<Game::ECS::BoxCollider>())
         {
             const Physics::BodyCreateParams col_params{};
             const Physics::ColliderHandle col_handle =
-                physics.CreateBoxCollider(handle, col_params, box->half_extents());
+                physics.CreateBoxCollider(handle, col_params, box->half_extents(), entity.name());
             AddColliderToBody(entity, col_handle);
         }
     }

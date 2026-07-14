@@ -7,6 +7,7 @@
 #include "Game/GameScene.h"
 #include "Game/GameTime.h"
 #include "Physics/PhysicsScene.h"
+#include "Physics/PhysicsDebugger.h"
 #include "Renderer/Viewport.h"
 #include "Renderer/VkEngine.h"
 
@@ -32,6 +33,7 @@ namespace Game
         std::unique_ptr<Editor::SceneEditor> m_main_editor{};
         std::unique_ptr<GameScene> m_main_scene;
         std::unique_ptr<Physics::PhysicsScene> m_physics_scene;
+        std::unique_ptr<Physics::PhysicsDebugger> m_physics_debugger{};
         std::unique_ptr<ECS::World> m_ecs_world;
         Renderer::Viewport* m_main_viewport;
         Renderer::VulkanEngine* m_renderer;

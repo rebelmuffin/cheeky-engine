@@ -14,12 +14,13 @@ namespace Physics
         m_world = b3_nullWorldId;
     }
 
-    BodyHandle PhysicsScene::CreateBody(const BodyCreateParams& params, const bool dynamic)
+    BodyHandle PhysicsScene::CreateBody(const BodyCreateParams& params, const bool dynamic, const char* debug_name)
     {
         const glm::vec3& pos = params.position;
         const glm::quat& rot = params.rotation;
 
         b3BodyDef bodyDef = b3DefaultBodyDef();
+        bodyDef.name = debug_name;
         bodyDef.position = { pos.x, pos.y, pos.z };
         bodyDef.rotation = { { rot.x, rot.y, rot.z }, rot.w };
         if (dynamic)
@@ -39,11 +40,12 @@ namespace Physics
     }
 
     ColliderHandle PhysicsScene::CreateSphereCollider(
-        BodyHandle attached_body, const glm::vec3& position, float radius
+        BodyHandle attached_body, const glm::vec3& position, float radius, const char* debug_name
     )
     {
         b3Sphere sphere{ { position.x, position.y, position.z }, radius };
         b3ShapeDef shape_def = b3DefaultShapeDef();
+        shape_def.name = debug_name;
         shape_def.density = 1.0f;
         shape_def.enableContactEvents = true;
         shape_def.enableHitEvents = true;
@@ -52,7 +54,7 @@ namespace Physics
     }
 
     ColliderHandle PhysicsScene::CreateBoxCollider(
-        BodyHandle attached_body, const BodyCreateParams& params, const glm::vec3& half_extents
+        BodyHandle attached_body, const BodyCreateParams& params, const glm::vec3& half_extents, const char* debug_name
     )
     {
         const glm::vec3& pos = params.position;
@@ -64,6 +66,7 @@ namespace Physics
         transform.q = { { rot.x, rot.y, rot.z }, rot.w };
         b3BoxHull hull = b3MakeTransformedBoxHull(half_extents.x, half_extents.y, half_extents.z, transform);
         b3ShapeDef shape_def = b3DefaultShapeDef();
+        shape_def.name = debug_name;
         shape_def.density = 1.0f;
         shape_def.enableContactEvents = true;
         shape_def.enableHitEvents = true;
@@ -99,9 +102,14 @@ namespace Physics
         }
     }
 
-    void PhysicsScene::Step(const float time_step)
+    void PhysicsScene::Step()
     {
+        if (m_paused)
+        {
+            return;
+        }
+
         constexpr int substep_count = 4;
-        b3World_Step(m_world, time_step, substep_count);
+        b3World_Step(m_world, 1.0f / m_frequency, substep_count);
     }
 } // namespace Physics
