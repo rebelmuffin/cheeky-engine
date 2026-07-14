@@ -71,6 +71,12 @@ namespace
             );
         }
 
+        created_node->SetLocalTransform(Game::Transform::FromMatrix(gltf_node.transform));
+        for (const Renderer::GLTFNode& child : gltf_node.children)
+        {
+            CreateGameNodeFromGLTFNodeECS(world, *created_node, child, gltf_scene, extras);
+        }
+
         const auto collision_type_it = extras.find("collision_type");
         if (collision_type_it != extras.end())
         {
@@ -104,12 +110,6 @@ namespace
 
             // do this at the end to initialise the body
             std::ignore = entity.set(Game::ECS::PhysicsBodyComponent{ is_dynamic });
-        }
-
-        created_node->SetLocalTransform(Game::Transform::FromMatrix(gltf_node.transform));
-        for (const Renderer::GLTFNode& child : gltf_node.children)
-        {
-            CreateGameNodeFromGLTFNodeECS(world, *created_node, child, gltf_scene, extras);
         }
 
         return *created_node;
