@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Renderer/Material.h"
-#include "Renderer/MaterialInterface.h"
+#include "Renderer/Material/Material.h"
+#include "Renderer/Material/MaterialInterface.h"
 #include "Renderer/RenderObject.h"
 #include "Renderer/ResourceStorage.h"
 #include "Renderer/Utility/DeletionQueue.h"
@@ -95,7 +95,7 @@ namespace Renderer
         vkb::DispatchTable& DeviceDispatchTable() { return m_device_dispatch; }
         vkb::InstanceDispatchTable& InstanceDispatchTable() { return m_instance_dispatch; }
         VmaAllocator& Allocator() { return m_allocator; }
-        Material_GLTF_PBR& PBRMaterial() { return m_gltf_pbr_material; }
+        GenericMaterial_GLTF_PBR* PBRMaterial() { return m_gltf_pbr_material.get(); }
         VkSampler Sampler() { return m_default_sampler_nearest; }
         ImageHandle PlaceholderImage() { return m_checkerboard_image; }
         ImageHandle WhiteImage() { return m_white_image; }
@@ -252,7 +252,7 @@ namespace Renderer
         VkDescriptorSetLayout m_scene_data_descriptor_layout;
 
         // materials (pipelines)
-        Material_GLTF_PBR m_gltf_pbr_material;
+        std::unique_ptr<GenericMaterial_GLTF_PBR> m_gltf_pbr_material;
 
         // interfaces
         MaterialEngineInterface m_material_interface;

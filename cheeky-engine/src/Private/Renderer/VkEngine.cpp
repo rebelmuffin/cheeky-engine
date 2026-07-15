@@ -1,8 +1,7 @@
 #include "Renderer/VkEngine.h"
 
 #include "Renderer/FrameDrawContext.h"
-#include "Renderer/Material.h"
-#include "Renderer/MaterialInterface.h"
+#include "Renderer/Material/MaterialInterface.h"
 #include "Renderer/RenderObject.h"
 #include "Renderer/Utility/DebugPanels.h"
 #include "Renderer/Utility/UploadRequest.h"
@@ -13,6 +12,8 @@
 #include "Renderer/VkTypes.h"
 
 #include "ThirdParty/ImGUI.h"
+#include "Utilities/Log.h"
+
 #include <SDL3/SDL_vulkan.h>
 #include <VkBootstrap.h>
 #include <glm/ext/vector_float4.hpp>
@@ -39,6 +40,48 @@
 
 #define VK_INSTANCE_CALL(instance, function, ...)                                                            \
     reinterpret_cast<PFN_##function>(m_get_instance_proc_addr(instance, #function))(instance, __VA_ARGS__);
+
+namespace
+{
+    VkBool32 VulkanDebugMessageCallback(
+        VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+        VkDebugUtilsMessageTypeFlagsEXT type,
+        const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
+        [[maybe_unused]] void* user_data
+    )
+    {
+        auto message_type = vkb::to_string_message_type(type);
+        if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+        {
+            LOG_ERROR(
+                "[VULKAN: {}] - {}\n{}\n",
+                message_type,
+                callback_data->pMessageIdName,
+                callback_data->pMessage
+            );
+        }
+        else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+        {
+            LOG_WARNING(
+                "[VULKAN: {}] - {}\n{}\n",
+                message_type,
+                callback_data->pMessageIdName,
+                callback_data->pMessage
+            );
+        }
+        else
+        {
+            LOG_INFO(
+                "[VULKAN: {}] - {}\n{}\n",
+                message_type,
+                callback_data->pMessageIdName,
+                callback_data->pMessage
+            );
+        }
+
+        return VK_FALSE;
+    }
+} // namespace
 
 namespace Renderer
 {
@@ -958,7 +1001,7 @@ namespace Renderer
 
         builder.set_app_name("Vulkan Engine")
             .request_validation_layers(m_use_validation_layers)
-            .use_default_debug_messenger()
+            .set_debug_callback(&VulkanDebugMessageCallback)
             .require_api_version(1, 3, 0);
 
         vkb::Result<vkb::Instance> build_result = builder.build();
@@ -1161,27 +1204,17 @@ namespace Renderer
     bool VulkanEngine::InitMaterialPipelines()
     {
         // create any materials (pipelines)
-        m_gltf_pbr_material.BuildPipelines(m_material_interface);
-
-        // allocator for materials
-        if (m_gltf_pbr_material.loaded)
-        {
-            std::array<Utils::DescriptorPoolSizeRatio, 2> size_ratios{
-                Utils::DescriptorPoolSizeRatio{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
-                Utils::DescriptorPoolSizeRatio{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 }
-            };
-            m_gltf_pbr_material.descriptor_allocator.Init(m_device_dispatch, 1024, size_ratios);
-        }
+        m_gltf_pbr_material = std::make_unique<GenericMaterial_GLTF_PBR>(m_material_interface);
 
         m_deletion_queue.PushFunction(
             "pbr material",
             [this]()
             {
-                m_gltf_pbr_material.DestroyResources(m_device_dispatch);
+                m_gltf_pbr_material.reset();
             }
         );
 
-        return m_gltf_pbr_material.loaded;
+        return m_gltf_pbr_material->IsValid();
     }
 
     void VulkanEngine::InitDefaultData()

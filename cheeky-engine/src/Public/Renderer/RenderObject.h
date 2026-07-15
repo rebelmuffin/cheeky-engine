@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Renderer/Material.h"
+#include "Renderer/Material/Material.h"
 
 #include <glm/ext/matrix_float4x4.hpp>
 #include <vulkan/vulkan_core.h>

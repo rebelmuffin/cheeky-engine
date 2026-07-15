@@ -35,7 +35,7 @@ namespace Debug
         std::vector<uint32_t> indices;
 
         // WE NEED THE REAL DEBUG SHADER HERE!
-        Renderer::Material_GLTF_PBR::MaterialParameters default_mat_params;
+        Renderer::GenericMaterial_GLTF_PBR::MaterialParameters default_mat_params;
         default_mat_params.colour = glm::vec4(1.0f);
         default_mat_params.metal_roughness = glm::vec4(1.0f);
         Renderer::BufferHandle default_mat_uniform = renderer.CreateBuffer(
@@ -44,7 +44,7 @@ namespace Debug
             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             "default material uniform buffer"
         );
-        Renderer::Material_GLTF_PBR::Resources default_mat_resources;
+        Renderer::GenericMaterial_GLTF_PBR::Resources default_mat_resources;
         default_mat_resources.colour_image = renderer.PlaceholderImage();
         default_mat_resources.colour_sampler = renderer.Sampler();
         default_mat_resources.metal_roughness_image = renderer.PlaceholderImage();
@@ -53,12 +53,12 @@ namespace Debug
         default_mat_resources.buffer_offset = 0;
 
         std::shared_ptr<Renderer::GLTFMaterial> default_material = std::make_shared<Renderer::GLTFMaterial>();
-        default_material->material = renderer.PBRMaterial().CreateInstance(
-            renderer.DeviceDispatchTable(),
-            Renderer::MaterialPass::MainColour,
-            default_mat_resources,
-            renderer.PBRMaterial().descriptor_allocator
-        );
+        default_material->material =
+            renderer.PBRMaterial()
+                ->CreateInstance(
+                    renderer.DeviceDispatchTable(), Renderer::MaterialPass::MainColour, default_mat_resources
+                )
+                .value();
 
         for (const DebugLine& line : m_lines)
         {

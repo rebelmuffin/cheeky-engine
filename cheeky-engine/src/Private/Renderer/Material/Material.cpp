@@ -1,5 +1,5 @@
-#include "Renderer/Material.h"
-#include "Renderer/MaterialInterface.h"
+#include "Renderer/Material/Material.h"
+#include "Renderer/Material/MaterialInterface.h"
 #include "Renderer/Utility/VkDescriptors.h"
 #include "Renderer/Utility/VkPipelines.h"
 #include "Renderer/VkEngine.h"
@@ -82,8 +82,8 @@ namespace Renderer
                     VK_CULL_MODE_BACK_BIT,
                     VK_FRONT_FACE_COUNTER_CLOCKWISE
                 ) // idk why the meshes end up having counter clockwise tris
-                .SetInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-                .SetPolygonMode(VK_POLYGON_MODE_FILL)
+                .SetInputTopology(VK_PRIMITIVE_TOPOLOGY_LINE_LIST)
+                .SetPolygonMode(VK_POLYGON_MODE_LINE)
                 .SetColorAttachmentFormat(interface.draw_image_format)
                 .SetDepthFormat(interface.depth_image_format)
                 .EnableDepthTest(VK_COMPARE_OP_GREATER_OR_EQUAL) // greater or equal for inverse depth
@@ -138,11 +138,11 @@ namespace Renderer
         vkb::DispatchTable& device_dispatch,
         MaterialPass pass,
         const Resources& resources,
-        Utils::DescriptorAllocatorDynamic& descriptor_allocator
+        Utils::DescriptorAllocatorDynamic& _descriptor_allocator
     ) const
     {
         // create the material descriptor set
-        VkDescriptorSet descriptor_set = descriptor_allocator.Allocate(device_dispatch, descriptor_layout);
+        VkDescriptorSet descriptor_set = _descriptor_allocator.Allocate(device_dispatch, descriptor_layout);
 
         Utils::DescriptorWriter descriptor_writer{};
 
@@ -192,4 +192,73 @@ namespace Renderer
                                  { resources.colour_image, resources.metal_roughness_image },
                                  { resources.uniform_buffer } };
     }
+
+    GenericMaterial_GLTF_PBR::GenericMaterial_GLTF_PBR(MaterialEngineInterface& interface)
+    {
+
+        MaterialDefinition definition{};
+        definition.frag_shader = FRAGMENT_SHADER;
+        definition.vert_shader = VERTEX_SHADER;
+        definition.descriptor.bindings.emplace_back(
+            MaterialDescriptorBinding{ MaterialBindingType::UniformBuffer, sizeof(MaterialParameters) }
+        );
+        definition.descriptor.bindings.emplace_back(
+            MaterialDescriptorBinding{ MaterialBindingType::ImageSampler }
+        );
+        definition.descriptor.bindings.emplace_back(
+            MaterialDescriptorBinding{ MaterialBindingType::ImageSampler }
+        );
+
+        definition.pipelines[MaterialPass::MainColour] = MaterialPipelineDefinition{
+            false, true, MaterialPipelinePolygonMode::Fill, MaterialPipelineTopology::Triangle
+        };
+        definition.pipelines[MaterialPass::Transparent] = MaterialPipelineDefinition{
+            true, true, MaterialPipelinePolygonMode::Fill, MaterialPipelineTopology::Triangle
+        };
+
+        m_material = GenericMaterial::CreateMaterial("GLTF PBR", interface, definition);
+
+        if (IsValid())
+        {
+            std::array<Utils::DescriptorPoolSizeRatio, 2> size_ratios{
+                Utils::DescriptorPoolSizeRatio{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
+                Utils::DescriptorPoolSizeRatio{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1 }
+            };
+            m_descriptor_allocator.Init(*interface.device_dispatch_table, 1024, size_ratios);
+        }
+    }
+
+    GenericMaterial_GLTF_PBR::~GenericMaterial_GLTF_PBR()
+    {
+        if (m_material.has_value())
+        {
+            m_material->DestroyResources();
+            m_material.reset();
+        }
+    }
+
+    std::optional<MaterialInstance> GenericMaterial_GLTF_PBR::CreateInstance(
+        vkb::DispatchTable& device_dispatch, MaterialPass pass, const Resources& resources
+    )
+    {
+        if (m_material == std::nullopt)
+        {
+            return std::nullopt;
+        }
+
+        GenericMaterialParameters params{};
+        params.parameters.emplace_back(
+            GenericMaterialParameter{ BufferParameter{ resources.uniform_buffer, resources.buffer_offset } }
+        );
+        params.parameters.emplace_back(
+            GenericMaterialParameter{ ImageParameter{ resources.colour_image, resources.colour_sampler } }
+        );
+        params.parameters.emplace_back(
+            GenericMaterialParameter{
+                ImageParameter{ resources.metal_roughness_image, resources.metal_roughness_sampler } }
+        );
+
+        return m_material->CreateInstance(device_dispatch, pass, params, m_descriptor_allocator);
+    }
+
 } // namespace Renderer

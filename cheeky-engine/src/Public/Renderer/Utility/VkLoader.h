@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Renderer/Material.h"
+#include "Renderer/Material/Material.h"
 #include "Renderer/ResourceStorage.h"
 #include "Renderer/VkTypes.h"
 

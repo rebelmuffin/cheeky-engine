@@ -1,5 +1,5 @@
 #include "Renderer/Utility/VkLoader.h"
-#include "Renderer/Material.h"
+#include "../../../Public/Renderer/Material/Material.h"
 #include "Renderer/Utility/VkInitialisers.h"
 #include "Renderer/VkEngine.h"
 #include "Renderer/VkTypes.h"
@@ -460,7 +460,7 @@ namespace Renderer::Utils
                   << "ms loading images." << std::endl;
 
         // create a default material for surfaces that don't have one.
-        Material_GLTF_PBR::MaterialParameters default_mat_params;
+        GenericMaterial_GLTF_PBR::MaterialParameters default_mat_params;
         default_mat_params.colour = glm::vec4(1.0f);
         default_mat_params.metal_roughness = glm::vec4(1.0f);
         BufferHandle default_mat_uniform = engine.CreateBuffer(
@@ -470,7 +470,7 @@ namespace Renderer::Utils
             "default material uniform buffer"
         );
 
-        Material_GLTF_PBR::Resources default_mat_resources;
+        GenericMaterial_GLTF_PBR::Resources default_mat_resources;
         default_mat_resources.colour_image = engine.PlaceholderImage();
         default_mat_resources.colour_sampler = engine.Sampler();
         default_mat_resources.metal_roughness_image = engine.PlaceholderImage();
@@ -479,19 +479,19 @@ namespace Renderer::Utils
         default_mat_resources.buffer_offset = 0;
 
         std::shared_ptr<GLTFMaterial> default_material = std::make_shared<GLTFMaterial>();
-        default_material->material = engine.PBRMaterial().CreateInstance(
-            engine.DeviceDispatchTable(),
-            MaterialPass::MainColour,
-            default_mat_resources,
-            engine.PBRMaterial().descriptor_allocator
-        );
+        default_material->material =
+            engine.PBRMaterial()
+                ->CreateInstance(
+                    engine.DeviceDispatchTable(), MaterialPass::MainColour, default_mat_resources
+                )
+                .value();
 
         for (const fastgltf::Material& gltf_mat : asset.materials)
         {
             fastgltf::math::nvec4 colour_factor = gltf_mat.pbrData.baseColorFactor;
             float metal_roughness_factor = gltf_mat.pbrData.roughnessFactor;
 
-            Material_GLTF_PBR::MaterialParameters mat_params;
+            GenericMaterial_GLTF_PBR::MaterialParameters mat_params;
             mat_params.colour =
                 glm::vec4(colour_factor.x(), colour_factor.y(), colour_factor.z(), colour_factor.w());
             mat_params.metal_roughness = glm::vec4(metal_roughness_factor); // #TODO: figure this out later
@@ -513,7 +513,7 @@ namespace Renderer::Utils
                 metal_roughness_image = out_images[idx];
             }
 
-            Material_GLTF_PBR::Resources mat_resources;
+            GenericMaterial_GLTF_PBR::Resources mat_resources;
             mat_resources.colour_image = colour_image;
             mat_resources.colour_sampler = engine.Sampler();
             mat_resources.metal_roughness_image = metal_roughness_image;
@@ -537,9 +537,9 @@ namespace Renderer::Utils
 
             std::shared_ptr<GLTFMaterial> new_mat =
                 out_materials.emplace_back(std::make_shared<GLTFMaterial>());
-            new_mat->material = engine.PBRMaterial().CreateInstance(
-                engine.DeviceDispatchTable(), pass, mat_resources, engine.PBRMaterial().descriptor_allocator
-            );
+            new_mat->material = engine.PBRMaterial()
+                                    ->CreateInstance(engine.DeviceDispatchTable(), pass, mat_resources)
+                                    .value();
         }
 
         std::vector<uint32_t> indices;
