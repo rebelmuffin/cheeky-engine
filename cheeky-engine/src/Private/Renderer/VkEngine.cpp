@@ -1199,22 +1199,24 @@ namespace Renderer
 
     void VulkanEngine::InitDefaultDescriptors() {}
 
-    bool VulkanEngine::InitPipelines() { return InitMaterialPipelines(); }
+    bool VulkanEngine::InitPipelines() { return InitMaterials(); }
 
-    bool VulkanEngine::InitMaterialPipelines()
+    bool VulkanEngine::InitMaterials()
     {
         // create any materials (pipelines)
         m_gltf_pbr_material = std::make_unique<GenericMaterial_GLTF_PBR>(m_material_interface);
+        m_debug_lines_material = std::make_unique<GenericMaterial_Debug_Lines>(m_material_interface);
 
         m_deletion_queue.PushFunction(
-            "pbr material",
+            "default materials",
             [this]()
             {
                 m_gltf_pbr_material.reset();
+                m_debug_lines_material.reset();
             }
         );
 
-        return m_gltf_pbr_material->IsValid();
+        return m_gltf_pbr_material->IsValid() && m_debug_lines_material->IsValid();
     }
 
     void VulkanEngine::InitDefaultData()

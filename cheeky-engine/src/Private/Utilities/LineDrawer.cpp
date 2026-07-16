@@ -28,6 +28,16 @@ namespace Debug
         Renderer::VulkanEngine& renderer, Renderer::Viewport& viewport, double time_delta_s
     )
     {
+        if (m_depth_material == nullptr)
+        {
+            m_depth_material = CreateMaterial(renderer, false);
+        }
+
+        if (m_no_depth_material == nullptr)
+        {
+            m_no_depth_material = CreateMaterial(renderer, true);
+        }
+
         if (m_lines.empty())
         {
             return;
@@ -39,38 +49,12 @@ namespace Debug
         std::vector<Renderer::Vertex> vertices;
         std::vector<uint32_t> indices;
 
-        // WE NEED THE REAL DEBUG SHADER HERE!
-        Renderer::GenericMaterial_GLTF_PBR::MaterialParameters default_mat_params;
-        default_mat_params.colour = glm::vec4(1.0f);
-        default_mat_params.metal_roughness = glm::vec4(1.0f);
-        Renderer::BufferHandle default_mat_uniform = renderer.CreateBuffer(
-            &default_mat_params,
-            sizeof(default_mat_params),
-            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            "default material uniform buffer"
-        );
-        Renderer::GenericMaterial_GLTF_PBR::Resources default_mat_resources;
-        default_mat_resources.colour_image = renderer.PlaceholderImage();
-        default_mat_resources.colour_sampler = renderer.Sampler();
-        default_mat_resources.metal_roughness_image = renderer.PlaceholderImage();
-        default_mat_resources.metal_roughness_sampler = renderer.Sampler();
-        default_mat_resources.uniform_buffer = default_mat_uniform;
-        default_mat_resources.buffer_offset = 0;
-
-        std::shared_ptr<Renderer::GLTFMaterial> default_material = std::make_shared<Renderer::GLTFMaterial>();
-        default_material->material =
-            renderer.PBRMaterial()
-                ->CreateInstance(
-                    renderer.DeviceDispatchTable(), Renderer::MaterialPass::MainColour, default_mat_resources
-                )
-                .value();
-
         for (const DebugLine& line : m_lines)
         {
             Renderer::GeoSurface surface{};
             surface.first_index = indices.size();
-            surface.index_count = 4;
-            surface.material = default_material;
+            surface.index_count = 2;
+            surface.material = line.z_depth ? m_depth_material : m_no_depth_material;
 
             vertices.push_back(Renderer::Vertex(line.start, 0.0f, { 0.0, 1.0f, 0.0f }, 0.0f, line.colour));
             vertices.push_back(Renderer::Vertex(line.end, 0.0f, { 0.0, 1.0f, 0.0f }, 0.0f, line.colour));
@@ -113,5 +97,18 @@ namespace Debug
 
             it->duration.seconds -= time_delta_s;
         }
+    }
+
+    std::shared_ptr<Renderer::GLTFMaterial> LineDrawer::CreateMaterial(
+        Renderer::VulkanEngine& renderer, bool depth
+    )
+    {
+        Renderer::MaterialPass pass =
+            depth ? Renderer::MaterialPass::MainColour : Renderer::MaterialPass::NoDepth;
+        std::shared_ptr<Renderer::GLTFMaterial> material = std::make_shared<Renderer::GLTFMaterial>();
+        material->material =
+            renderer.DebugLineMaterial()->CreateInstance(renderer.DeviceDispatchTable(), pass).value();
+
+        return material;
     }
 } // namespace Debug

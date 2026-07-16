@@ -8,6 +8,7 @@ namespace Renderer
     {
         MainColour,
         Transparent,
+        NoDepth,
         Other
     };
 } // namespace Renderer

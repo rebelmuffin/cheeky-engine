@@ -9,6 +9,7 @@
 
 namespace Renderer
 {
+    struct GLTFMaterial;
     class VulkanEngine;
     struct Viewport;
 } // namespace Renderer
@@ -42,15 +43,18 @@ namespace Debug
             glm::vec3 end,
             DrawDuration duration = ONE_FRAME,
             Colour colour = WHITE,
-            bool z_depth = false
+            bool z_depth = true
         );
 
         void OnRender(Renderer::VulkanEngine& renderer, Renderer::Viewport& viewport, double time_delta_s);
 
       private:
         void UpdateLineDurations(double time_delta_s);
+        static std::shared_ptr<Renderer::GLTFMaterial> CreateMaterial(Renderer::VulkanEngine& renderer, bool depth);
 
         std::vector<DebugLine> m_lines{};
+        std::shared_ptr<Renderer::GLTFMaterial> m_depth_material{};
+        std::shared_ptr<Renderer::GLTFMaterial> m_no_depth_material{};
 
         static std::unique_ptr<LineDrawer> s_line_drawer;
     };

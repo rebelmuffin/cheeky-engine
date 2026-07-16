@@ -96,6 +96,7 @@ namespace Renderer
         vkb::InstanceDispatchTable& InstanceDispatchTable() { return m_instance_dispatch; }
         VmaAllocator& Allocator() { return m_allocator; }
         GenericMaterial_GLTF_PBR* PBRMaterial() { return m_gltf_pbr_material.get(); }
+        GenericMaterial_Debug_Lines* DebugLineMaterial() { return m_debug_lines_material.get(); }
         VkSampler Sampler() { return m_default_sampler_nearest; }
         ImageHandle PlaceholderImage() { return m_checkerboard_image; }
         ImageHandle WhiteImage() { return m_white_image; }
@@ -163,7 +164,6 @@ namespace Renderer
 
         // draw loop
         void Draw();
-        void DrawViewportBackground(const Viewport& viewport, VkCommandBuffer cmd);
         void DrawViewportGeometry(Viewport& viewport, VkCommandBuffer cmd);
         void DrawImgui(VkCommandBuffer cmd, VkImageView target_image_view);
 
@@ -174,7 +174,7 @@ namespace Renderer
         void InitFrameDescriptors();
         void InitDefaultDescriptors();
         bool InitPipelines();
-        bool InitMaterialPipelines();
+        bool InitMaterials();
         void InitDefaultData();
         void InitImgui();
 
@@ -253,6 +253,7 @@ namespace Renderer
 
         // materials (pipelines)
         std::unique_ptr<GenericMaterial_GLTF_PBR> m_gltf_pbr_material;
+        std::unique_ptr<GenericMaterial_Debug_Lines> m_debug_lines_material;
 
         // interfaces
         MaterialEngineInterface m_material_interface;
