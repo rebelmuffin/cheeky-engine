@@ -28,6 +28,11 @@ namespace Debug
         Renderer::VulkanEngine& renderer, Renderer::Viewport& viewport, double time_delta_s
     )
     {
+        if (m_lines.empty())
+        {
+            return;
+        }
+
         Renderer::MeshAsset mesh_asset;
         mesh_asset.name = "debug lines";
 
