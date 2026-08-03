@@ -1,11 +1,15 @@
 #include "Utilities/LineDrawer.h"
 
+#include "Debug/DebuggerRegistry.h"
 #include "Renderer/Viewport.h"
 #include "Renderer/VkEngine.h"
+#include "Utilities/LineDrawerDebugger.h"
 
 namespace Debug
 {
     std::unique_ptr<LineDrawer> LineDrawer::s_line_drawer = nullptr;
+
+    LineDrawer::LineDrawer() { DebuggerRegistry::Instance().AddDebugger(new LineDrawerDebugger(*this)); }
 
     LineDrawer& LineDrawer::Instance()
     {
@@ -18,10 +22,43 @@ namespace Debug
     }
 
     void LineDrawer::AddLine(
-        glm::vec3 start, glm::vec3 end, DrawDuration duration, Colour colour, bool z_depth
+        glm::vec3 start, glm::vec3 end, DrawDuration duration, Cheeky::Colour colour, bool z_depth
     )
     {
         m_lines.emplace_back(duration, start, end, colour, z_depth);
+    }
+
+    void LineDrawer::AddCircle(
+        const glm::vec3 origin,
+        const float radius,
+        const glm::quat rotation,
+        const size_t segments,
+        const DrawDuration duration,
+        const Cheeky::Colour colour,
+        const bool z_depth
+    )
+    {
+        // x = r * cos(angle)
+        // y = r * sin(angle)
+        const float angle_per_seg = (2.0f * glm::pi<float>()) / static_cast<float>(segments);
+        for (size_t i = 0; i < segments; ++i)
+        {
+            const float angle1 = static_cast<float>(i) * angle_per_seg;
+            const float x1 = radius * glm::cos(angle1);
+            const float y1 = radius * glm::sin(angle1);
+
+            const float angle2 = static_cast<float>(i + 1) * angle_per_seg;
+            const float x2 = radius * glm::cos(angle2);
+            const float y2 = radius * glm::sin(angle2);
+
+            AddLine(
+                origin + glm::vec3{ x1, .0f, y1 } * rotation,
+                origin + glm::vec3{ x2, .0f, y2 } * rotation,
+                duration,
+                colour,
+                z_depth
+            );
+        }
     }
 
     void LineDrawer::OnRender(
@@ -56,8 +93,12 @@ namespace Debug
             surface.index_count = 2;
             surface.material = line.z_depth ? m_depth_material : m_no_depth_material;
 
-            vertices.push_back(Renderer::Vertex(line.start, 0.0f, { 0.0, 1.0f, 0.0f }, 0.0f, line.colour));
-            vertices.push_back(Renderer::Vertex(line.end, 0.0f, { 0.0, 1.0f, 0.0f }, 0.0f, line.colour));
+            vertices.push_back(
+                Renderer::Vertex(line.start, 0.0f, { 0.0, 1.0f, 0.0f }, 0.0f, line.colour.ToVec4())
+            );
+            vertices.push_back(
+                Renderer::Vertex(line.end, 0.0f, { 0.0, 1.0f, 0.0f }, 0.0f, line.colour.ToVec4())
+            );
             indices.emplace_back(vertices.size() - 1);
             indices.emplace_back(vertices.size() - 2);
 
@@ -65,14 +106,13 @@ namespace Debug
         }
 
         mesh_asset.buffers = renderer.UploadMesh(indices, vertices);
-        static Renderer::MeshHandle created_mesh =
-            renderer.RegisterMeshAsset(std::move(mesh_asset), mesh_asset.name);
+        m_draw_mesh = renderer.RegisterMeshAsset(std::move(mesh_asset), mesh_asset.name);
 
-        for (const Renderer::GeoSurface& surface : created_mesh->surfaces)
+        for (const Renderer::GeoSurface& surface : m_draw_mesh->surfaces)
         {
             Renderer::RenderObject obj{};
-            obj.index_buffer = created_mesh->buffers.index_buffer->buffer;
-            obj.vertex_buffer_address = created_mesh->buffers.vertex_buffer_address;
+            obj.index_buffer = m_draw_mesh->buffers.index_buffer->buffer;
+            obj.vertex_buffer_address = m_draw_mesh->buffers.vertex_buffer_address;
 
             obj.first_index = surface.first_index;
             obj.index_count = surface.index_count;
