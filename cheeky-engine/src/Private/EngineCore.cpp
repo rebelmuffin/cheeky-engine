@@ -1,5 +1,6 @@
 #include "EngineCore.h"
 #include "CVars.h"
+#include "Debug/DebuggerRegistry.h"
 #include "Game/GameMain.h"
 
 #include "ImGuizmo.h"
@@ -35,11 +36,11 @@ EngineCore::EngineCore(CVars cvars) : m_cvars(cvars)
                            std::chrono::steady_clock().now().time_since_epoch()
     )
                            .count();
+
+    Debug::DebuggerRegistry::Instance().SetDebuggingEnabled(cvars.enable_debuggers);
 }
 
 EngineCore::~EngineCore() { m_renderer->Cleanup(); }
-
-void EngineCore::Update() {}
 
 void EngineCore::RunMainLoop()
 {
@@ -74,6 +75,7 @@ void EngineCore::RunMainLoop()
                              .count();
         m_last_delta_ms = static_cast<double>(now_us - m_last_update_us) / 1000.0;
         m_last_update_us = now_us;
+        const double delta_time_seconds = m_last_delta_ms / 1000.0;
 
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplSDL3_NewFrame();
@@ -82,21 +84,23 @@ void EngineCore::RunMainLoop()
 
         OnImgui();
 
-        m_game->Draw(m_last_delta_ms / 1000.0);
+        if (Debug::DebuggerRegistry::Instance().IsDebuggingEnabled())
+        {
+            Debug::DebuggerRegistry::Instance().Draw(delta_time_seconds);
+        }
+
+        m_game->Draw(delta_time_seconds);
 
         Debug::LineDrawer::Instance().AddLine(glm::vec3(100.0f, 0.0f, 0.0f), glm::vec3(-100.0f, 0.0f, 0.0f));
         Debug::LineDrawer::Instance().AddLine(glm::vec3(0.0f, 100.0f, 0.0f), glm::vec3(0.0f, -100.0f, 0.0f));
 
         Debug::LineDrawer::Instance().OnRender(
-            *m_renderer, m_renderer->active_viewports[m_renderer->main_viewport], m_last_delta_ms / 1000.0f
+            *m_renderer, m_renderer->active_viewports[m_renderer->main_viewport], delta_time_seconds
         );
 
         // renderer draw should be after any other kind of draw because things "queue" render objects for the
         // renderer to render during its draw.
         m_renderer->Update();
-
-        // any logical updates
-        Update();
     }
 }
 
@@ -145,6 +149,11 @@ void EngineCore::OnImgui()
             fps_text.data(),
             fps_text.data() + fps_text.size()
         );
+    }
+
+    if (Debug::DebuggerRegistry::Instance().IsDebuggingEnabled())
+    {
+        Debug::DebuggerRegistry::Instance().ImGui();
     }
 
     m_game->OnImGui();

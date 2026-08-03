@@ -22,7 +22,6 @@ class EngineCore
     bool InitialisationFailed();
 
   private:
-    void Update();
     void OnImgui();
     void RestartGame();
 

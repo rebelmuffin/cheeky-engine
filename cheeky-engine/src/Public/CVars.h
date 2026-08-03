@@ -13,6 +13,7 @@ struct CVars
     bool use_validation_layers = true;
     bool force_immediate_uploads = false;
     char default_scene_path[512] = "data/resources/BarramundiFish.glb";
+    bool enable_debuggers = true;
 
     uint32_t ReadFromFile(std::filesystem::path path)
     {
@@ -72,6 +73,11 @@ struct CVars
                     default_scene_path[len - 2] = '\0';
                 }
                 total_read++;
+            }
+
+            if (std::strstr(line.data(), "DISABLE_DEBUGGERS;"))
+            {
+                enable_debuggers = false;
             }
         }
 
