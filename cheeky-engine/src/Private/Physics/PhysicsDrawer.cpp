@@ -2,12 +2,14 @@
 
 namespace
 {
+    constexpr bool depth = false;
+
     void DrawSegmentFcn(b3Pos p1, b3Pos p2, b3HexColor, void*)
     {
         glm::vec3 p1v(p1.x, p1.y, p1.z);
         glm::vec3 p2v(p2.x, p2.y, p2.z);
 
-        Debug::LineDrawer::Instance().AddLine(p1v, p2v);
+        Debug::LineDrawer::Instance().AddLine(p1v, p2v, Debug::ONE_FRAME, Debug::WHITE, depth);
     }
 } // namespace
 
