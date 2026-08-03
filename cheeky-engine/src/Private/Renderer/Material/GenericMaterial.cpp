@@ -313,8 +313,10 @@ namespace Renderer
 
             if (definition.enable_depth)
             {
-                pipeline_builder.SetDepthFormat(interface.depth_image_format)
-                    .EnableDepthTest(VK_COMPARE_OP_GREATER_OR_EQUAL); // greater or equal for inverse depth
+                pipeline_builder.SetDepthFormat(interface.depth_image_format);
+                pipeline_builder.EnableDepthTest(
+                    VK_COMPARE_OP_GREATER_OR_EQUAL
+                ); // greater or equal for inverse depth
             }
             else
             {
