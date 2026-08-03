@@ -67,12 +67,12 @@ namespace Debug
     {
         if (m_depth_material == nullptr)
         {
-            m_depth_material = CreateMaterial(renderer, false);
+            m_depth_material = CreateMaterial(renderer, true);
         }
 
         if (m_no_depth_material == nullptr)
         {
-            m_no_depth_material = CreateMaterial(renderer, true);
+            m_no_depth_material = CreateMaterial(renderer, false);
         }
 
         if (m_lines.empty())
