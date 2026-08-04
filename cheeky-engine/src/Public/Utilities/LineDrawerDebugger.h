@@ -33,5 +33,8 @@ namespace Debug
 
         bool m_draw_circle = false;
         DebugCircle m_circle{};
+
+        bool m_draw_sphere = false;
+        DebugCircle m_sphere{};
     };
 } // namespace Debug

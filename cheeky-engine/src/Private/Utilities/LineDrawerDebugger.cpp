@@ -4,6 +4,31 @@
 #include "Utilities/LineDrawer.h"
 #include "glm/gtx/euler_angles.hpp"
 
+namespace
+{
+    void RenderCircle(Debug::DebugCircle& circle, bool enable_rotation)
+    {
+        ImGui::DragFloat3("Origin", &circle.origin.x, 0.1f);
+        if (enable_rotation)
+        {
+            ImGui::SliderAngle("Rot X", &circle.rotation_euler.x);
+            ImGui::SliderAngle("Rot Y", &circle.rotation_euler.x);
+            ImGui::SliderAngle("Rot Z", &circle.rotation_euler.x);
+        }
+        ImGui::DragFloat("Radius", &circle.radius, 0.1f);
+
+        int segments = circle.segments;
+        ImGui::DragInt("Segments", &segments, 1, 2, 256);
+        circle.segments = segments;
+
+        glm::vec4 colour = circle.colour.ToVec4();
+        ImGui::ColorEdit4("Colour", &colour.x);
+        circle.colour = Cheeky::Colour::FromVec4(colour);
+
+        ImGui::Checkbox("Depth", &circle.depth);
+    }
+} // namespace
+
 namespace Debug
 {
     LineDrawerDebugger::LineDrawerDebugger(LineDrawer& line_drawer) :
@@ -22,21 +47,7 @@ namespace Debug
             {
                 if (ImGui::CollapsingHeader("Circle Settings"))
                 {
-                    ImGui::DragFloat3("Origin", &m_circle.origin.x, 0.1f);
-                    ImGui::SliderAngle("Rot X", &m_circle.rotation_euler.x);
-                    ImGui::SliderAngle("Rot Y", &m_circle.rotation_euler.x);
-                    ImGui::SliderAngle("Rot Z", &m_circle.rotation_euler.x);
-                    ImGui::DragFloat("Radius", &m_circle.radius, 0.1f);
-
-                    int segments = m_circle.segments;
-                    ImGui::DragInt("Segments", &segments, 1, 2, 256);
-                    m_circle.segments = segments;
-
-                    glm::vec4 colour = m_circle.colour.ToVec4();
-                    ImGui::ColorEdit4("Colour", &colour.x);
-                    m_circle.colour = Cheeky::Colour::FromVec4(colour);
-
-                    ImGui::Checkbox("Depth", &m_circle.depth);
+                    RenderCircle(m_circle, true);
                 }
 
                 m_line_drawer->AddCircle(
@@ -49,6 +60,24 @@ namespace Debug
                     ONE_FRAME,
                     m_circle.colour,
                     m_circle.depth
+                );
+            }
+
+            ImGui::Checkbox("Draw Sphere", &m_draw_sphere);
+            if (m_draw_sphere)
+            {
+                if (ImGui::CollapsingHeader("Sphere Settings"))
+                {
+                    RenderCircle(m_sphere, false);
+                }
+
+                m_line_drawer->AddSphere(
+                    m_sphere.origin,
+                    m_sphere.radius,
+                    m_sphere.segments,
+                    ONE_FRAME,
+                    m_sphere.colour,
+                    m_sphere.depth
                 );
             }
         }

@@ -61,6 +61,31 @@ namespace Debug
         }
     }
 
+    void LineDrawer::AddSphere(
+        glm::vec3 origin,
+        float radius,
+        size_t segments,
+        DrawDuration duration,
+        Cheeky::Colour colour,
+        bool z_depth
+    )
+    {
+        // a sphere is just a 3d circle
+        glm::quat rot1 = glm::identity<glm::quat>();
+        glm::quat rot2 = glm::rotate(rot1, glm::radians(90.0f), glm::vec3{ 1.0f, 0.0f, 0.0f });
+        glm::quat rot3 = glm::rotate(rot2, glm::radians(90.0f), glm::vec3{ 0.0f, 1.0f, 0.0f });
+
+        AddCircle(origin, radius, rot1, segments, duration, colour, z_depth);
+        AddCircle(origin, radius, rot2, segments, duration, colour, z_depth);
+        AddCircle(origin, radius, rot3, segments, duration, colour, z_depth);
+    }
+    //
+    // void LineDrawer::AddBox(
+    //     glm::vec3 origin, glm::vec3 half_widths, glm::quat rotation, DrawDuration duration, Cheeky::Colour colour, bool z_depth
+    // )
+    // {
+    // }
+
     void LineDrawer::OnRender(
         Renderer::VulkanEngine& renderer, Renderer::Viewport& viewport, double time_delta_s
     )

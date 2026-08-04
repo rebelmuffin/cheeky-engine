@@ -56,7 +56,23 @@ namespace Debug
             Cheeky::Colour colour = WHITE,
             bool z_depth = false
         );
-
+        void AddSphere(
+            glm::vec3 origin,
+            float radius,
+            size_t segments = 8,
+            DrawDuration duration = ONE_FRAME,
+            Cheeky::Colour colour = WHITE,
+            bool z_depth = false
+        );
+        // void AddBox(
+        //     glm::vec3 origin,
+        //     glm::vec3 half_widths,
+        //     glm::quat rotation = glm::identity<glm::quat>(),
+        //     DrawDuration duration = ONE_FRAME,
+        //     Cheeky::Colour colour = WHITE,
+        //     bool z_depth = false
+        // );
+        //
         void OnRender(Renderer::VulkanEngine& renderer, Renderer::Viewport& viewport, double time_delta_s);
 
       private:
